@@ -1,5 +1,7 @@
 # LunaVita
 
+> **Work in progress:** LunaVita is an early-stage prototype and may change significantly.
+
 LunaVita is a small, private health tracker for calories, macronutrients, and general health measurements. The stack runs locally with Docker Compose:
 
 - PostgreSQL 17 stores all health data.
