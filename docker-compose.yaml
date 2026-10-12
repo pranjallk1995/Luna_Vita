@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lunavita}
+      POSTGRES_USER: ${POSTGRES_USER:-lunavita}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lunavita-dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    networks:
+      - lunavita_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lunavita} -d ${POSTGRES_DB:-lunavita}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp:
+    build: ./mcp
+    working_dir: /workspace/mcp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@postgres:5432/${POSTGRES_DB:-lunavita}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:${MCP_PORT:-18001}:8000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./mcp/app
+          target: /workspace/mcp/app
+        - action: rebuild
+          path: ./mcp/requirements.txt
+        - action: rebuild
+          path: ./mcp/Dockerfile
+    networks:
+      - lunavita_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ui:
+    build: ./ui
+    working_dir: /workspace/ui
+    restart: unless-stopped
+    environment:
+      LUNAVITA_API_URL: http://mcp:8000
+    ports:
+      - "127.0.0.1:${UI_PORT:-18502}:8501"
+    develop:
+      watch:
+        - action: sync
+          path: ./ui
+          target: /workspace/ui
+          ignore:
+            - __pycache__/
+            - "*.py[cod]"
+            - requirements.txt
+            - Dockerfile
+        - action: rebuild
+          path: ./ui/requirements.txt
+        - action: rebuild
+          path: ./ui/Dockerfile
+    networks:
+      - lunavita_network
+    depends_on:
+      mcp:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+
+networks:
+  lunavita_network:
+    driver: bridge
