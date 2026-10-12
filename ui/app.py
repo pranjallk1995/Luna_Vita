@@ -119,7 +119,10 @@ with food_tab:
             "Consumed date", value=date.today(), key="food_consumed_date"
         )
         consumed_time = consumed_time_col.time_input(
-            "Consumed time", value=datetime.now().time(), key="food_consumed_time"
+            "Consumed time",
+            value=datetime.now().replace(second=0, microsecond=0).time(),
+            step=60,
+            key="food_consumed_time",
         )
         consumed_at = datetime.combine(consumed_date, consumed_time)
         notes = st.text_area("Notes", max_chars=2000, key="food_notes")
