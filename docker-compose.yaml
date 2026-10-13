@@ -10,7 +10,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     networks:
-      - lunavita_network
+      lunavita_network:
+        aliases:
+          - luna-vita-postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lunavita} -d ${POSTGRES_DB:-lunavita}"]
       interval: 10s
@@ -22,7 +24,7 @@ services:
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@postgres:5432/${POSTGRES_DB:-lunavita}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@lunavita-postgres:5432/${POSTGRES_DB:-lunavita}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     expose:
@@ -39,7 +41,9 @@ services:
         - action: rebuild
           path: ./mcp/Dockerfile
     networks:
-      - lunavita_network
+      lunavita_network:
+        aliases:
+          - luna-vita-mcp
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,7 +58,7 @@ services:
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
-      LUNAVITA_API_URL: http://mcp:8000
+      LUNAVITA_API_URL: http://lunavita-mcp:8000
     ports:
       - "127.0.0.1:${UI_PORT:-18502}:8501"
     develop:
@@ -72,7 +76,9 @@ services:
         - action: rebuild
           path: ./ui/Dockerfile
     networks:
-      - lunavita_network
+      lunavita_network:
+        aliases:
+          - luna-vita-ui
     depends_on:
       mcp:
         condition: service_healthy
@@ -82,4 +88,5 @@ volumes:
 
 networks:
   lunavita_network:
-    driver: bridge
+    external: true
+    name: luna_vault_lunavault_network
