@@ -3,8 +3,8 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-lunavita}
-      POSTGRES_USER: ${POSTGRES_USER:-lunavita}
+      POSTGRES_DB: lunavita
+      POSTGRES_USER: lunavita
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lunavita-dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -24,7 +24,7 @@ services:
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@lunavita-postgres:5432/${POSTGRES_DB:-lunavita}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-postgres:5432/${POSTGRES_DB:-lunavita}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     expose:
@@ -58,7 +58,7 @@ services:
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
-      LUNAVITA_API_URL: http://lunavita-mcp:8000
+      LUNAVITA_API_URL: http://luna-vita-mcp:8000
     ports:
       - "127.0.0.1:${UI_PORT:-18502}:8501"
     develop:
