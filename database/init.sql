@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS food_entries (
     id BIGSERIAL PRIMARY KEY,
     consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    consumed_date DATE NOT NULL DEFAULT CURRENT_DATE,
     time_label TEXT,
     food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),
     quantity TEXT,
@@ -16,7 +17,15 @@ CREATE TABLE IF NOT EXISTS food_entries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS consumed_date DATE;
+UPDATE food_entries
+SET consumed_date = (consumed_at AT TIME ZONE 'Asia/Kolkata')::date
+WHERE consumed_date IS NULL;
+ALTER TABLE food_entries ALTER COLUMN consumed_date SET DEFAULT CURRENT_DATE;
+ALTER TABLE food_entries ALTER COLUMN consumed_date SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS food_entries_consumed_at_idx ON food_entries (consumed_at DESC);
+CREATE INDEX IF NOT EXISTS food_entries_consumed_date_idx ON food_entries (consumed_date DESC);
 
 CREATE TABLE IF NOT EXISTS daily_logs (
     log_date DATE PRIMARY KEY,

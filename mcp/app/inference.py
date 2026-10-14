@@ -1,5 +1,4 @@
 import os
-from functools import lru_cache
 from typing import Literal
 
 from openai import OpenAI, OpenAIError
@@ -26,39 +25,60 @@ class NutritionInferenceUnavailable(RuntimeError):
     pass
 
 
-@lru_cache
-def _client() -> OpenAI:
-    key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise NutritionInferenceUnavailable("Nutrition inference is not configured.")
-    return OpenAI(api_key=key, timeout=20.0, max_retries=1)
+class NutritionInferenceService:
+    """Estimate nutrition through OpenAI when server-side inference is configured."""
 
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        self.api_key = (api_key if api_key is not None else os.getenv("OPENAI_API_KEY", "")).strip()
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self._client: OpenAI | None = None
 
-def infer_nutrition(request: NutritionInferenceRequest) -> NutritionEstimate:
-    description = request.food_name.strip()
-    if request.quantity:
-        description += f"\nQuantity: {request.quantity.strip()}"
-    try:
-        response = _client().responses.parse(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            store=False,
-            input=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Estimate nutrition for the described food or supplement. Return values for the stated "
-                        "quantity. Use grams for protein, carbohydrates, fat, natural sugar, and added sugar. "
-                        "Separate intrinsic sugar from added sugar. If details are ambiguous, make conservative "
-                        "assumptions and lower confidence. This is an estimate for user review, not medical advice."
-                    ),
-                },
-                {"role": "user", "content": description},
-            ],
-            text_format=NutritionEstimate,
-        )
-    except OpenAIError as exc:
-        raise NutritionInferenceUnavailable("Nutrition inference is temporarily unavailable.") from exc
-    estimate = response.output_parsed
-    if estimate is None:
-        raise NutritionInferenceUnavailable("Nutrition inference returned no usable estimate.")
-    return NutritionEstimate.model_validate(estimate)
+    def client(self) -> OpenAI:
+        if not self.api_key:
+            raise NutritionInferenceUnavailable("Nutrition inference is not configured.")
+        if self._client is None:
+            self._client = OpenAI(
+                api_key=self.api_key,
+                timeout=20.0,
+                max_retries=1,
+            )
+        return self._client
+
+    def infer(self, request: NutritionInferenceRequest) -> NutritionEstimate:
+        description = request.food_name.strip()
+        if request.quantity:
+            description += f"\nQuantity: {request.quantity.strip()}"
+        try:
+            response = self.client().responses.parse(
+                model=self.model,
+                store=False,
+                input=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Estimate nutrition for the described food or supplement. "
+                            "Return values for the stated quantity. Use grams for protein, "
+                            "carbohydrates, fat, natural sugar, and added sugar. Separate "
+                            "intrinsic sugar from added sugar. If details are ambiguous, "
+                            "make conservative assumptions and lower confidence. This is "
+                            "an estimate for user review, not medical advice."
+                        ),
+                    },
+                    {"role": "user", "content": description},
+                ],
+                text_format=NutritionEstimate,
+            )
+        except OpenAIError as exc:
+            raise NutritionInferenceUnavailable(
+                "Nutrition inference is temporarily unavailable."
+            ) from exc
+        estimate = response.output_parsed
+        if estimate is None:
+            raise NutritionInferenceUnavailable(
+                "Nutrition inference returned no usable estimate."
+            )
+        return NutritionEstimate.model_validate(estimate)

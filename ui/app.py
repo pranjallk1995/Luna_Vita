@@ -15,26 +15,29 @@ import streamlit as st
 UI_ROOT = Path(__file__).resolve().parent
 
 
-def source_revision() -> str:
-    """Return a stable digest of UI source currently loaded by Streamlit."""
-    source_files = sorted(UI_ROOT.rglob("*.py"))
-    source_files.append(UI_ROOT / ".streamlit" / "config.toml")
-    digest = hashlib.sha256()
-    for source_file in source_files:
-        if not source_file.is_file():
-            continue
-        digest.update(source_file.relative_to(UI_ROOT).as_posix().encode())
-        digest.update(source_file.read_bytes())
-    return digest.hexdigest()
+class SourceReloadMonitor:
+    """Track deployed UI source and notify existing Streamlit sessions."""
 
+    @staticmethod
+    def revision() -> str:
+        source_files = sorted(UI_ROOT.rglob("*.py"))
+        source_files.append(UI_ROOT / ".streamlit" / "config.toml")
+        digest = hashlib.sha256()
+        for source_file in source_files:
+            if not source_file.is_file():
+                continue
+            digest.update(source_file.relative_to(UI_ROOT).as_posix().encode())
+            digest.update(source_file.read_bytes())
+        return digest.hexdigest()
 
-def show_reload_notice() -> None:
-    """Notify an existing session only when its loaded UI source changes."""
-    revision = source_revision()
-    previous_revision = st.session_state.get("ui_source_revision")
-    st.session_state.ui_source_revision = revision
-    if previous_revision is not None and previous_revision != revision:
-        st.toast("Luna Vita updated", icon=":material/refresh:")
+    @classmethod
+    def notify(cls) -> None:
+        revision = cls.revision()
+        previous_revision = st.session_state.get("ui_source_revision")
+        st.session_state.ui_source_revision = revision
+        if previous_revision is not None and previous_revision != revision:
+            st.toast("Luna Vita updated", icon=":material/refresh:")
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -84,6 +87,9 @@ class LunaVitaAPI:
 
     def create_measurement(self, payload: dict[str, Any]) -> None:
         self.request("POST", "/api/measurements", json=payload)
+
+    def create_measurements(self, payloads: list[dict[str, Any]]) -> None:
+        self.request("POST", "/api/measurements/batch", json={"measurements": payloads})
 
     def report(self, day: date) -> bytes:
         response = requests.get(
@@ -175,6 +181,7 @@ class FoodLogView:
 
     COLUMNS = [
         "id",
+        "consumed_date",
         "consumed_at",
         "time_label",
         "food_name",
@@ -298,6 +305,7 @@ class FoodLogView:
                             "natural_sugar_g": float(row["natural_sugar_g"]),
                             "added_sugar_g": float(row["added_sugar_g"]),
                             "consumed_at": consumed_at,
+                            "consumed_date": original[entry_id]["consumed_date"],
                             "time_label": time_label,
                             "notes": self.nullable(row["notes"]),
                         },
@@ -375,6 +383,7 @@ class FoodLogView:
                         "consumed_at": datetime.combine(
                             consumed_date, consumed_time or time.min
                         ).isoformat(),
+                        "consumed_date": consumed_date.isoformat(),
                         "time_label": time_label.strip() or (
                             None if include_time else "Not recorded"
                         ),
@@ -389,6 +398,15 @@ class FoodLogView:
 class WeightView:
     api: LunaVitaAPI
 
+    METRICS = {
+        "weight": ("Weight", "kg"),
+        "bmr": ("BMR", "kcal/day"),
+        "health_score": ("Health score", "/100"),
+        "body_age": ("Body age", "years"),
+        "bmi": ("BMI", "index"),
+        "water_ratio": ("Water ratio", "%"),
+    }
+
     @staticmethod
     def period(row: pd.Series) -> str:
         label = str(row.get("time_label") or "").lower()
@@ -398,58 +416,127 @@ class WeightView:
             return "Night"
         return "Morning" if row["measured_at"].hour < 12 else "Night"
 
+    @classmethod
+    def format_value(cls, metric: str, value: float, unit: str) -> str:
+        if metric == "health_score":
+            return f"{value:g}/100"
+        if metric == "bmi":
+            return f"{value:g}"
+        return f"{value:g} {unit}"
+
     def render(self, day: date) -> None:
         LunaStyle.section(
             "Body measurements",
-            "Morning and night weigh-ins",
-            "Weight measurements for the selected day, arranged like the daily report.",
+            "Morning and night check-ins",
+            "Weight, BMR, health score, body age, BMI, and water ratio for the selected day.",
         )
         rows = self.api.measurements()
         frame = pd.DataFrame(rows)
         if not frame.empty:
             frame["measured_at"] = pd.to_datetime(frame["measured_at"])
             frame = frame[
-                (frame["metric"].str.lower() == "weight")
+                frame["metric"].isin(self.METRICS)
                 & (frame["measured_at"].dt.date == day)
             ].copy()
-        display = {
-            "Measurement": "Weight",
-            "Morning": "Not recorded",
-            "Night": "Not recorded",
-        }
-        if not frame.empty:
             frame["period"] = frame.apply(self.period, axis=1)
-            for period in ("Morning", "Night"):
-                matches = frame[frame["period"] == period].sort_values("measured_at")
-                if not matches.empty:
-                    row = matches.iloc[-1]
-                    display[period] = f"{float(row['value']):g} {row['unit']}"
-        st.dataframe(pd.DataFrame([display]), hide_index=True, use_container_width=True)
+
+        display_rows = []
+        for metric, (label, _) in self.METRICS.items():
+            display = {
+                "Measurement": label,
+                "Morning": "Not recorded",
+                "Night": "Not recorded",
+            }
+            if not frame.empty:
+                metric_rows = frame[frame["metric"] == metric]
+                for period in ("Morning", "Night"):
+                    matches = metric_rows[metric_rows["period"] == period].sort_values(
+                        "measured_at"
+                    )
+                    if not matches.empty:
+                        row = matches.iloc[-1]
+                        display[period] = self.format_value(
+                            metric, float(row["value"]), str(row["unit"])
+                        )
+            display_rows.append(display)
+
+        st.dataframe(
+            pd.DataFrame(display_rows), hide_index=True, use_container_width=True
+        )
         self.add_form(day)
 
     def add_form(self, day: date) -> None:
-        with st.expander("Record weigh-in"):
-            with st.form("weight-entry", clear_on_submit=True):
-                date_col, period_col, value_col, time_col = st.columns(4)
+        with st.expander("Record body measurements"):
+            with st.form("body-measurement-entry", clear_on_submit=True):
+                date_col, period_col, time_col = st.columns(3)
                 measured_date = date_col.date_input("Measured date", value=day)
                 period = period_col.selectbox("Period", ["Morning", "Night"])
-                value = value_col.number_input("Weight (kg)", min_value=0.0, step=0.1)
                 default_time = time(8, 0) if period == "Morning" else time(22, 0)
                 measured_time = time_col.time_input("Time", default_time, step=60)
+
+                first_row = st.columns(3)
+                weight = first_row[0].number_input(
+                    "Weight (kg)", min_value=0.0, step=0.1, value=None
+                )
+                bmr = first_row[1].number_input(
+                    "BMR (kcal/day)", min_value=0, step=1, value=None
+                )
+                health_score = first_row[2].number_input(
+                    "Health score (/100)",
+                    min_value=0,
+                    max_value=100,
+                    step=1,
+                    value=None,
+                )
+
+                second_row = st.columns(3)
+                body_age = second_row[0].number_input(
+                    "Body age (years)", min_value=0, step=1, value=None
+                )
+                bmi = second_row[1].number_input(
+                    "BMI", min_value=0.0, step=0.1, value=None
+                )
+                water_ratio = second_row[2].number_input(
+                    "Water ratio (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    step=0.1,
+                    value=None,
+                )
                 notes = st.text_input("Notes", max_chars=2000)
-                submitted = st.form_submit_button("Record weigh-in", type="primary")
+                submitted = st.form_submit_button(
+                    "Save body measurements", type="primary"
+                )
+
             if submitted:
-                self.api.create_measurement(
+                measured_at = datetime.combine(
+                    measured_date, measured_time
+                ).isoformat()
+                values = {
+                    "weight": (weight, "kg"),
+                    "bmr": (bmr, "kcal/day"),
+                    "health_score": (health_score, "/100"),
+                    "body_age": (body_age, "years"),
+                    "bmi": (bmi, "index"),
+                    "water_ratio": (water_ratio, "%"),
+                }
+                payloads = [
                     {
-                        "metric": "weight",
+                        "metric": metric,
                         "value": float(value),
-                        "unit": "kg",
-                        "measured_at": datetime.combine(measured_date, measured_time).isoformat(),
+                        "unit": unit,
+                        "measured_at": measured_at,
                         "time_label": period,
                         "notes": notes.strip() or None,
                     }
-                )
-                st.toast("Weigh-in saved to database")
+                    for metric, (value, unit) in values.items()
+                    if value is not None
+                ]
+                if not payloads:
+                    st.warning("Enter at least one body measurement.")
+                    return
+                self.api.create_measurements(payloads)
+                st.toast("Body measurements saved to database")
                 st.rerun()
 
 
@@ -460,7 +547,7 @@ class LunaVitaApp:
     def render(self) -> None:
         LunaStyle.apply()
         LunaStyle.header()
-        show_reload_notice()
+        SourceReloadMonitor.notify()
         today = date.today()
         LunaStyle.section(
             "Daily overview",
@@ -473,18 +560,19 @@ class LunaVitaApp:
         WeightView(self.api).render(selected_day)
 
 
-def main() -> None:
-    st.set_page_config(
-        page_title="Luna Vita",
-        page_icon="LV",
-        layout="wide",
-        initial_sidebar_state="collapsed",
-    )
-    try:
-        LunaVitaApp().render()
-    except requests.RequestException as exc:
-        st.error(f"The Luna Vita service is unavailable: {exc}")
+    @classmethod
+    def run(cls) -> None:
+        st.set_page_config(
+            page_title="Luna Vita",
+            page_icon="LV",
+            layout="wide",
+            initial_sidebar_state="collapsed",
+        )
+        try:
+            cls().render()
+        except requests.RequestException as exc:
+            st.error(f"The Luna Vita service is unavailable: {exc}")
 
 
 if __name__ == "__main__":
-    main()
+    LunaVitaApp.run()

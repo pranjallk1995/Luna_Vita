@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ class FoodEntryCreate(BaseModel):
     natural_sugar_g: float = Field(default=0, ge=0, le=10_000)
     added_sugar_g: float = Field(default=0, ge=0, le=10_000)
     consumed_at: datetime | None = None
+    consumed_date: date | None = None
     time_label: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, max_length=2_000)
 
@@ -29,6 +30,11 @@ class HealthMeasurementCreate(BaseModel):
     measured_at: datetime | None = None
     time_label: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, max_length=2_000)
+
+
+
+class HealthMeasurementBatchCreate(BaseModel):
+    measurements: list[HealthMeasurementCreate] = Field(min_length=1, max_length=20)
 
 
 class DailyLogUpsert(BaseModel):
