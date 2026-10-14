@@ -9,14 +9,15 @@ MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 
 class FoodEntryCreate(BaseModel):
     food_name: str = Field(min_length=1, max_length=200)
-    quantity: str | None = Field(default=None, max_length=300)
+    quantity: str = Field(min_length=1, max_length=300)
     meal_type: MealType = "other"
     calories: int = Field(ge=0, le=100_000)
-    protein_g: float = Field(default=0, ge=0, le=10_000)
-    carbs_g: float = Field(default=0, ge=0, le=10_000)
-    fat_g: float = Field(default=0, ge=0, le=10_000)
-    natural_sugar_g: float = Field(default=0, ge=0, le=10_000)
-    added_sugar_g: float = Field(default=0, ge=0, le=10_000)
+    protein_g: float = Field(ge=0, le=10_000)
+    carbs_g: float = Field(ge=0, le=10_000)
+    fat_g: float = Field(ge=0, le=10_000)
+    natural_sugar_g: float = Field(ge=0, le=10_000)
+    added_sugar_g: float = Field(ge=0, le=10_000)
+    image_url: str | None = Field(default=None, max_length=2_000_000)
     consumed_at: datetime | None = None
     consumed_date: date | None = None
     time_label: str | None = Field(default=None, max_length=100)

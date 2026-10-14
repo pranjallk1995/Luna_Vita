@@ -24,19 +24,22 @@ Nutrition inference is optional and server-side. Set OPENAI_API_KEY in the ignor
 
 ## MCP tools
 
-- `record_food`: stores a food item with calories in kcal, meal type, macros, time, and notes.
+- `record_food`: stores a food item after the active ChatGPT model supplies the required quantity, kcal, macros, sugars, and optional representative image.
 - `get_food_log`: lists entries, optionally within an inclusive date range.
 - `update_food`: replaces the editable fields of a food entry.
+- `set_food_image`: sets, replaces, or clears the optional image URL for a food entry.
 - `remove_food`: deletes a food entry by ID, optionally guarded by its expected date.
 - `record_health_measurement`: stores a named measurement such as weight, steps, or sleep.
 - `get_health_measurements`: lists measurements, optionally filtered by metric.
 - `get_daily_nutrition_summary`: totals calories in kcal and macros for one date.
 
+For conversational logging, the active ChatGPT model infers missing kcal, protein, carbohydrates, fat, natural sugar, added sugar, and a representative image before calling the MCP tool. Food name and quantity are always required; inferred values remain editable.
+
 The Streamlit **Daily log** tab filters food entries to one date and persists cell edits and marked removals through the API. It also downloads a small draft PDF report for the selected date. This report is intentionally simple for the rough-draft phase and can be restyled later without changing the stored data.
 
 ## Data model
 
-The database mirrors the Daily Calorie Tracker report fields. Food rows preserve the date/time plus an optional display time label, food or supplement name, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, meal category, and notes.
+The database mirrors the Daily Calorie Tracker report fields. Food rows preserve the date/time plus an optional display time label, food or supplement name, image URL, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, meal category, and notes.
 
 Each date can also store calorie and macro targets, fat and added-sugar ranges, historical reported totals, activity notes, supplement notes, daily notes, and report caveats. Reported totals are separate because rounded historical line items may not reconcile exactly. Health measurements preserve metric, value, unit, timestamp, optional time label (such as morning or night), and notes.
 

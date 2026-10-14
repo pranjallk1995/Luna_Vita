@@ -37,6 +37,7 @@ class LunaVitaMCPAdapter:
             self.log_consumed_food,
             self.get_food_log,
             self.update_food,
+            self.set_food_image,
             self.remove_food,
             self.record_health_measurement,
             self.get_health_measurements,
@@ -52,20 +53,28 @@ class LunaVitaMCPAdapter:
     def record_food(
         self,
         food_name: str,
+        quantity: str,
         calories: int,
-        quantity: str | None = None,
+        protein_g: float,
+        carbs_g: float,
+        fat_g: float,
+        natural_sugar_g: float,
+        added_sugar_g: float,
+        image_url: str | None,
         meal_type: str = "other",
-        protein_g: float = 0,
-        carbs_g: float = 0,
-        fat_g: float = 0,
-        natural_sugar_g: float = 0,
-        added_sugar_g: float = 0,
         consumed_at: str | None = None,
         consumed_date: str | None = None,
         time_label: str | None = None,
         notes: str | None = None,
     ) -> dict[str, Any]:
-        """Record food and its calories in kcal plus macronutrients."""
+        """Record a food item after completing its nutrition estimate.
+
+        Food name and quantity are mandatory. When the user omits kcal, protein,
+        carbs, fat, natural sugar, added sugar, or an image, infer those values
+        from the stated food and complete quantity before calling this tool.
+        Supply a representative verified image URL/data URI when available;
+        otherwise pass null rather than inventing a URL.
+        """
         return self.service.record_food(
             FoodEntryCreate(
                 food_name=food_name,
@@ -77,6 +86,7 @@ class LunaVitaMCPAdapter:
                 fat_g=fat_g,
                 natural_sugar_g=natural_sugar_g,
                 added_sugar_g=added_sugar_g,
+                image_url=image_url,
                 consumed_at=consumed_at,
                 consumed_date=consumed_date,
                 time_label=time_label,
@@ -93,8 +103,9 @@ class LunaVitaMCPAdapter:
         protein_g: float,
         carbs_g: float,
         fat_g: float,
-        natural_sugar_g: float = 0,
-        added_sugar_g: float = 0,
+        natural_sugar_g: float,
+        added_sugar_g: float,
+        image_url: str | None,
         consumed_at: str | None = None,
         consumed_date: str | None = None,
     ) -> dict[str, Any]:
@@ -102,9 +113,12 @@ class LunaVitaMCPAdapter:
 
         Use this tool when the user says they ate or drank something and wants
         LunaVita to track it, including natural statements such as "I had 4
-        parathas of 40 g each right now". Infer a reasonable nutrition estimate
-        for the complete stated quantity before calling the tool. Use the current
-        date/time when the user says "now"; otherwise preserve the stated time.
+        parathas of 40 g each right now". Food name and quantity are mandatory.
+        Infer kcal, protein, carbs, fat, natural sugar, and added sugar for the
+        complete stated quantity before calling the tool. Also supply a
+        representative verified image URL/data URI when available; pass null
+        rather than inventing a URL. Use the current date/time when the user says
+        "now"; otherwise preserve the stated time.
         """
         return self.service.log_consumed_food(
             description=description,
@@ -116,6 +130,7 @@ class LunaVitaMCPAdapter:
             fat_g=fat_g,
             natural_sugar_g=natural_sugar_g,
             added_sugar_g=added_sugar_g,
+            image_url=image_url,
             consumed_at=consumed_at,
             consumed_date=consumed_date,
         )
@@ -135,14 +150,15 @@ class LunaVitaMCPAdapter:
         self,
         entry_id: int,
         food_name: str,
+        quantity: str,
         calories: int,
-        quantity: str | None = None,
+        protein_g: float,
+        carbs_g: float,
+        fat_g: float,
+        natural_sugar_g: float,
+        added_sugar_g: float,
+        image_url: str | None,
         meal_type: str = "other",
-        protein_g: float = 0,
-        carbs_g: float = 0,
-        fat_g: float = 0,
-        natural_sugar_g: float = 0,
-        added_sugar_g: float = 0,
         consumed_at: str | None = None,
         consumed_date: str | None = None,
         time_label: str | None = None,
@@ -159,12 +175,20 @@ class LunaVitaMCPAdapter:
             fat_g=fat_g,
             natural_sugar_g=natural_sugar_g,
             added_sugar_g=added_sugar_g,
+            image_url=image_url,
             consumed_at=consumed_at,
             consumed_date=consumed_date,
             time_label=time_label,
             notes=notes,
         )
         updated = self.service.update_food(entry_id, entry)
+        return {"updated": updated is not None, "entry": updated}
+
+    def set_food_image(
+        self, entry_id: int, image_url: str | None = None
+    ) -> dict[str, Any]:
+        """Set, replace, or clear the optional image URL for a food entry."""
+        updated = self.service.set_food_image(entry_id, image_url)
         return {"updated": updated is not None, "entry": updated}
 
     def remove_food(
@@ -320,6 +344,7 @@ class LunaVitaAPIAdapter:
     @asynccontextmanager
     async def lifespan(self, app: FastAPI):
         self.database.open()
+        self.service.ensure_schema()
         async with self.mcp_server.session_manager.run():
             yield
         self.database.close()
@@ -358,6 +383,17 @@ class LunaVitaAPIAdapter:
             "/api/measurements",
             self.read_measurements,
             methods=["GET"],
+        )
+        self.app.add_api_route(
+            "/api/measurements/{entry_id}",
+            self.replace_measurement,
+            methods=["PUT"],
+        )
+        self.app.add_api_route(
+            "/api/measurements/{entry_id}",
+            self.remove_measurement,
+            methods=["DELETE"],
+            status_code=204,
         )
         self.app.add_api_route(
             "/api/recommendations",
@@ -421,6 +457,19 @@ class LunaVitaAPIAdapter:
         self, batch: HealthMeasurementBatchCreate
     ) -> list[dict[str, Any]]:
         return self.service.record_measurements(batch.measurements)
+
+    def replace_measurement(
+        self, entry_id: int, entry: HealthMeasurementCreate
+    ) -> dict[str, Any]:
+        updated = self.service.update_measurement(entry_id, entry)
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Measurement not found")
+        return updated
+
+    def remove_measurement(self, entry_id: int) -> Response:
+        if not self.service.remove_measurement(entry_id):
+            raise HTTPException(status_code=404, detail="Measurement not found")
+        return Response(status_code=204)
 
     def read_measurements(
         self,

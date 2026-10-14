@@ -4,6 +4,7 @@ import os
 import base64
 import hashlib
 import inspect
+from io import BytesIO
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
@@ -12,7 +13,7 @@ from typing import Any
 import pandas as pd
 import requests
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 UI_ROOT = Path(__file__).resolve().parent
 LOGO_PATH = UI_ROOT / "assets" / "luna-vita-logo.png"
@@ -98,6 +99,12 @@ class LunaVitaAPI:
     def create_measurements(self, payloads: list[dict[str, Any]]) -> None:
         self.request("POST", "/api/measurements/batch", json={"measurements": payloads})
 
+    def update_measurement(self, entry_id: int, payload: dict[str, Any]) -> None:
+        self.request("PUT", f"/api/measurements/{entry_id}", json=payload)
+
+    def delete_measurement(self, entry_id: int) -> None:
+        self.request("DELETE", f"/api/measurements/{entry_id}")
+
     def report(self, day: date) -> bytes:
         response = requests.get(
             f"{self.base_url}/api/reports/daily/{day.isoformat()}", timeout=self.timeout
@@ -164,9 +171,39 @@ class LunaStyle:
             .nutrition-ring span { position:relative; z-index:1; color:var(--card-accent); font-size:.68rem; font-weight:750; }
             @media (max-width:900px) { .nutrition-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .nutrition-head { align-items:start; flex-direction:column; gap:.8rem; } .nutrition-overall { width:100%; min-width:0; } }
             @media (max-width:520px) { .nutrition-cards { grid-template-columns:1fr; } }
-            div[data-testid="stDataFrame"],div[data-testid="stDataEditor"] { border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+            .food-log-heading { margin:1.2rem 0 .75rem; }
+            .food-log-heading h2 { margin:0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
+            .food-log-heading p { margin:.25rem 0 0; color:var(--muted); font-size:.78rem; }
+            div[data-testid="stHorizontalBlock"]:has(.food-log-heading) { align-items:center; }
+            div[data-testid="stHorizontalBlock"]:has(.food-log-heading) .stButton > button { width:100%; }
+            div[data-testid="stDataFrame"],div[data-testid="stDataEditor"] { border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(255,255,255,.025); box-shadow:0 12px 30px rgba(0,0,0,.16); }
+            .macro-content { display:grid; grid-template-columns:minmax(12rem,1fr) minmax(12rem,1fr); align-items:center; gap:2rem; width:100%; margin:.1rem 0 .4rem; }
+            .macro-donut { position:relative; grid-column:2; grid-row:1; width:10rem; height:10rem; margin:auto; }
+            .macro-donut svg { display:block; width:100%; height:100%; overflow:visible; }
+            .macro-track { fill:none; stroke:rgba(255,255,255,.10); stroke-width:16; }
+            .macro-segment { fill:none; stroke-width:16; cursor:help; transition:stroke-width 140ms ease,filter 140ms ease; }
+            .macro-slice:hover .macro-segment { stroke-width:21; filter:drop-shadow(0 0 7px currentColor); }
+            .macro-tooltip { opacity:0; pointer-events:none; fill:var(--text); font-family:inherit; font-size:7px; font-weight:650; transition:opacity 100ms ease; }
+            .macro-tooltip .macro-tooltip-value { fill:var(--muted); font-size:6px; font-weight:500; }
+            .macro-slice:hover .macro-tooltip { opacity:1; }
+            .macro-center { position:absolute; inset:0; display:grid; place-content:center; text-align:center; pointer-events:none; color:var(--text); font-size:1.1rem; font-weight:750; transition:opacity 100ms ease; }
+            .macro-donut:has(.macro-slice:hover) .macro-center { opacity:0; }
+            .macro-center small { display:block; margin-top:.1rem; color:var(--muted); font-size:.68rem; font-weight:500; }
+            .macro-legend { grid-column:1; grid-row:1; display:grid; gap:.65rem; width:min(100%,20rem); }
+            .macro-row { display:grid; grid-template-columns:.65rem 1fr auto; align-items:center; gap:.5rem; color:var(--text); font-size:.75rem; }
+            .macro-dot { width:.62rem; height:.62rem; border-radius:50%; background:var(--dot); }
+            @media (max-width:620px) { .macro-content { grid-template-columns:1fr; } .macro-legend,.macro-donut { grid-column:1; grid-row:auto; } }
             div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:var(--panel); }
             div[data-baseweb="input"] > div,div[data-baseweb="select"] > div { border-color:var(--border)!important; border-radius:.5rem!important; background:var(--panel)!important; }
+            div[data-testid="stNumberInput"] button { background:rgba(255,255,255,.09)!important; color:#d4d4d4!important; border-color:rgba(255,255,255,.14)!important; }
+            div[data-testid="stNumberInput"] button:hover { background:rgba(255,255,255,.15)!important; color:#f5f5f5!important; }
+            div[data-testid="stNumberInput"] button svg { fill:currentColor!important; stroke:currentColor!important; color:inherit!important; opacity:1!important; }
+            div[data-testid="stToggle"] input { accent-color:#8f8f8f!important; }
+            div[data-testid="stToggle"] [data-baseweb="checkbox"] > div,
+            div[data-testid="stToggle"] input:not(:checked) + div { background:#737373!important; border-color:#8a8a8a!important; }
+            div[data-testid="stToggle"] input:checked + div { background:#a3a3a3!important; border-color:#b8b8b8!important; }
+            div[data-testid="stToggle"] [data-baseweb="checkbox"] > div::before,
+            div[data-testid="stToggle"] input + div::before { background:#d4d4d4!important; }
             .stButton > button,.stDownloadButton > button,div[data-testid="stFormSubmitButton"] > button { min-height:2.625rem!important; border:1px solid var(--border)!important; border-radius:.5rem!important; background:var(--control)!important; color:var(--text)!important; font-weight:650!important; }
             .stButton > button:hover,.stDownloadButton > button:hover,div[data-testid="stFormSubmitButton"] > button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; transform:translateY(-1px); }
             button[kind="primary"] { border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.16)!important; }
@@ -357,12 +394,33 @@ class FoodLogView:
         "fat_g",
         "natural_sugar_g",
         "added_sugar_g",
+        "image_url",
         "notes",
     ]
 
     @staticmethod
     def nullable(value: Any) -> Any:
         return None if pd.isna(value) else value
+
+    @staticmethod
+    def uploaded_image_data_url(uploaded_file: Any) -> str:
+        """Normalize an uploaded photo into a compact database-safe data URL."""
+        try:
+            image = ImageOps.exif_transpose(Image.open(uploaded_file))
+            image.thumbnail((360, 360), Image.Resampling.LANCZOS)
+            if image.mode in {"RGBA", "LA"}:
+                rgba = image.convert("RGBA")
+                background = Image.new("RGB", rgba.size, (17, 17, 17))
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                image = background
+            else:
+                image = image.convert("RGB")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=85, optimize=True)
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise ValueError("Choose a valid JPG, PNG, or WebP food photo.") from exc
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
 
     @staticmethod
     def display_time(row: pd.Series) -> str:
@@ -393,172 +451,266 @@ class FoodLogView:
             return datetime.combine(original.date(), parsed.time()).isoformat(), None
         return datetime.combine(original.date(), time.min).isoformat(), text
 
-    def render(self, day: date) -> None:
-        LunaStyle.section(
-            "Daily log",
-            "Food and nutrition",
-            "Edit cells directly. Tick Delete for unwanted rows, then select Save daily log.",
+    @staticmethod
+    def render_macro_distribution(rows: list[dict[str, Any]]) -> None:
+        calories = sum(float(row["calories"]) for row in rows)
+        values = [
+            sum(float(row["protein_g"]) for row in rows),
+            sum(float(row["carbs_g"]) for row in rows),
+            sum(float(row["fat_g"]) for row in rows),
+            sum(float(row["natural_sugar_g"]) for row in rows),
+            sum(float(row["added_sugar_g"]) for row in rows),
+        ]
+        total = sum(values)
+        percentages = (
+            [round(value * 100 / total) for value in values]
+            if total
+            else [0, 0, 0, 0, 0]
         )
+        if total:
+            percentages[-1] += 100 - sum(percentages)
+        colors = ["#4ade80", "#60a5fa", "#fbbf24", "#c084fc", "#fb7185"]
+        labels = ["Protein", "Carbs", "Fat", "Natural sugar", "Added sugar"]
+        cursor = 0
+        segments = []
+        for label, value, percentage, color in zip(
+            labels, values, percentages, colors
+        ):
+            segments.append(
+                '<g class="macro-slice">'
+                '<circle class="macro-segment" cx="60" cy="60" r="48" '
+                'pathLength="100" '
+                f'stroke="{color}" color="{color}" '
+                f'stroke-dasharray="{percentage} {100 - percentage}" '
+                f'stroke-dashoffset="{-cursor}" transform="rotate(-90 60 60)"/>'
+                '<text class="macro-tooltip" x="60" y="56" text-anchor="middle">'
+                f"<tspan x=\"60\">{label} {percentage}%</tspan>"
+                f'<tspan class="macro-tooltip-value" x="60" dy="10">'
+                f"{value:,.1f} g"
+                "</tspan></text></g>"
+            )
+            cursor += percentage
+        legend = "".join(
+            '<div class="macro-row">'
+            f'<span class="macro-dot" style="--dot:{color}"></span>'
+            f"<span>{label}</span><strong>{percentage}%</strong></div>"
+            for label, percentage, color in zip(labels, percentages, colors)
+        )
+        st.markdown(
+            '<div class="food-log-heading"><h2>Macro distribution</h2></div>',
+            unsafe_allow_html=True,
+        )
+        html = (
+            '<section class="macro-content">'
+            f'<div class="macro-legend">{legend}</div>'
+            '<div class="macro-donut"><svg viewBox="0 0 120 120" '
+            'role="img" aria-label="Macro distribution">'
+            '<circle class="macro-track" cx="60" cy="60" r="48"/>'
+            f'{"".join(segments)}</svg>'
+            f'<div class="macro-center">{calories:,.0f}<small>kcal</small></div>'
+            '</div></section>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
+
+    def save_rows(self, rows: list[dict[str, Any]], edited: pd.DataFrame) -> None:
+        original = {int(row["id"]): row for row in rows}
+        for row in edited.to_dict("records"):
+            entry_id = int(row["id"])
+            if row["remove"]:
+                self.api.delete_food(entry_id)
+                continue
+            consumed_at, time_label = self.resolve_display_time(
+                row["display_time"], original[entry_id]["consumed_at"]
+            )
+            self.api.update_food(entry_id, {
+                "food_name": str(row["food_name"]).strip(),
+                "quantity": str(row["quantity"]).strip(),
+                "meal_type": original[entry_id]["meal_type"],
+                "calories": int(row["calories"]),
+                "protein_g": float(row["protein_g"]),
+                "carbs_g": float(row["carbs_g"]),
+                "fat_g": float(row["fat_g"]),
+                "natural_sugar_g": float(row["natural_sugar_g"]),
+                "added_sugar_g": float(row["added_sugar_g"]),
+                "image_url": self.nullable(row["image_url"]),
+                "consumed_at": consumed_at,
+                "consumed_date": original[entry_id]["consumed_date"],
+                "time_label": time_label,
+                "notes": self.nullable(row["notes"]),
+            })
+        st.toast("Daily log saved")
+        st.rerun()
+
+    def render_actions(self, day: date, rows: list[dict[str, Any]], edited: pd.DataFrame | None) -> None:
+        save_column, download_column = st.columns(2, gap="medium")
+        if save_column.button("Save daily log", type="primary", icon=":material/save:", width="stretch", disabled=edited is None):
+            self.save_rows(rows, edited)
+        try:
+            download_column.download_button(
+                "Download daily PDF", self.api.report(day),
+                file_name=f"lunavita-{day.isoformat()}.pdf",
+                mime="application/pdf", icon=":material/download:", width="stretch",
+            )
+        except requests.RequestException:
+            download_column.caption("Daily PDF is temporarily unavailable.")
+
+    def render(self, day: date) -> None:
+        title_column, action_column = st.columns([5, 1], vertical_alignment="center", gap="medium")
+        with title_column:
+            st.markdown(
+                '<div class="food-log-heading"><h2>Food and nutrition</h2>'
+                '<p>Log your meals, snacks and supplements for the day.</p></div>',
+                unsafe_allow_html=True,
+            )
+        with action_column:
+            self.add_form(day)
         rows = self.api.food(day)
+        edited = None
         if rows:
             frame = pd.DataFrame(rows)[self.COLUMNS]
             frame["display_time"] = frame.apply(self.display_time, axis=1)
             frame.insert(0, "remove", False)
             edited = st.data_editor(
-                frame,
-                hide_index=True,
-                use_container_width=True,
-                disabled=["id"],
-                height=min(640, 88 + 35 * len(frame)),
-                column_order=[
-                    "remove",
-                    "display_time",
-                    "food_name",
-                    "quantity",
-                    "calories",
-                    "protein_g",
-                    "carbs_g",
-                    "fat_g",
-                    "natural_sugar_g",
-                    "added_sugar_g",
-                    "notes",
-                ],
+                frame, hide_index=True, use_container_width=True,
+                disabled=["id", "image_url"], height=min(680, 88 + 54 * len(frame)),
+                row_height=52,
+                column_order=["display_time", "image_url", "food_name", "quantity", "calories", "protein_g", "carbs_g", "fat_g", "natural_sugar_g", "added_sugar_g", "notes", "remove"],
                 column_config={
                     "remove": st.column_config.CheckboxColumn(
-                        "Delete", help="Tick the row, then select Save daily log."
+                        "Delete", help="Select rows to delete, then save."
                     ),
-                    "display_time": st.column_config.TextColumn("Consumed time"),
+                    "display_time": st.column_config.TextColumn(
+                        "Time", pinned=True
+                    ),
+                    "image_url": st.column_config.ImageColumn(
+                        "Image", help="Optional food image", width="small", pinned=True
+                    ),
                     "food_name": st.column_config.TextColumn(
-                        "Food / supplement", required=True, width="large"
+                        "Food / supplement", required=True, width="large", pinned=True
                     ),
-                    "quantity": st.column_config.TextColumn("Quantity", width="medium"),
-                    "calories": st.column_config.NumberColumn(
-                        "kcal", min_value=0, step=1
-                    ),
-                    "protein_g": st.column_config.NumberColumn(
-                        "Protein g", min_value=0.0
-                    ),
-                    "carbs_g": st.column_config.NumberColumn("Carbs g", min_value=0.0),
-                    "fat_g": st.column_config.NumberColumn("Fat g", min_value=0.0),
-                    "natural_sugar_g": st.column_config.NumberColumn(
-                        "Natural sugar g", min_value=0.0
-                    ),
-                    "added_sugar_g": st.column_config.NumberColumn(
-                        "Added sugar g", min_value=0.0
-                    ),
+                    "quantity": st.column_config.TextColumn("\u21aa Quantity", required=True, width="medium"),
+                    "calories": st.column_config.NumberColumn("\u2668 kcal", min_value=0, step=1),
+                    "protein_g": st.column_config.NumberColumn("\u224b Protein", min_value=0.0),
+                    "carbs_g": st.column_config.NumberColumn("\u224b Carbs", min_value=0.0),
+                    "fat_g": st.column_config.NumberColumn("\u25c9 Fat", min_value=0.0),
+                    "natural_sugar_g": st.column_config.NumberColumn("\u25c7 Natural sugar", min_value=0.0),
+                    "added_sugar_g": st.column_config.NumberColumn("\u25c7 Added sugar", min_value=0.0),
                     "notes": st.column_config.TextColumn("Notes", width="large"),
                 },
                 key=f"food-editor-{day.isoformat()}",
             )
-            if st.button("Save daily log", type="primary"):
-                original = {int(row["id"]): row for row in rows}
-                for row in edited.to_dict("records"):
-                    entry_id = int(row["id"])
-                    if row["remove"]:
-                        self.api.delete_food(entry_id)
-                        continue
-                    consumed_at, time_label = self.resolve_display_time(
-                        row["display_time"], original[entry_id]["consumed_at"]
-                    )
-                    self.api.update_food(
-                        entry_id,
-                        {
-                            "food_name": str(row["food_name"]).strip(),
-                            "quantity": self.nullable(row["quantity"]),
-                            "meal_type": original[entry_id]["meal_type"],
-                            "calories": int(row["calories"]),
-                            "protein_g": float(row["protein_g"]),
-                            "carbs_g": float(row["carbs_g"]),
-                            "fat_g": float(row["fat_g"]),
-                            "natural_sugar_g": float(row["natural_sugar_g"]),
-                            "added_sugar_g": float(row["added_sugar_g"]),
-                            "consumed_at": consumed_at,
-                            "consumed_date": original[entry_id]["consumed_date"],
-                            "time_label": time_label,
-                            "notes": self.nullable(row["notes"]),
-                        },
-                    )
-                st.toast("Daily log saved")
-                st.rerun()
         else:
             st.info("No food entries for this day yet.")
-        self.add_form(day)
-        try:
-            st.download_button(
-                "Download daily PDF",
-                self.api.report(day),
-                file_name=f"lunavita-{day.isoformat()}.pdf",
-                mime="application/pdf",
-            )
-        except requests.RequestException:
-            st.caption("Daily PDF is temporarily unavailable.")
+        self.render_actions(day, rows, edited)
+        self.render_macro_distribution(rows)
 
     def add_form(self, day: date) -> None:
-        with st.expander("Add food or supplement"):
-            include_time = st.checkbox(
-                "Include consumed time",
-                value=True,
-                key=f"include-consumed-time-{day.isoformat()}",
+        if st.button(
+            "Add entry",
+            icon=":material/add:",
+            type="primary",
+            width="stretch",
+            key=f"open-food-entry-{day.isoformat()}",
+        ):
+            self.add_dialog(day)
+
+    @st.dialog("Add food or supplement", width="large")
+    def add_dialog(self, day: date) -> None:
+        c1, c2 = st.columns([2, 1.2])
+        name = c1.text_input("Food / supplement :red[*]")
+        quantity = c2.text_input(
+            "Quantity :red[*]", placeholder="30 g, 1 serving..."
+        )
+
+        date_column, toggle_column, time_column = st.columns(
+            [1.35, 1.05, 1.2], vertical_alignment="bottom"
+        )
+        consumed_date = date_column.date_input("Consumed date", value=day)
+        include_time = toggle_column.toggle(
+            "Include consumed time",
+            value=True,
+            key=f"include-consumed-time-{day.isoformat()}",
+        )
+        if include_time:
+            consumed_time = time_column.time_input(
+                "Consumed time",
+                datetime.now().replace(second=0, microsecond=0).time(),
+                step=60,
             )
-            with st.form("food-entry", clear_on_submit=True):
-                c1, c2 = st.columns([2, 1.2])
-                name = c1.text_input("Food / supplement")
-                quantity = c2.text_input("Quantity", placeholder="30 g, 1 serving...")
-                consumed_date = st.date_input("Consumed date", value=day)
-                if include_time:
-                    consumed_time = st.time_input(
-                        "Consumed time",
-                        datetime.now().replace(second=0, microsecond=0).time(),
-                        step=60,
-                    )
-                else:
-                    consumed_time = None
-                time_label = st.text_input(
-                    "Time label", placeholder="Morning, ~4:30 PM..."
+        else:
+            consumed_time = None
+            time_column.text_input(
+                "Consumed time",
+                value="Not recorded",
+                disabled=True,
+            )
+
+        time_label = st.text_input(
+            "Time label", placeholder="Morning, ~4:30 PM..."
+        )
+        uploaded_image = st.file_uploader(
+            "Food photo (optional)",
+            type=["jpg", "jpeg", "png", "webp"],
+            help="Choose a photo from this device. It will be resized before saving.",
+        )
+        nutrients = st.columns(6)
+        calories = nutrients[0].number_input(
+            "Calories kcal", min_value=0, step=1
+        )
+        protein = nutrients[1].number_input(
+            "Protein g", min_value=0.0, step=0.5
+        )
+        carbs = nutrients[2].number_input("Carbs g", min_value=0.0, step=0.5)
+        fat = nutrients[3].number_input("Fat g", min_value=0.0, step=0.5)
+        natural = nutrients[4].number_input(
+            "Natural sugar", min_value=0.0, step=0.5
+        )
+        added = nutrients[5].number_input(
+            "Added sugar", min_value=0.0, step=0.5
+        )
+        notes = st.text_input("Notes", max_chars=2000)
+        submitted = st.button(
+            "Record food",
+            type="primary",
+            width="stretch",
+            key=f"record-food-{day.isoformat()}",
+        )
+        if submitted:
+            if not name.strip() or not quantity.strip():
+                st.warning("Food name and quantity are required.")
+                return
+            try:
+                stored_image = (
+                    self.uploaded_image_data_url(uploaded_image)
+                    if uploaded_image is not None
+                    else None
                 )
-                nutrients = st.columns(6)
-                calories = nutrients[0].number_input(
-                    "Calories kcal", min_value=0, step=1
-                )
-                protein = nutrients[1].number_input(
-                    "Protein g", min_value=0.0, step=0.5
-                )
-                carbs = nutrients[2].number_input("Carbs g", min_value=0.0, step=0.5)
-                fat = nutrients[3].number_input("Fat g", min_value=0.0, step=0.5)
-                natural = nutrients[4].number_input(
-                    "Natural sugar", min_value=0.0, step=0.5
-                )
-                added = nutrients[5].number_input(
-                    "Added sugar", min_value=0.0, step=0.5
-                )
-                notes = st.text_input("Notes", max_chars=2000)
-                submitted = st.form_submit_button("Record food", type="primary")
-            if submitted:
-                if not name.strip():
-                    st.warning("Enter a food or supplement name.")
-                    return
-                self.api.create_food(
-                    {
-                        "food_name": name.strip(),
-                        "quantity": quantity.strip() or None,
-                        "meal_type": "other",
-                        "calories": int(calories),
-                        "protein_g": float(protein),
-                        "carbs_g": float(carbs),
-                        "fat_g": float(fat),
-                        "natural_sugar_g": float(natural),
-                        "added_sugar_g": float(added),
-                        "consumed_at": datetime.combine(
-                            consumed_date, consumed_time or time.min
-                        ).isoformat(),
-                        "consumed_date": consumed_date.isoformat(),
-                        "time_label": time_label.strip()
-                        or (None if include_time else "Not recorded"),
-                        "notes": notes.strip() or None,
-                    }
-                )
-                st.toast("Food saved to database")
-                st.rerun()
+            except ValueError as exc:
+                st.warning(str(exc))
+                return
+            self.api.create_food(
+                {
+                    "food_name": name.strip(),
+                    "quantity": quantity.strip(),
+                    "meal_type": "other",
+                    "calories": int(calories),
+                    "protein_g": float(protein),
+                    "carbs_g": float(carbs),
+                    "fat_g": float(fat),
+                    "natural_sugar_g": float(natural),
+                    "added_sugar_g": float(added),
+                    "image_url": stored_image,
+                    "consumed_at": datetime.combine(
+                        consumed_date, consumed_time or time.min
+                    ).isoformat(),
+                    "consumed_date": consumed_date.isoformat(),
+                    "time_label": time_label.strip()
+                    or (None if include_time else "Not recorded"),
+                    "notes": notes.strip() or None,
+                }
+            )
+            st.toast("Food saved to database")
+            st.rerun()
 
 
 @dataclass
@@ -592,11 +744,17 @@ class WeightView:
         return f"{value:g} {unit}"
 
     def render(self, day: date) -> None:
-        LunaStyle.section(
-            "Body measurements",
-            "Morning and night check-ins",
-            "Weight, BMR, health score, body age, BMI, and water ratio for the selected day.",
+        title_column, action_column = st.columns(
+            [5, 1], vertical_alignment="center", gap="medium"
         )
+        with title_column:
+            st.markdown(
+                '<div class="food-log-heading"><h2>Body measurements</h2></div>',
+                unsafe_allow_html=True,
+            )
+        with action_column:
+            self.add_form(day)
+
         rows = self.api.measurements()
         frame = pd.DataFrame(rows)
         if not frame.empty:
@@ -617,9 +775,9 @@ class WeightView:
             if not frame.empty:
                 metric_rows = frame[frame["metric"] == metric]
                 for period in ("Morning", "Night"):
-                    matches = metric_rows[metric_rows["period"] == period].sort_values(
-                        "measured_at"
-                    )
+                    matches = metric_rows[
+                        metric_rows["period"] == period
+                    ].sort_values("measured_at")
                     if not matches.empty:
                         row = matches.iloc[-1]
                         display[period] = self.format_value(
@@ -628,95 +786,149 @@ class WeightView:
             display_rows.append(display)
 
         st.dataframe(
-            pd.DataFrame(display_rows), hide_index=True, use_container_width=True
+            pd.DataFrame(display_rows),
+            hide_index=True,
+            use_container_width=True,
         )
-        self.add_form(day)
 
     def add_form(self, day: date) -> None:
-        with st.expander("Record body measurements"):
-            with st.form("body-measurement-entry", clear_on_submit=True):
-                date_col, period_col, time_col = st.columns(3)
-                measured_date = date_col.date_input("Measured date", value=day)
-                period = period_col.selectbox("Period", ["Morning", "Night"])
-                default_time = time(8, 0) if period == "Morning" else time(22, 0)
-                measured_time = time_col.time_input("Time", default_time, step=60)
+        if st.button(
+            "Add entry",
+            icon=":material/add:",
+            type="primary",
+            width="stretch",
+            key=f"open-body-entry-{day.isoformat()}",
+        ):
+            self.add_dialog(day)
 
-                first_row = st.columns(3)
-                weight = first_row[0].number_input(
-                    "Weight (kg)", min_value=0.0, step=0.1, value=None
-                )
-                bmr = first_row[1].number_input(
-                    "BMR (kcal/day)", min_value=0, step=1, value=None
-                )
-                health_score = first_row[2].number_input(
-                    "Health score (/100)",
-                    min_value=0,
-                    max_value=100,
-                    step=1,
-                    value=None,
-                )
+    @st.dialog("Add body measurements", width="large")
+    def add_dialog(self, day: date) -> None:
+        weight = st.number_input(
+            "Weight (kg) :red[*]",
+            min_value=0.0,
+            step=0.1,
+            value=None,
+        )
 
-                second_row = st.columns(3)
-                body_age = second_row[0].number_input(
-                    "Body age (years)", min_value=0, step=1, value=None
-                )
-                bmi = second_row[1].number_input(
-                    "BMI", min_value=0.0, step=0.1, value=None
-                )
-                water_ratio = second_row[2].number_input(
-                    "Water ratio (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    step=0.1,
-                    value=None,
-                )
-                notes = st.text_input("Notes", max_chars=2000)
-                submitted = st.form_submit_button(
-                    "Save body measurements", type="primary"
-                )
+        date_col, period_col, toggle_col, time_col = st.columns(
+            [1.25, 1.05, 1.2, 1.15], vertical_alignment="bottom"
+        )
+        include_time = toggle_col.toggle(
+            "Include measured time",
+            value=True,
+            key=f"include-measured-time-{day.isoformat()}",
+        )
+        measured_date = date_col.date_input("Measured date", value=day)
+        period = period_col.selectbox(
+            "Morning / night :red[*]",
+            ["Morning", "Night"],
+            index=0,
+        )
+        if include_time:
+            measured_time = time_col.time_input(
+                "Measured time",
+                datetime.now().replace(second=0, microsecond=0).time(),
+                step=60,
+            )
+        else:
+            measured_time = None
 
-            if submitted:
-                measured_at = datetime.combine(measured_date, measured_time).isoformat()
-                values = {
-                    "weight": (weight, "kg"),
-                    "bmr": (bmr, "kcal/day"),
-                    "health_score": (health_score, "/100"),
-                    "body_age": (body_age, "years"),
-                    "bmi": (bmi, "index"),
-                    "water_ratio": (water_ratio, "%"),
+        first_row = st.columns(3)
+        bmr = first_row[0].number_input(
+            "BMR (kcal/day)", min_value=0, step=1, value=None
+        )
+        health_score = first_row[1].number_input(
+            "Health score (/100)",
+            min_value=0,
+            max_value=100,
+            step=1,
+            value=None,
+        )
+        body_age = first_row[2].number_input(
+            "Body age (years)", min_value=0, step=1, value=None
+        )
+
+        second_row = st.columns(2)
+        bmi = second_row[0].number_input(
+            "BMI", min_value=0.0, step=0.1, value=None
+        )
+        water_ratio = second_row[1].number_input(
+            "Water ratio (%)",
+            min_value=0.0,
+            max_value=100.0,
+            step=0.1,
+            value=None,
+        )
+        notes = st.text_input("Notes", max_chars=2000)
+        submitted = st.button(
+            "Save body measurements",
+            type="primary",
+            icon=":material/save:",
+            width="stretch",
+            key=f"submit-body-measurements-{day.isoformat()}",
+        )
+
+        if submitted:
+            effective_time = measured_time or time.min
+            measured_at = datetime.combine(
+                measured_date, effective_time
+            ).isoformat()
+            if weight is None:
+                st.warning("Weight is required.")
+                return
+            values = {
+                "weight": (weight, "kg"),
+                "bmr": (bmr, "kcal/day"),
+                "health_score": (health_score, "/100"),
+                "body_age": (body_age, "years"),
+                "bmi": (bmi, "index"),
+                "water_ratio": (water_ratio, "%"),
+            }
+            payloads = [
+                {
+                    "metric": metric,
+                    "value": float(value),
+                    "unit": unit,
+                    "measured_at": measured_at,
+                    "time_label": period,
+                    "notes": notes.strip() or None,
                 }
-                payloads = [
-                    {
-                        "metric": metric,
-                        "value": float(value),
-                        "unit": unit,
-                        "measured_at": measured_at,
-                        "time_label": period,
-                        "notes": notes.strip() or None,
-                    }
-                    for metric, (value, unit) in values.items()
-                    if value is not None
-                ]
-                if not payloads:
-                    st.warning("Enter at least one body measurement.")
-                    return
-                self.api.create_measurements(payloads)
-                st.toast("Body measurements saved to database")
-                st.rerun()
+                for metric, (value, unit) in values.items()
+                if value is not None
+            ]
+            if not payloads:
+                st.warning("Enter at least one body measurement.")
+                return
+            self.api.create_measurements(payloads)
+            st.toast("Body measurements saved to database")
+            st.rerun()
 
 
 class LunaVitaApp:
+    PERIOD_KEY = "nutrition-period"
+    LAST_PERIOD_KEY = "nutrition-period-last"
+
     def __init__(self) -> None:
         self.api = LunaVitaAPI(AppConfig.from_env())
+
+    @classmethod
+    def preserve_period_selection(cls) -> None:
+        selected = st.session_state.get(cls.PERIOD_KEY)
+        if selected is None:
+            st.session_state[cls.PERIOD_KEY] = st.session_state.get(
+                cls.LAST_PERIOD_KEY, "daily"
+            )
+        else:
+            st.session_state[cls.LAST_PERIOD_KEY] = selected
 
     def render(self) -> None:
         LunaStyle.apply()
         SourceReloadMonitor.notify()
         selected_day = LunaStyle.header(date.today())
         period_labels = {
-            "daily": ":material/today: Daily Tracking",
-            "weekly": ":material/date_range: Weekly Tracking",
-            "monthly": ":material/calendar_month: Monthly Tracking",
+            "daily": ":material/today: Daily ",
+            "weekly": ":material/date_range: Weekly ",
+            "monthly": ":material/calendar_month: Monthly ",
         }
         navigation_container = st.container(key="nutrition_navigation")
         navigation_options = {
@@ -724,7 +936,8 @@ class LunaVitaApp:
             "default": "daily",
             "format_func": period_labels.__getitem__,
             "label_visibility": "collapsed",
-            "key": "nutrition-period",
+            "key": self.PERIOD_KEY,
+            "on_change": self.preserve_period_selection,
         }
         if "width" in inspect.signature(st.segmented_control).parameters:
             navigation_options["width"] = "stretch"
@@ -732,6 +945,7 @@ class LunaVitaApp:
             "Nutrition period",
             **navigation_options,
         )
+        period = period or st.session_state.get(self.LAST_PERIOD_KEY, "daily")
         if period == "daily":
             SummaryView(self.api).render(selected_day)
             FoodLogView(self.api).render(selected_day)

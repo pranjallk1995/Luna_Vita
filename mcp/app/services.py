@@ -28,6 +28,9 @@ class LunaVitaService:
     def record_food(self, entry: FoodEntryCreate) -> dict[str, Any]:
         return self.repository.add_food_entry(entry)
 
+    def ensure_schema(self) -> None:
+        self.repository.ensure_schema()
+
     def log_consumed_food(
         self,
         *,
@@ -38,8 +41,9 @@ class LunaVitaService:
         protein_g: float,
         carbs_g: float,
         fat_g: float,
-        natural_sugar_g: float = 0,
-        added_sugar_g: float = 0,
+        natural_sugar_g: float,
+        added_sugar_g: float,
+        image_url: str | None,
         consumed_at: str | None = None,
         consumed_date: str | None = None,
     ) -> dict[str, Any]:
@@ -54,6 +58,7 @@ class LunaVitaService:
                 fat_g=fat_g,
                 natural_sugar_g=natural_sugar_g,
                 added_sugar_g=added_sugar_g,
+                image_url=image_url,
                 consumed_at=consumed_at,
                 consumed_date=consumed_date,
                 notes=note,
@@ -81,6 +86,12 @@ class LunaVitaService:
     ) -> dict[str, Any] | None:
         return self.repository.update_food_entry(entry_id, entry)
 
+    def set_food_image(
+        self, entry_id: int, image_url: str | None
+    ) -> dict[str, Any] | None:
+        normalized = image_url.strip() if image_url and image_url.strip() else None
+        return self.repository.set_food_image(entry_id, normalized)
+
     def remove_food(
         self, entry_id: int, expected_day: date | None = None
     ) -> bool:
@@ -100,6 +111,14 @@ class LunaVitaService:
         self, metric: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         return self.repository.list_health_measurements(metric, limit)
+
+    def update_measurement(
+        self, entry_id: int, entry: HealthMeasurementCreate
+    ) -> dict[str, Any] | None:
+        return self.repository.update_health_measurement(entry_id, entry)
+
+    def remove_measurement(self, entry_id: int) -> bool:
+        return self.repository.delete_health_measurement(entry_id)
 
     def summary(self, day: date) -> dict[str, Any]:
         return self.repository.daily_summary(day)

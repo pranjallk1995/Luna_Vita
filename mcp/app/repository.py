@@ -19,6 +19,23 @@ class LunaVitaRepository:
     def __init__(self, database: Database) -> None:
         self.database = database
 
+    def ensure_schema(self) -> None:
+        """Apply additive migrations required by the running application."""
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS image_url TEXT"
+            )
+            cursor.execute(
+                """
+                UPDATE food_entries
+                SET quantity='Not specified'
+                WHERE quantity IS NULL OR length(trim(quantity))=0
+                """
+            )
+            cursor.execute(
+                "ALTER TABLE food_entries ALTER COLUMN quantity SET NOT NULL"
+            )
+
     @staticmethod
     def serialize(row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -41,8 +58,10 @@ class LunaVitaRepository:
                 """
                 INSERT INTO food_entries
                     (food_name, quantity, meal_type, calories, protein_g, carbs_g, fat_g,
-                     natural_sugar_g, added_sugar_g, consumed_at, consumed_date, time_label, notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), %s, %s, %s)
+                     natural_sugar_g, added_sugar_g, image_url, consumed_at,
+                     consumed_date, time_label, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        COALESCE(%s, NOW()), %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -55,6 +74,7 @@ class LunaVitaRepository:
                     entry.fat_g,
                     entry.natural_sugar_g,
                     entry.added_sugar_g,
+                    entry.image_url,
                     entry.consumed_at,
                     consumed_date,
                     entry.time_label,
@@ -77,7 +97,8 @@ class LunaVitaRepository:
                 UPDATE food_entries
                 SET food_name=%s, quantity=%s, meal_type=%s, calories=%s,
                     protein_g=%s, carbs_g=%s, fat_g=%s, natural_sugar_g=%s,
-                    added_sugar_g=%s, consumed_at=COALESCE(%s, consumed_at),
+                    added_sugar_g=%s, image_url=%s,
+                    consumed_at=COALESCE(%s, consumed_at),
                     consumed_date=%s, time_label=%s, notes=%s
                 WHERE id=%s
                 RETURNING *
@@ -92,12 +113,24 @@ class LunaVitaRepository:
                     entry.fat_g,
                     entry.natural_sugar_g,
                     entry.added_sugar_g,
+                    entry.image_url,
                     entry.consumed_at,
                     consumed_date,
                     entry.time_label,
                     entry.notes,
                     entry_id,
                 ),
+            )
+            row = cursor.fetchone()
+            return self.serialize(row) if row else None
+
+    def set_food_image(
+        self, entry_id: int, image_url: str | None
+    ) -> dict[str, Any] | None:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                "UPDATE food_entries SET image_url=%s WHERE id=%s RETURNING *",
+                (image_url, entry_id),
             )
             row = cursor.fetchone()
             return self.serialize(row) if row else None
@@ -207,6 +240,40 @@ class LunaVitaRepository:
                 (normalized_metric, normalized_metric, min(max(limit, 1), 500)),
             )
             return [self.serialize(row) for row in cursor.fetchall()]
+
+    def update_health_measurement(
+        self, entry_id: int, entry: HealthMeasurementCreate
+    ) -> dict[str, Any] | None:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE health_measurements
+                SET metric=%s, value=%s, unit=%s,
+                    measured_at=COALESCE(%s, measured_at),
+                    time_label=%s, notes=%s
+                WHERE id=%s
+                RETURNING *
+                """,
+                (
+                    entry.metric.strip().lower(),
+                    entry.value,
+                    entry.unit.strip(),
+                    entry.measured_at,
+                    entry.time_label,
+                    entry.notes,
+                    entry_id,
+                ),
+            )
+            row = cursor.fetchone()
+            return self.serialize(row) if row else None
+
+    def delete_health_measurement(self, entry_id: int) -> bool:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM health_measurements WHERE id=%s RETURNING id",
+                (entry_id,),
+            )
+            return cursor.fetchone() is not None
 
     def list_health_measurements_for_day(
         self, day: date

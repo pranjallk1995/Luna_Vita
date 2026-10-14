@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS food_entries (
     consumed_date DATE NOT NULL DEFAULT CURRENT_DATE,
     time_label TEXT,
     food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),
-    quantity TEXT,
+    quantity TEXT NOT NULL CHECK (length(trim(quantity)) > 0),
     meal_type TEXT NOT NULL DEFAULT 'other'
         CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack', 'other')),
     calories INTEGER NOT NULL CHECK (calories >= 0),
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS food_entries (
     fat_g NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (fat_g >= 0),
     natural_sugar_g NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (natural_sugar_g >= 0),
     added_sugar_g NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (added_sugar_g >= 0),
+    image_url TEXT,
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -23,6 +24,11 @@ SET consumed_date = (consumed_at AT TIME ZONE 'Asia/Kolkata')::date
 WHERE consumed_date IS NULL;
 ALTER TABLE food_entries ALTER COLUMN consumed_date SET DEFAULT CURRENT_DATE;
 ALTER TABLE food_entries ALTER COLUMN consumed_date SET NOT NULL;
+ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS image_url TEXT;
+UPDATE food_entries
+SET quantity = 'Not specified'
+WHERE quantity IS NULL OR length(trim(quantity)) = 0;
+ALTER TABLE food_entries ALTER COLUMN quantity SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS food_entries_consumed_at_idx ON food_entries (consumed_at DESC);
 CREATE INDEX IF NOT EXISTS food_entries_consumed_date_idx ON food_entries (consumed_date DESC);
