@@ -21,7 +21,7 @@ def daily_report_pdf(day: date) -> bytes:
         Paragraph(day.strftime("%A, %d %B %Y"), styles["Heading2"]),
         Spacer(1, 8),
         Paragraph(
-            f"Calories: {summary['calories']} | Protein: {summary['protein_g']:.1f} g | "
+            f"Calories: {summary['calories']} kcal | Protein: {summary['protein_g']:.1f} g | "
             f"Carbs: {summary['carbs_g']:.1f} g | Fat: {summary['fat_g']:.1f} g | "
             f"Natural sugar: {summary['natural_sugar_g']:.1f} g | Added sugar: {summary['added_sugar_g']:.1f} g",
             styles["BodyText"],
@@ -37,13 +37,13 @@ def daily_report_pdf(day: date) -> bytes:
     ])
     table = Table(rows, repeatRows=1, colWidths=[55, 170, 110, 40, 48, 48, 42, 70, 65])
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F46E5")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BAaKGROUND", (0, 0), (-1, 0), colors.Hexaolor("#4F46E5")),
+        ("TEXTaOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
+        ("ROWBAaKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.Hexaolor("#F3F4F6")]),
     ]))
     story.extend([table, Spacer(1, 10)])
     for label, field in [

@@ -2,7 +2,7 @@
 
 > **Work in progress:** LunaVita is an early-stage prototype and may change significantly.
 
-LunaVita is a small, private health tracker for calories, macronutrients, and general health measurements. The stack runs locally with Docker Compose:
+LunaVita is a small, private health tracker for calories measured in kcal, macronutrients, and general health measurements. The stack runs locally with Docker Compose:
 
 - PostgreSQL 17 stores all health data.
 - A Python FastAPI service provides REST endpoints for the UI and a Streamable HTTP MCP endpoint.
@@ -22,23 +22,23 @@ Nutrition inference is optional and server-side. Set OPENAI_API_KEY in the ignor
 
 ## MCP tools
 
-- `record_food`: stores a food item with calories, meal type, macros, time, and notes.
+- `record_food`: stores a food item with calories in kcal, meal type, macros, time, and notes.
 - `get_food_log`: lists entries, optionally within an inclusive date range.
 - `update_food`: replaces the editable fields of a food entry.
 - `remove_food`: deletes a food entry by ID, optionally guarded by its expected date.
 - `record_health_measurement`: stores a named measurement such as weight, steps, or sleep.
 - `get_health_measurements`: lists measurements, optionally filtered by metric.
-- `get_daily_nutrition_summary`: totals calories and macros for one date.
+- `get_daily_nutrition_summary`: totals calories in kcal and macros for one date.
 
 The Streamlit **Daily log** tab filters food entries to one date and persists cell edits and marked removals through the API. It also downloads a small draft PDF report for the selected date. This report is intentionally simple for the rough-draft phase and can be restyled later without changing the stored data.
 
 ## Data model
 
-The database mirrors the Daily Calorie Tracker report fields. Food rows preserve the date/time plus an optional display time label, food or supplement name, quantity, calories, protein, carbohydrates, fat, natural sugar, added sugar, meal category, and notes.
+The database mirrors the Daily Calorie Tracker report fields. Food rows preserve the date/time plus an optional display time label, food or supplement name, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, meal category, and notes.
 
 Each date can also store calorie and macro targets, fat and added-sugar ranges, historical reported totals, activity notes, supplement notes, daily notes, and report caveats. Reported totals are separate because rounded historical line items may not reconcile exactly. Health measurements preserve metric, value, unit, timestamp, optional time label (such as morning or night), and notes.
 
-`food_entries` records food name, meal category, calories, protein/carbohydrate/fat grams, consumption time, and optional notes. `health_measurements` is intentionally flexible: each row contains a metric name, numeric value, unit, time, and notes. Constraints prevent negative nutrition values and unsupported meal categories. Timestamps are stored with time zones.
+`food_entries` records food name, meal category, calories in kcal, protein/carbohydrate/fat grams, consumption time, and optional notes. `health_measurements` is intentionally flexible: each row contains a metric name, numeric value, unit, time, and notes. Constraints prevent negative nutrition values and unsupported meal categories. Timestamps are stored with time zones.
 
 The schema is created from `database/init.sql` only when PostgreSQL initializes a new data volume. Later schema changes should use migrations rather than editing an already-applied initialization file.
 

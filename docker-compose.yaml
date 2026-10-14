@@ -12,7 +12,7 @@ services:
     networks:
       lunavita_network:
         aliases:
-          - luna-vita-postgres
+          - luna-vita-db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lunavita} -d ${POSTGRES_DB:-lunavita}"]
       interval: 10s
@@ -24,13 +24,11 @@ services:
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lunavita}:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-postgres:5432/${POSTGRES_DB:-lunavita}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-db:5432/lunavita
     expose:
       - "8000"
     ports:
-      - "127.0.0.1:${MCP_PORT:-18001}:8000"
+      - "127.0.0.1:18001:8000"
     develop:
       watch:
         - action: sync+restart
@@ -60,7 +58,7 @@ services:
     environment:
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
     ports:
-      - "127.0.0.1:${UI_PORT:-18502}:8501"
+      - "127.0.0.1:18502:8501"
     develop:
       watch:
         - action: sync

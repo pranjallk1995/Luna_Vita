@@ -36,7 +36,7 @@ def record_food(
     consumed_at: str | None = None, time_label: str | None = None,
     notes: str | None = None,
 ) -> dict:
-    """Record food and its calories/macronutrients."""
+    """Record food and its calories in kcal plus macronutrients."""
     payload = FoodEntryCreate(
         food_name=food_name, quantity=quantity, calories=calories, meal_type=meal_type,
         protein_g=protein_g, carbs_g=carbs_g, fat_g=fat_g,
@@ -96,7 +96,7 @@ def get_health_measurements(metric: str | None = None, limit: int = 100) -> list
 
 @mcp.tool()
 def get_daily_nutrition_summary(day: str) -> dict:
-    """Return total calories and macronutrients for a YYYY-MM-DD date."""
+    """Return total calories in kcal and macronutrients for a YYYY-MM-DD date."""
     return daily_summary(date.fromisoformat(day))
 
 
