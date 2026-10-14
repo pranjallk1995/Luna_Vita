@@ -37,6 +37,22 @@ class HealthMeasurementBatchCreate(BaseModel):
     measurements: list[HealthMeasurementCreate] = Field(min_length=1, max_length=20)
 
 
+
+
+class DailyRecommendationsUpsert(BaseModel):
+    calories_kcal: int = Field(gt=0, le=10_000)
+    protein_g: float = Field(gt=0, le=1_000)
+    carbs_g: float = Field(gt=0, le=2_000)
+    fat_g: float = Field(gt=0, le=1_000)
+    sugars_g: float = Field(ge=0, le=1_000)
+    height_cm: float = Field(gt=0, le=300)
+    sex: Literal["male", "female", "other"]
+    birth_date: date | None = None
+    weight_kg: float | None = Field(default=None, gt=0, le=1_000)
+    goal: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2_000)
+
+
 class DailyLogUpsert(BaseModel):
     calorie_goal: int | None = Field(default=None, ge=0)
     protein_goal_g: float | None = Field(default=None, ge=0)

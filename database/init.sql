@@ -62,3 +62,19 @@ CREATE TABLE IF NOT EXISTS health_measurements (
 
 CREATE INDEX IF NOT EXISTS health_measurements_metric_time_idx
     ON health_measurements (metric, measured_at DESC);
+
+CREATE TABLE IF NOT EXISTS daily_recommendations (
+    profile_id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (profile_id = 1),
+    calories_kcal INTEGER NOT NULL CHECK (calories_kcal > 0),
+    protein_g NUMERIC(8,2) NOT NULL CHECK (protein_g > 0),
+    carbs_g NUMERIC(8,2) NOT NULL CHECK (carbs_g > 0),
+    fat_g NUMERIC(8,2) NOT NULL CHECK (fat_g > 0),
+    sugars_g NUMERIC(8,2) NOT NULL CHECK (sugars_g >= 0),
+    height_cm NUMERIC(6,2) NOT NULL CHECK (height_cm > 0),
+    sex TEXT NOT NULL CHECK (sex IN ('male', 'female', 'other')),
+    birth_date DATE,
+    weight_kg NUMERIC(6,2) CHECK (weight_kg > 0),
+    goal TEXT,
+    notes TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -3,6 +3,7 @@
 import os
 import base64
 import hashlib
+import inspect
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
@@ -24,6 +25,7 @@ class SourceReloadMonitor:
     def revision() -> str:
         source_files = sorted(UI_ROOT.rglob("*.py"))
         source_files.append(UI_ROOT / ".streamlit" / "config.toml")
+        source_files.append(LOGO_PATH)
         digest = hashlib.sha256()
         for source_file in source_files:
             if not source_file.is_file():
@@ -67,6 +69,9 @@ class LunaVitaAPI:
 
     def summary(self, day: date) -> dict[str, Any]:
         return self.request("GET", f"/api/summary/{day.isoformat()}")
+
+    def recommendations(self) -> dict[str, Any] | None:
+        return self.request("GET", "/api/recommendations")
 
     def food(self, day: date) -> list[dict[str, Any]]:
         return self.request(
@@ -115,16 +120,50 @@ class LunaStyle:
             header[data-testid="stHeader"] { background:transparent; }
             #MainMenu,footer,div[data-testid="stDecoration"] { display:none; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) { align-items:center; margin-bottom:.55rem; }
+            div[data-testid="stHorizontalBlock"]:has(.lv-header) .stButton > button { white-space:nowrap; }
+            div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] { width:100%; margin-left:auto; }
+            div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] > div { width:100%; }
+            div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-baseweb="input"] { min-height:2.625rem; border-color:var(--strong)!important; background:var(--control)!important; }
             .lv-header { display:flex; align-items:center; gap:1rem; min-height:4.5rem; margin-bottom:1rem; }
+            .lv-date-anchor { height:0; overflow:hidden; }
+            div[data-testid="stButtonGroup"] { gap:.2rem; margin:.2rem 0 1.15rem; padding:.4rem; border:1px solid var(--border); border-radius:.9rem; background:var(--panel); }
+            div[data-testid="stButtonGroup"] button { min-height:2.55rem!important; border:0!important; border-radius:.65rem!important; box-shadow:none!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { margin-inline:.16rem!important; padding-inline:1rem!important; border:0!important; background:transparent!important; box-shadow:none!important; transition:background 140ms ease,transform 140ms ease!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover { background:transparent!important; transform:translateY(-1px)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button[aria-pressed="true"] { background:rgba(255,255,255,.12)!important; }
             .lv-mark { display:block; flex:0 0 5.75rem; width:5.75rem; height:4.5rem; border:0; border-radius:0; object-fit:contain; object-position:center; box-shadow:none; }
             .lv-title { margin:0; color:var(--text); font-family:inherit; font-size:clamp(1.65rem,3vw,2.15rem); font-weight:720; letter-spacing:-.04em; line-height:1; }
-            .lv-subtitle { margin:.32rem 0 0; color:var(--text); font-size:.84rem; }
+            .lv-subtitle { margin:.32rem 0 0; color:var(--muted); font-size:.84rem; }
             .vita-section { margin:1.2rem 0 .75rem; }
             .vita-eyebrow { color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.13em; text-transform:uppercase; }
             .vita-section h2 { margin:.25rem 0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
             .vita-section p { margin:0; color:var(--muted); font-size:.88rem; }
             div[data-testid="stMetric"] { min-height:7rem; padding:1rem; border:1px solid var(--border); border-radius:14px; background:var(--panel); box-shadow:0 10px 30px rgba(0,0,0,.12); }
             div[data-testid="stMetricValue"] { color:var(--text); letter-spacing:-.04em; }
+            .nutrition-panel { padding:0; margin:.35rem 0 1.15rem; border:0; border-radius:0; background:transparent; box-shadow:none; }
+            .nutrition-head { display:flex; align-items:end; justify-content:space-between; gap:2rem; margin-bottom:.9rem; }
+            .nutrition-title h2 { margin:0; color:var(--text); font-size:1.08rem; letter-spacing:-.02em; }
+            .nutrition-title p { margin:.22rem 0 0; color:var(--muted); font-size:.72rem; }
+            .nutrition-overall { width:min(31%,20rem); min-width:15rem; }
+            .nutrition-overall-row { display:flex; justify-content:space-between; gap:.8rem; margin-bottom:.38rem; color:var(--text); font-size:.72rem; }
+            .nutrition-overall-row strong { color:#fb7185; }
+            .nutrition-track { height:.42rem; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.10); }
+            .nutrition-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,#fb7185,#f43f5e); box-shadow:0 0 12px rgba(244,63,94,.35); }
+            .nutrition-cards { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.65rem; }
+            .nutrition-card { --card-accent:#94a3b8; --card-rgb:148,163,184; display:grid; grid-template-columns:minmax(0,1fr) 3.45rem; align-items:center; min-width:0; min-height:5.9rem; padding:.8rem .75rem; border:1px solid rgba(var(--card-rgb),.12); border-radius:12px; background:linear-gradient(135deg,rgba(var(--card-rgb),.13),rgba(var(--card-rgb),.035)); }
+            .nutrition-card.calories,.nutrition-card.protein,.nutrition-card.carbs,.nutrition-card.fat,.nutrition-card.sugars { --card-accent:#f5f5f5; --card-rgb:245,245,245; }
+            .nutrition-card.warning { --card-accent:#facc15; --card-rgb:250,204,21; border-color:rgba(250,204,21,.28); }
+            .nutrition-card.danger { --card-accent:#fb7185; --card-rgb:251,113,133; border-color:rgba(251,113,133,.34); }
+            .nutrition-card.success { --card-accent:#4ade80; --card-rgb:74,222,128; border-color:rgba(74,222,128,.28); }
+            .nutrition-card-label { display:flex; align-items:center; gap:.38rem; color:#d4d4d4; font-size:.72rem; white-space:nowrap; }
+            .nutrition-card-icon { color:var(--card-accent); font-family:"Material Symbols Rounded","Material Symbols Outlined"; font-size:1.05rem; font-weight:400; font-style:normal; line-height:1; letter-spacing:normal; text-transform:none; white-space:nowrap; word-wrap:normal; direction:ltr; font-feature-settings:"liga"; -webkit-font-feature-settings:"liga"; -webkit-font-smoothing:antialiased; }
+            .nutrition-card-value { margin:.32rem 0 .18rem; color:var(--card-accent); font-size:1.18rem; font-weight:700; letter-spacing:-.03em; white-space:nowrap; }
+            .nutrition-card-target { color:var(--muted); font-size:.66rem; white-space:nowrap; }
+            .nutrition-ring { --ring-value:0deg; position:relative; display:grid; place-items:center; width:3.15rem; height:3.15rem; margin-left:auto; border-radius:50%; background:conic-gradient(var(--card-accent) var(--ring-value),rgba(255,255,255,.10) 0); }
+            .nutrition-ring::after { content:""; position:absolute; inset:.38rem; border-radius:50%; background:#13171d; }
+            .nutrition-ring span { position:relative; z-index:1; color:var(--card-accent); font-size:.68rem; font-weight:750; }
+            @media (max-width:900px) { .nutrition-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .nutrition-head { align-items:start; flex-direction:column; gap:.8rem; } .nutrition-overall { width:100%; min-width:0; } }
+            @media (max-width:520px) { .nutrition-cards { grid-template-columns:1fr; } }
             div[data-testid="stDataFrame"],div[data-testid="stDataEditor"] { border:1px solid var(--border); border-radius:14px; overflow:hidden; }
             div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:var(--panel); }
             div[data-baseweb="input"] > div,div[data-baseweb="select"] > div { border-color:var(--border)!important; border-radius:.5rem!important; background:var(--panel)!important; }
@@ -139,9 +178,9 @@ class LunaStyle:
         )
 
     @staticmethod
-    def header() -> None:
+    def header(default_day: date) -> date:
         logo_data = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
-        brand_column, _ = st.columns(
+        brand_column, date_column = st.columns(
             [5, 4], vertical_alignment="center", gap="medium"
         )
         with brand_column:
@@ -159,6 +198,14 @@ class LunaStyle:
                 """,
                 unsafe_allow_html=True,
             )
+        with date_column:
+            st.markdown('<div class="lv-date-anchor"></div>', unsafe_allow_html=True)
+            return st.date_input(
+                "Log date",
+                value=default_day,
+                key="header-log-date",
+                label_visibility="collapsed",
+            )
 
     @staticmethod
     def section(eyebrow: str, title: str, description: str) -> None:
@@ -172,19 +219,125 @@ class LunaStyle:
 @dataclass
 class SummaryView:
     api: LunaVitaAPI
+    WARNING_THRESHOLD = 0.85
+
+    @classmethod
+    def limit_status(cls, value: float, target: float) -> str:
+        if target <= 0:
+            return ""
+        ratio = value / target
+        if ratio > 1:
+            return "danger"
+        return "warning" if ratio >= cls.WARNING_THRESHOLD else ""
+
+    @staticmethod
+    def protein_status(value: float, target: float) -> str:
+        return "success" if target > 0 and value >= target else ""
+
+    @staticmethod
+    def percentage(value: float, target: float) -> int:
+        return round((value / target) * 100) if target > 0 else 0
+
+    @classmethod
+    def card_html(
+        cls,
+        *,
+        key: str,
+        icon: str,
+        label: str,
+        value: str,
+        target: str,
+        amount: float,
+        target_amount: float,
+        status: str,
+    ) -> str:
+        percent = cls.percentage(amount, target_amount)
+        ring_degrees = min(max(percent, 0), 100) * 3.6
+        return (
+            f'<div class="nutrition-card {key} {status}">'
+            "<div>"
+            f'<div class="nutrition-card-label"><span class="nutrition-card-icon">'
+            f"{icon}</span>{label}</div>"
+            f'<div class="nutrition-card-value">{value}</div>'
+            f'<div class="nutrition-card-target">Target {target}</div>'
+            "</div>"
+            f'<div class="nutrition-ring" style="--ring-value:{ring_degrees:.1f}deg">'
+            f"<span>{percent}%</span></div>"
+            "</div>"
+        )
 
     def render(self, day: date) -> None:
         summary = self.api.summary(day)
-        sugar = float(summary["natural_sugar_g"]) + float(summary["added_sugar_g"])
-        cards = [
-            ("Calories", f"{int(summary['calories']):,} kcal"),
-            ("Protein", f"{float(summary['protein_g']):.1f} g"),
-            ("Carbs", f"{float(summary['carbs_g']):.1f} g"),
-            ("Fat", f"{float(summary['fat_g']):.1f} g"),
-            ("Sugars", f"{sugar:.1f} g"),
+        recommendations = self.api.recommendations()
+        if not recommendations:
+            st.warning("Daily nutrition recommendations have not been configured.")
+            return
+
+        values = {
+            "calories": float(summary["calories"]),
+            "protein": float(summary["protein_g"]),
+            "carbs": float(summary["carbs_g"]),
+            "fat": float(summary["fat_g"]),
+            "sugars": float(summary["added_sugar_g"]),
+        }
+        targets = {
+            "calories": float(recommendations["calories_kcal"]),
+            "protein": float(recommendations["protein_g"]),
+            "carbs": float(recommendations["carbs_g"]),
+            "fat": float(recommendations["fat_g"]),
+            "sugars": float(recommendations["sugars_g"]),
+        }
+        statuses = {
+            key: self.limit_status(values[key], targets[key])
+            for key in ("calories", "carbs", "fat", "sugars")
+        }
+        statuses["protein"] = self.protein_status(values["protein"], targets["protein"])
+        calorie_percent = self.percentage(values["calories"], targets["calories"])
+        calorie_width = min(max(calorie_percent, 0), 100)
+        specs = [
+            ("calories", "local_fire_department", "Calories", "kcal", ""),
+            ("protein", "fitness_center", "Protein", "g", ""),
+            ("carbs", "grain", "Carbs", "g", ""),
+            ("fat", "water_drop", "Fat", "g", ""),
+            ("sugars", "nutrition", "Added sugar", "g", " max"),
         ]
-        for column, (label, value) in zip(st.columns(5), cards):
-            column.metric(label, value)
+        cards = []
+        for key, icon, label, unit, suffix in specs:
+            decimals = 0 if key == "calories" else 1
+            current = f"{values[key]:,.{decimals}f} {unit}"
+            target_decimals = 0
+            target = f"{targets[key]:,.{target_decimals}f} {unit}{suffix}"
+            cards.append(
+                self.card_html(
+                    key=key,
+                    icon=icon,
+                    label=label,
+                    value=current,
+                    target=target,
+                    amount=values[key],
+                    target_amount=targets[key],
+                    status=statuses[key],
+                )
+            )
+        panel_html = (
+            '<section class="nutrition-panel">'
+            '<div class="nutrition-head">'
+            '<div class="nutrition-title">'
+            "<h2>Today's Nutrition</h2>"
+            "<p>Running totals from today's food log</p>"
+            "</div>"
+            '<div class="nutrition-overall">'
+            '<div class="nutrition-overall-row">'
+            f"<span>{values['calories']:,.0f} / {targets['calories']:,.0f} kcal</span>"
+            f"<strong>{calorie_percent}%</strong>"
+            "</div>"
+            '<div class="nutrition-track">'
+            f'<div class="nutrition-fill" style="width:{calorie_width}%"></div>'
+            "</div></div></div>"
+            f'<div class="nutrition-cards">{"".join(cards)}</div>'
+            "</section>"
+        )
+        st.markdown(panel_html, unsafe_allow_html=True)
 
 
 @dataclass
@@ -558,18 +711,31 @@ class LunaVitaApp:
 
     def render(self) -> None:
         LunaStyle.apply()
-        LunaStyle.header()
         SourceReloadMonitor.notify()
-        today = date.today()
-        LunaStyle.section(
-            "Daily overview",
-            "So far today",
-            "Running nutrition totals calculated from today's saved food log.",
+        selected_day = LunaStyle.header(date.today())
+        period_labels = {
+            "daily": ":material/today: Daily Tracking",
+            "weekly": ":material/date_range: Weekly Tracking",
+            "monthly": ":material/calendar_month: Monthly Tracking",
+        }
+        navigation_container = st.container(key="nutrition_navigation")
+        navigation_options = {
+            "options": list(period_labels),
+            "default": "daily",
+            "format_func": period_labels.__getitem__,
+            "label_visibility": "collapsed",
+            "key": "nutrition-period",
+        }
+        if "width" in inspect.signature(st.segmented_control).parameters:
+            navigation_options["width"] = "stretch"
+        period = navigation_container.segmented_control(
+            "Nutrition period",
+            **navigation_options,
         )
-        SummaryView(self.api).render(today)
-        selected_day = st.date_input("Log date", value=today)
-        FoodLogView(self.api).render(selected_day)
-        WeightView(self.api).render(selected_day)
+        if period == "daily":
+            SummaryView(self.api).render(selected_day)
+            FoodLogView(self.api).render(selected_day)
+            WeightView(self.api).render(selected_day)
 
     @classmethod
     def run(cls) -> None:

@@ -1,20 +1,103 @@
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from .repository import LunaVitaRepository
 
 
 class DailyReportService:
-    """Build the daily nutrition PDF from repository data."""
+    """Build the daily nutrition and body-measurement PDF."""
+
+    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+    BODY_METRICS = {
+        "weight": ("Weight", "kg"),
+        "bmr": ("BMR", "kcal/day"),
+        "health_score": ("Health score", "/100"),
+        "body_age": ("Body age", "years"),
+        "bmi": ("BMI", ""),
+        "water_ratio": ("Water ratio", "%"),
+    }
 
     def __init__(self, repository: LunaVitaRepository) -> None:
         self.repository = repository
+
+    @staticmethod
+    def table_style() -> TableStyle:
+        return TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F46E5")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [colors.white, colors.HexColor("#F3F4F6")],
+                ),
+            ]
+        )
+
+    @classmethod
+    def measurement_period(cls, measurement: dict) -> str:
+        label = str(measurement.get("time_label") or "").lower()
+        if "morning" in label or "am" in label:
+            return "Morning"
+        if "night" in label or "evening" in label or "pm" in label:
+            return "Night"
+        measured_at = datetime.fromisoformat(measurement["measured_at"])
+        if measured_at.tzinfo is not None:
+            measured_at = measured_at.astimezone(cls.LOCAL_TIMEZONE)
+        return "Morning" if measured_at.hour < 12 else "Night"
+
+    @classmethod
+    def format_measurement(cls, metric: str, value: float) -> str:
+        _, unit = cls.BODY_METRICS[metric]
+        if metric == "health_score":
+            return f"{value:g}/100"
+        if metric == "bmi":
+            return f"{value:g}"
+        if unit == "%":
+            return f"{value:g}%"
+        return f"{value:g} {unit}"
+
+    def body_measurement_rows(self, day: date) -> list[list[str]]:
+        measurements = self.repository.list_health_measurements_for_day(day)
+        latest: dict[tuple[str, str], dict] = {}
+        for measurement in measurements:
+            metric = measurement["metric"]
+            if metric not in self.BODY_METRICS:
+                continue
+            period = self.measurement_period(measurement)
+            latest[(metric, period)] = measurement
+
+        rows = [["Measurement", "Morning", "Night"]]
+        for metric, (label, _) in self.BODY_METRICS.items():
+            row = [label]
+            for period in ("Morning", "Night"):
+                measurement = latest.get((metric, period))
+                row.append(
+                    self.format_measurement(metric, float(measurement["value"]))
+                    if measurement
+                    else "Not recorded"
+                )
+            rows.append(row)
+        return rows
 
     def build(self, day: date) -> bytes:
         entries = self.repository.list_food_entries(day, day, 500)
@@ -42,7 +125,7 @@ class DailyReportService:
             ),
             Spacer(1, 10),
         ]
-        rows = [
+        food_rows = [
             [
                 "Time",
                 "Food / supplement",
@@ -55,7 +138,7 @@ class DailyReportService:
                 "Added sugar",
             ]
         ]
-        rows.extend(
+        food_rows.extend(
             [
                 [
                     entry.get("time_label") or "",
@@ -71,30 +154,13 @@ class DailyReportService:
                 for entry in reversed(entries)
             ]
         )
-        table = Table(
-            rows,
+        food_table = Table(
+            food_rows,
             repeatRows=1,
             colWidths=[55, 170, 110, 40, 48, 48, 42, 70, 65],
         )
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F46E5")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    (
-                        "ROWBACKGROUNDS",
-                        (0, 1),
-                        (-1, -1),
-                        [colors.white, colors.HexColor("#F3F4F6")],
-                    ),
-                ]
-            )
-        )
-        story.extend([table, Spacer(1, 10)])
+        food_table.setStyle(self.table_style())
+        story.extend([food_table, Spacer(1, 10)])
         for label, field in [
             ("Activity", "activity_notes"),
             ("Supplements", "supplement_notes"),
@@ -112,5 +178,27 @@ class DailyReportService:
                         Spacer(1, 4),
                     ]
                 )
+
+        story.extend(
+            [
+                PageBreak(),
+                Paragraph("LunaVita Body Measurements", styles["Title"]),
+                Paragraph(day.strftime("%A, %d %B %Y"), styles["Heading2"]),
+                Spacer(1, 8),
+                Paragraph(
+                    "Morning and night weigh-in information for the selected day.",
+                    styles["BodyText"],
+                ),
+                Spacer(1, 10),
+            ]
+        )
+        measurement_table = Table(
+            self.body_measurement_rows(day),
+            repeatRows=1,
+            colWidths=[220, 220, 220],
+        )
+        measurement_table.setStyle(self.table_style())
+        story.append(measurement_table)
+
         document.build(story)
         return buffer.getvalue()

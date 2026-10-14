@@ -2,7 +2,12 @@ from datetime import date
 from typing import Any
 
 from .inference import NutritionEstimate, NutritionInferenceRequest, NutritionInferenceService
-from .models import DailyLogUpsert, FoodEntryCreate, HealthMeasurementCreate
+from .models import (
+    DailyLogUpsert,
+    DailyRecommendationsUpsert,
+    FoodEntryCreate,
+    HealthMeasurementCreate,
+)
 from .reports import DailyReportService
 from .repository import LunaVitaRepository
 
@@ -106,6 +111,29 @@ class LunaVitaService:
         self, day: date, entry: DailyLogUpsert
     ) -> dict[str, Any]:
         return self.repository.upsert_daily_log(day, entry)
+
+    def update_daily_recommendations(
+        self, entry: DailyRecommendationsUpsert
+    ) -> dict[str, Any]:
+        return self.repository.upsert_daily_recommendations(entry)
+
+    def daily_recommendations(self) -> dict[str, Any] | None:
+        return self.repository.get_daily_recommendations()
+
+    def update_body_profile(
+        self,
+        *,
+        height_cm: float | None = None,
+        birth_date: date | None = None,
+        sex: str | None = None,
+        weight_kg: float | None = None,
+    ) -> dict[str, Any] | None:
+        return self.repository.update_body_profile(
+            height_cm=height_cm,
+            birth_date=birth_date,
+            sex=sex,
+            weight_kg=weight_kg,
+        )
 
     def infer_nutrition(
         self, request: NutritionInferenceRequest

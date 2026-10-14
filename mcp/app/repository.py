@@ -3,7 +3,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .database import Database
-from .models import DailyLogUpsert, FoodEntryCreate, HealthMeasurementCreate
+from .models import (
+    DailyLogUpsert,
+    DailyRecommendationsUpsert,
+    FoodEntryCreate,
+    HealthMeasurementCreate,
+)
 
 
 class LunaVitaRepository:
@@ -202,6 +207,107 @@ class LunaVitaRepository:
                 (normalized_metric, normalized_metric, min(max(limit, 1), 500)),
             )
             return [self.serialize(row) for row in cursor.fetchall()]
+
+    def list_health_measurements_for_day(
+        self, day: date
+    ) -> list[dict[str, Any]]:
+        """Return measurements belonging to a local calendar day."""
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM health_measurements
+                WHERE (measured_at AT TIME ZONE 'Asia/Kolkata')::date=%s
+                ORDER BY measured_at, id
+                """,
+                (day,),
+            )
+            return [self.serialize(row) for row in cursor.fetchall()]
+
+    def upsert_daily_recommendations(
+        self, entry: DailyRecommendationsUpsert
+    ) -> dict[str, Any]:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO daily_recommendations
+                    (profile_id, calories_kcal, protein_g, carbs_g, fat_g,
+                     sugars_g, height_cm, sex, birth_date, weight_kg, goal, notes)
+                VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (profile_id) DO UPDATE SET
+                    calories_kcal=EXCLUDED.calories_kcal,
+                    protein_g=EXCLUDED.protein_g,
+                    carbs_g=EXCLUDED.carbs_g,
+                    fat_g=EXCLUDED.fat_g,
+                    sugars_g=EXCLUDED.sugars_g,
+                    height_cm=EXCLUDED.height_cm,
+                    sex=EXCLUDED.sex,
+                    birth_date=COALESCE(
+                        EXCLUDED.birth_date,
+                        daily_recommendations.birth_date
+                    ),
+                    weight_kg=EXCLUDED.weight_kg,
+                    goal=EXCLUDED.goal,
+                    notes=EXCLUDED.notes,
+                    updated_at=NOW()
+                RETURNING *,
+                    EXTRACT(YEAR FROM age(CURRENT_DATE, birth_date))::int
+                        AS age
+                """,
+                (
+                    entry.calories_kcal,
+                    entry.protein_g,
+                    entry.carbs_g,
+                    entry.fat_g,
+                    entry.sugars_g,
+                    entry.height_cm,
+                    entry.sex,
+                    entry.birth_date,
+                    entry.weight_kg,
+                    entry.goal,
+                    entry.notes,
+                ),
+            )
+            return self.serialize(cursor.fetchone())
+
+    def update_body_profile(
+        self,
+        *,
+        height_cm: float | None = None,
+        birth_date: date | None = None,
+        sex: str | None = None,
+        weight_kg: float | None = None,
+    ) -> dict[str, Any] | None:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE daily_recommendations SET
+                    height_cm=COALESCE(%s, height_cm),
+                    birth_date=COALESCE(%s, birth_date),
+                    sex=COALESCE(%s, sex),
+                    weight_kg=COALESCE(%s, weight_kg),
+                    updated_at=NOW()
+                WHERE profile_id=1
+                RETURNING *,
+                    EXTRACT(YEAR FROM age(CURRENT_DATE, birth_date))::int
+                        AS age
+                """,
+                (height_cm, birth_date, sex, weight_kg),
+            )
+            row = cursor.fetchone()
+            return self.serialize(row) if row else None
+
+    def get_daily_recommendations(self) -> dict[str, Any] | None:
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT *,
+                    EXTRACT(YEAR FROM age(CURRENT_DATE, birth_date))::int AS age
+                FROM daily_recommendations
+                WHERE profile_id=1
+                """
+            )
+            row = cursor.fetchone()
+            return self.serialize(row) if row else None
 
     def daily_summary(self, day: date) -> dict[str, Any]:
         with self.database.cursor() as cursor:

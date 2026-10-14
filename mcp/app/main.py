@@ -13,6 +13,7 @@ from .inference import (
 )
 from .models import (
     DailyLogUpsert,
+    DailyRecommendationsUpsert,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
@@ -42,6 +43,9 @@ class LunaVitaMCPAdapter:
             self.get_daily_nutrition_summary,
             self.get_day_context,
             self.save_day_context,
+            self.update_daily_recommendations,
+            self.get_daily_recommendations,
+            self.update_body_profile,
         ):
             self.server.tool()(tool)
 
@@ -216,6 +220,83 @@ class LunaVitaMCPAdapter:
         )
 
 
+    def update_daily_recommendations(
+        self,
+        calories_kcal: int,
+        protein_g: float,
+        carbs_g: float,
+        fat_g: float,
+        sugars_g: float,
+        height_cm: float,
+        sex: str,
+        birth_date: str | None = None,
+        weight_kg: float | None = None,
+        goal: str | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace the current daily nutrition recommendations and body profile.
+
+        Calories are in kcal. Protein, carbohydrates, fat, and sugars are in
+        grams. Treat sugars_g as the daily free/added-sugar ceiling rather than
+        a limit on intrinsic sugars in whole fruit or unsweetened dairy.
+        """
+        entry = DailyRecommendationsUpsert(
+            calories_kcal=calories_kcal,
+            protein_g=protein_g,
+            carbs_g=carbs_g,
+            fat_g=fat_g,
+            sugars_g=sugars_g,
+            height_cm=height_cm,
+            sex=sex,
+            birth_date=birth_date,
+            weight_kg=weight_kg,
+            goal=goal,
+            notes=notes,
+        )
+        return self.service.update_daily_recommendations(entry)
+
+    def get_daily_recommendations(self) -> dict[str, Any] | None:
+        """Return the current daily nutrition recommendations and body profile."""
+        return self.service.daily_recommendations()
+
+
+    def update_body_profile(
+        self,
+        height_cm: float | None = None,
+        date_of_birth: str | None = None,
+        sex: str | None = None,
+        weight_kg: float | None = None,
+    ) -> dict[str, Any]:
+        """Update any supplied body-profile fields while preserving the rest.
+
+        Store date_of_birth as YYYY-MM-DD. Age is calculated dynamically from
+        that date, so it automatically changes on the person's birthday.
+        """
+        if all(
+            value is None
+            for value in (height_cm, date_of_birth, sex, weight_kg)
+        ):
+            raise ValueError("Provide at least one body-profile field.")
+        if height_cm is not None and not 0 < height_cm <= 300:
+            raise ValueError("height_cm must be between 0 and 300.")
+        if weight_kg is not None and not 0 < weight_kg <= 1000:
+            raise ValueError("weight_kg must be between 0 and 1000.")
+        if sex is not None and sex not in {"male", "female", "other"}:
+            raise ValueError("sex must be male, female, or other.")
+        birth_date = date.fromisoformat(date_of_birth) if date_of_birth else None
+        if birth_date is not None and birth_date > date.today():
+            raise ValueError("date_of_birth cannot be in the future.")
+        updated = self.service.update_body_profile(
+            height_cm=height_cm,
+            birth_date=birth_date,
+            sex=sex,
+            weight_kg=weight_kg,
+        )
+        if updated is None:
+            raise ValueError("Daily recommendations have not been created.")
+        return updated
+
+
 class LunaVitaAPIAdapter:
     """Configure FastAPI routes around the application service."""
 
@@ -276,6 +357,11 @@ class LunaVitaAPIAdapter:
         self.app.add_api_route(
             "/api/measurements",
             self.read_measurements,
+            methods=["GET"],
+        )
+        self.app.add_api_route(
+            "/api/recommendations",
+            self.read_recommendations,
             methods=["GET"],
         )
         self.app.add_api_route(
@@ -342,6 +428,9 @@ class LunaVitaAPIAdapter:
         limit: int = Query(100, ge=1, le=500),
     ) -> list[dict[str, Any]]:
         return self.service.list_measurements(metric, limit)
+
+    def read_recommendations(self) -> dict[str, Any] | None:
+        return self.service.daily_recommendations()
 
     def read_summary(self, day: date) -> dict[str, Any]:
         return self.service.summary(day)
