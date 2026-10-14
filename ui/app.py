@@ -1,6 +1,7 @@
 """Luna Vita Streamlit application."""
 
 import os
+import base64
 import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -10,9 +11,10 @@ from typing import Any
 import pandas as pd
 import requests
 import streamlit as st
-
+from PIL import Image
 
 UI_ROOT = Path(__file__).resolve().parent
+LOGO_PATH = UI_ROOT / "assets" / "luna-vita-logo.png"
 
 
 class SourceReloadMonitor:
@@ -107,29 +109,30 @@ class LunaStyle:
         st.markdown(
             """
             <style>
-            :root { --bg:#080c18; --panel:#11182a; --border:rgba(148,163,184,.18); --strong:rgba(52,211,153,.42); --muted:#9aa6bd; --accent:#34d399; --soft:rgba(52,211,153,.11); }
-            .stApp { background:radial-gradient(circle at 82% -10%,rgba(16,185,129,.12),transparent 30rem),var(--bg); }
-            .block-container { max-width:1240px; padding-top:1.35rem; padding-bottom:3rem; }
+            :root { --bg:#111111; --panel:rgba(255,255,255,.055); --control:rgba(255,255,255,.07); --control-hover:rgba(255,255,255,.12); --text:#f5f5f5; --muted:#a3a3a3; --border:rgba(255,255,255,.14); --strong:rgba(255,255,255,.34); --accent:#f5f5f5; --soft:rgba(255,255,255,.09); }
+            .stApp { color:var(--text); background:radial-gradient(circle at 82% -10%,rgba(255,255,255,.07),transparent 30rem),var(--bg); }
+            .block-container { max-width:1180px; padding-top:1.35rem; padding-bottom:3rem; }
             header[data-testid="stHeader"] { background:transparent; }
             #MainMenu,footer,div[data-testid="stDecoration"] { display:none; }
-            .vita-header { display:flex; align-items:center; gap:.9rem; margin-bottom:1rem; }
-            .vita-mark { display:grid; place-items:center; width:2.65rem; height:2.65rem; border:1px solid var(--strong); border-radius:.85rem; background:linear-gradient(145deg,#0f766e,#064e3b); color:#ecfdf5; font-weight:800; box-shadow:0 12px 34px rgba(0,0,0,.22); }
-            .vita-title { margin:0; color:#f8fafc; font-size:clamp(1.65rem,3vw,2.15rem); font-weight:720; letter-spacing:-.04em; line-height:1; }
-            .vita-subtitle { margin:.32rem 0 0; color:var(--muted); font-size:.84rem; }
+            div[data-testid="stHorizontalBlock"]:has(.lv-header) { align-items:center; margin-bottom:.55rem; }
+            .lv-header { display:flex; align-items:center; gap:1rem; min-height:4.5rem; margin-bottom:1rem; }
+            .lv-mark { display:block; flex:0 0 5.75rem; width:5.75rem; height:4.5rem; border:0; border-radius:0; object-fit:contain; object-position:center; box-shadow:none; }
+            .lv-title { margin:0; color:var(--text); font-family:inherit; font-size:clamp(1.65rem,3vw,2.15rem); font-weight:720; letter-spacing:-.04em; line-height:1; }
+            .lv-subtitle { margin:.32rem 0 0; color:var(--text); font-size:.84rem; }
             .vita-section { margin:1.2rem 0 .75rem; }
             .vita-eyebrow { color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.13em; text-transform:uppercase; }
-            .vita-section h2 { margin:.25rem 0; color:#f1f5f9; font-size:1.3rem; letter-spacing:-.025em; }
+            .vita-section h2 { margin:.25rem 0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
             .vita-section p { margin:0; color:var(--muted); font-size:.88rem; }
-            div[data-testid="stMetric"] { min-height:7rem; padding:1rem; border:1px solid var(--border); border-radius:14px; background:rgba(17,24,42,.68); box-shadow:0 10px 30px rgba(0,0,0,.12); }
-            div[data-testid="stMetricValue"] { color:#f8fafc; letter-spacing:-.04em; }
+            div[data-testid="stMetric"] { min-height:7rem; padding:1rem; border:1px solid var(--border); border-radius:14px; background:var(--panel); box-shadow:0 10px 30px rgba(0,0,0,.12); }
+            div[data-testid="stMetricValue"] { color:var(--text); letter-spacing:-.04em; }
             div[data-testid="stDataFrame"],div[data-testid="stDataEditor"] { border:1px solid var(--border); border-radius:14px; overflow:hidden; }
-            div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:rgba(17,24,42,.62); }
-            div[data-baseweb="input"] > div,div[data-baseweb="select"] > div { border-color:var(--border)!important; border-radius:.5rem!important; background:rgba(17,24,42,.84)!important; }
-            .stButton > button,.stDownloadButton > button,div[data-testid="stFormSubmitButton"] > button { min-height:2.625rem!important; border:1px solid var(--border)!important; border-radius:.5rem!important; background:#121a2d!important; color:#e8edf7!important; font-weight:650!important; }
-            .stButton > button:hover,.stDownloadButton > button:hover,div[data-testid="stFormSubmitButton"] > button:hover { border-color:var(--strong)!important; background:#17263a!important; transform:translateY(-1px); }
-            button[kind="primary"] { border-color:transparent!important; background:linear-gradient(135deg,#10b981,#0f766e)!important; }
+            div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:var(--panel); }
+            div[data-baseweb="input"] > div,div[data-baseweb="select"] > div { border-color:var(--border)!important; border-radius:.5rem!important; background:var(--panel)!important; }
+            .stButton > button,.stDownloadButton > button,div[data-testid="stFormSubmitButton"] > button { min-height:2.625rem!important; border:1px solid var(--border)!important; border-radius:.5rem!important; background:var(--control)!important; color:var(--text)!important; font-weight:650!important; }
+            .stButton > button:hover,.stDownloadButton > button:hover,div[data-testid="stFormSubmitButton"] > button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; transform:translateY(-1px); }
+            button[kind="primary"] { border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.16)!important; }
             div[data-testid="stAlert"] { border-radius:.85rem; border-color:var(--border); }
-            @media (max-width:700px) { .block-container { padding:.85rem .8rem 2rem; } .vita-subtitle { display:none; } }
+            @media (max-width:700px) { .block-container { padding:.85rem .8rem 2rem; } div[data-testid="stHorizontalBlock"]:has(.lv-header) { flex-wrap:wrap!important; } div[data-testid="stHorizontalBlock"]:has(.lv-header) > div[data-testid="stColumn"] { flex:1 1 100%!important; width:100%!important; } .lv-subtitle { display:none; } }
             </style>
             """,
             unsafe_allow_html=True,
@@ -137,16 +140,25 @@ class LunaStyle:
 
     @staticmethod
     def header() -> None:
-        st.markdown(
-            """
-            <div class="vita-header">
-              <div class="vita-mark">LV</div>
-              <div><h1 class="vita-title">Luna Vita</h1>
-              <p class="vita-subtitle">Private nutrition and health tracking</p></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        logo_data = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+        brand_column, _ = st.columns(
+            [5, 4], vertical_alignment="center", gap="medium"
         )
+        with brand_column:
+            st.markdown(
+                f"""
+                <div class="lv-header">
+                    <img class="lv-mark"
+                         src="data:image/png;base64,{logo_data}"
+                         alt="Luna Vita logo">
+                    <div>
+                        <h1 class="lv-title">Luna Vita</h1>
+                        <p class="lv-subtitle">Private AI-managed nutrition tracking</p>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     @staticmethod
     def section(eyebrow: str, title: str, description: str) -> None:
@@ -219,7 +231,10 @@ class FoodLogView:
         original = pd.to_datetime(original_consumed_at)
         text = "" if pd.isna(value) else str(value).strip()
         if not text or text.lower() == "not recorded":
-            return datetime.combine(original.date(), time.min).isoformat(), "Not recorded"
+            return (
+                datetime.combine(original.date(), time.min).isoformat(),
+                "Not recorded",
+            )
         parsed = pd.to_datetime(text, errors="coerce")
         if not pd.isna(parsed):
             return datetime.combine(original.date(), parsed.time()).isoformat(), None
@@ -384,9 +399,8 @@ class FoodLogView:
                             consumed_date, consumed_time or time.min
                         ).isoformat(),
                         "consumed_date": consumed_date.isoformat(),
-                        "time_label": time_label.strip() or (
-                            None if include_time else "Not recorded"
-                        ),
+                        "time_label": time_label.strip()
+                        or (None if include_time else "Not recorded"),
                         "notes": notes.strip() or None,
                     }
                 )
@@ -509,9 +523,7 @@ class WeightView:
                 )
 
             if submitted:
-                measured_at = datetime.combine(
-                    measured_date, measured_time
-                ).isoformat()
+                measured_at = datetime.combine(measured_date, measured_time).isoformat()
                 values = {
                     "weight": (weight, "kg"),
                     "bmr": (bmr, "kcal/day"),
@@ -559,12 +571,11 @@ class LunaVitaApp:
         FoodLogView(self.api).render(selected_day)
         WeightView(self.api).render(selected_day)
 
-
     @classmethod
     def run(cls) -> None:
         st.set_page_config(
             page_title="Luna Vita",
-            page_icon="LV",
+            page_icon=Image.open(LOGO_PATH),
             layout="wide",
             initial_sidebar_state="collapsed",
         )

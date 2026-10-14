@@ -2,6 +2,8 @@
 
 > **Work in progress:** LunaVita is an early-stage prototype and may change significantly.
 
+## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using AI
+
 LunaVita is a small, private health tracker for calories measured in kcal, macronutrients, and general health measurements. The stack runs locally with Docker Compose:
 
 - PostgreSQL 17 stores all health data.
