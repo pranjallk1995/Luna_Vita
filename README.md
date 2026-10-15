@@ -39,7 +39,7 @@ Inference happens in the active AI conversation. Luna Vita stores the supplied s
 - Date-based daily log with running totals for calories in kcal, protein, carbohydrates, fat, and sugar.
 - Recommendation-aware status cards with neutral, warning, exceeded, and protein-target states.
 - Editable food table backed by PostgreSQL.
-- Time, image, and food-name columns remain pinned during horizontal scrolling.
+- Time and image columns remain pinned during horizontal scrolling.
 - Food name and quantity are required.
 - Optional consumed time; historical or free-form time labels remain supported.
 - Optional image upload from the device. Images are resized before being stored with the entry.

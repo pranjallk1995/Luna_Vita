@@ -451,7 +451,7 @@ class FoodLogView:
                         "Image", help="Optional food image", width="small", pinned=True
                     ),
                     "food_name": st.column_config.TextColumn(
-                        "Food / supplement", required=True, width="large", pinned=True
+                        "Food / supplement", required=True, width="large"
                     ),
                     "quantity": st.column_config.TextColumn(
                         "\u21aa Quantity", required=True, width="medium"
