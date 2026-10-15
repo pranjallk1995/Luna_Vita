@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ValidationError
@@ -15,6 +16,7 @@ from .models import (
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
 )
+from .report_tools import CurrentLogPdfTool
 from .reports import DailyReportService
 from .repository import LunaVitaRepository
 from .services import LunaVitaService
@@ -23,9 +25,12 @@ from .services import LunaVitaService
 class LunaVitaMCPAdapter:
     """Expose application services as conversational MCP tools."""
 
+    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
     def __init__(self, server: FastMCP, service: LunaVitaService) -> None:
         self.server = server
         self.service = service
+        self.current_log_pdf = CurrentLogPdfTool(service)
         self.register_tools()
 
     def register_tools(self) -> None:
@@ -44,6 +49,7 @@ class LunaVitaMCPAdapter:
             self.update_daily_recommendations,
             self.get_daily_recommendations,
             self.update_body_profile,
+            self.get_current_log_pdf,
         ):
             self.server.tool()(tool)
 
@@ -229,6 +235,15 @@ class LunaVitaMCPAdapter:
         """Return kcal and macronutrient totals for a YYYY-MM-DD date."""
         return self.service.summary(date.fromisoformat(day))
 
+    def get_current_log_pdf(self):
+        """Generate and return today's complete Luna Vita log as a PDF.
+
+        The current day is determined in the Asia/Kolkata timezone. The PDF is
+        generated from the latest saved food, context, and measurement data and
+        returned as an embedded application/pdf resource.
+        """
+        return self.current_log_pdf.generate()
+
     def get_day_context(self, day: str) -> dict[str, Any]:
         """Get goals, reported totals, activity, supplements, and daily notes."""
         return self.service.day_context(date.fromisoformat(day))
@@ -305,7 +320,9 @@ class LunaVitaMCPAdapter:
         if sex is not None and sex not in {"male", "female", "other"}:
             raise ValueError("sex must be male, female, or other.")
         birth_date = date.fromisoformat(date_of_birth) if date_of_birth else None
-        if birth_date is not None and birth_date > date.today():
+        if birth_date is not None and birth_date > datetime.now(
+            self.LOCAL_TIMEZONE
+        ).date():
             raise ValueError("date_of_birth cannot be in the future.")
         updated = self.service.update_body_profile(
             height_cm=height_cm,

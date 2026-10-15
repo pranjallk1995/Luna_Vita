@@ -23,11 +23,17 @@ class LunaVitaRepository:
         """Create or upgrade the database schema before serving requests."""
         self.database.initialize_schema()
 
-    @staticmethod
-    def serialize(row: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def serialize(cls, row: dict[str, Any]) -> dict[str, Any]:
         return {
-            key: value.isoformat()
-            if isinstance(value, (date, datetime))
+            key: (
+                value.replace(tzinfo=cls.LOCAL_TIMEZONE)
+                if value.tzinfo is None
+                else value.astimezone(cls.LOCAL_TIMEZONE)
+            ).isoformat()
+            if isinstance(value, datetime)
+            else value.isoformat()
+            if isinstance(value, date)
             else float(value)
             if hasattr(value, "as_tuple")
             else value

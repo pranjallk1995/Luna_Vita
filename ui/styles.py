@@ -25,6 +25,7 @@ class LunaStyle:
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] { width:100%; margin-left:auto; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] > div { width:100%; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-baseweb="input"] { min-height:2.625rem; border-color:var(--strong)!important; background:var(--control)!important; }
+            div[data-testid="stDateInput"] input { color:#d4d4d4!important; -webkit-text-fill-color:#d4d4d4!important; }
             .lv-header { display:flex; align-items:center; gap:1rem; min-height:4.5rem; margin-bottom:1rem; }
             .lv-date-anchor { height:0; overflow:hidden; }
             div[data-testid="stButtonGroup"] { gap:.2rem; margin:.2rem 0 1.15rem; padding:.4rem; border:1px solid var(--border); border-radius:.9rem; background:var(--panel); }

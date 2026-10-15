@@ -173,6 +173,7 @@ Inference happens in the active AI conversation. Luna Vita stores the supplied s
 - `record_health_measurement` — store weight, BMI, BMR, water ratio, or another measurement.
 - `get_health_measurements` — list recent measurements, optionally filtered by metric.
 - `get_daily_nutrition_summary` — return daily totals in kcal and grams.
+- `get_current_log_pdf` — generate and return today's complete log as a PDF.
 
 ### Daily context and recommendations
 

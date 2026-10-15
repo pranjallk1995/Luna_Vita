@@ -1,6 +1,7 @@
 """Validation tests for Luna Vita request models."""
 
 import unittest
+from datetime import timedelta
 
 from pydantic import ValidationError
 
@@ -55,6 +56,21 @@ class RequestModelTests(unittest.TestCase):
                 height_cm=175,
                 sex="unknown",
             )
+
+    def test_naive_food_timestamp_is_interpreted_as_ist(self) -> None:
+        entry = FoodEntryCreate(
+            food_name="Apple",
+            quantity="1",
+            calories=95,
+            protein_g=0.5,
+            carbs_g=25,
+            fat_g=0.3,
+            natural_sugar_g=19,
+            added_sugar_g=0,
+            consumed_at="2026-10-15T14:30:00",
+        )
+
+        self.assertEqual(entry.consumed_at.utcoffset(), timedelta(hours=5, minutes=30))
 
 
 if __name__ == "__main__":

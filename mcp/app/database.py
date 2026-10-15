@@ -12,7 +12,8 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS food_entries (
     id BIGSERIAL PRIMARY KEY,
     consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    consumed_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    consumed_date DATE NOT NULL DEFAULT
+        (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date,
     time_label TEXT,
     food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),
     quantity TEXT NOT NULL CHECK (length(trim(quantity)) > 0),
@@ -33,7 +34,8 @@ ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS consumed_date DATE;
 UPDATE food_entries
 SET consumed_date = (consumed_at AT TIME ZONE 'Asia/Kolkata')::date
 WHERE consumed_date IS NULL;
-ALTER TABLE food_entries ALTER COLUMN consumed_date SET DEFAULT CURRENT_DATE;
+ALTER TABLE food_entries ALTER COLUMN consumed_date SET DEFAULT
+    (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date;
 ALTER TABLE food_entries ALTER COLUMN consumed_date SET NOT NULL;
 ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS image_url TEXT;
 UPDATE food_entries

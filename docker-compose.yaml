@@ -6,6 +6,7 @@ services:
       POSTGRES_DB: lunavita
       POSTGRES_USER: lunavita
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lunavita-dev}
+      TZ: Asia/Kolkata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -24,6 +25,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-db:5432/lunavita
+      TZ: Asia/Kolkata
     expose:
       - "8000"
     ports:
@@ -56,6 +58,7 @@ services:
     restart: unless-stopped
     environment:
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
+      TZ: Asia/Kolkata
     ports:
       - "127.0.0.1:18502:8501"
     develop:

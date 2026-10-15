@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import httpx
@@ -16,6 +17,24 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 UI_ROOT = Path(__file__).resolve().parent
 LOGO_PATH = UI_ROOT / "assets" / "lunavita_logo.png"
+
+
+class LunaVitaClock:
+    """Provide timezone-aware dates and timestamps for the UI."""
+
+    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+    @classmethod
+    def now(cls) -> datetime:
+        return datetime.now(cls.LOCAL_TIMEZONE)
+
+    @classmethod
+    def today(cls) -> date:
+        return cls.now().date()
+
+    @classmethod
+    def combine(cls, day: date, clock_time: time) -> datetime:
+        return datetime.combine(day, clock_time, tzinfo=cls.LOCAL_TIMEZONE)
 
 
 class SourceReloadMonitor:
@@ -238,13 +257,15 @@ class FoodLogView:
         text = "" if pd.isna(value) else str(value).strip()
         if not text or text.lower() == "not recorded":
             return (
-                datetime.combine(original.date(), time.min).isoformat(),
+                LunaVitaClock.combine(original.date(), time.min).isoformat(),
                 "Not recorded",
             )
         parsed = pd.to_datetime(text, errors="coerce")
         if not pd.isna(parsed):
-            return datetime.combine(original.date(), parsed.time()).isoformat(), None
-        return datetime.combine(original.date(), time.min).isoformat(), text
+            return LunaVitaClock.combine(
+                original.date(), parsed.time()
+            ).isoformat(), None
+        return LunaVitaClock.combine(original.date(), time.min).isoformat(), text
 
     @staticmethod
     def render_macro_distribution(rows: list[dict[str, Any]]) -> None:
@@ -467,7 +488,7 @@ class FoodLogView:
         if include_time:
             consumed_time = time_column.time_input(
                 "Consumed time",
-                datetime.now().replace(second=0, microsecond=0).time(),
+                LunaVitaClock.now().replace(second=0, microsecond=0).time(),
                 step=60,
             )
         else:
@@ -523,7 +544,7 @@ class FoodLogView:
                     "natural_sugar_g": float(natural),
                     "added_sugar_g": float(added),
                     "image_url": stored_image,
-                    "consumed_at": datetime.combine(
+                    "consumed_at": LunaVitaClock.combine(
                         consumed_date, consumed_time or time.min
                     ).isoformat(),
                     "consumed_date": consumed_date.isoformat(),
@@ -718,7 +739,7 @@ class WeightView:
         if include_time:
             measured_time = time_col.time_input(
                 "Measured time",
-                datetime.now().replace(second=0, microsecond=0).time(),
+                LunaVitaClock.now().replace(second=0, microsecond=0).time(),
                 step=60,
             )
         else:
@@ -759,7 +780,9 @@ class WeightView:
 
         if submitted:
             effective_time = measured_time or time.min
-            measured_at = datetime.combine(measured_date, effective_time).isoformat()
+            measured_at = LunaVitaClock.combine(
+                measured_date, effective_time
+            ).isoformat()
             if weight is None:
                 st.warning("Weight is required.")
                 return
@@ -811,7 +834,7 @@ class LunaVitaApp:
     def render(self) -> None:
         LunaStyle.apply()
         SourceReloadMonitor.notify()
-        selected_day = LunaStyle.header(date.today(), LOGO_PATH)
+        selected_day = LunaStyle.header(LunaVitaClock.today(), LOGO_PATH)
         period_labels = {
             "daily": ":material/today: Daily Tracking",
             "weekly": ":material/date_range: Weekly Tracking",

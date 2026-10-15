@@ -1,13 +1,29 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import ClassVar, Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 
 
-class FoodEntryCreate(BaseModel):
+class LocalTimestampModel(BaseModel):
+    """Interpret timezone-free client timestamps as Asia/Kolkata local time."""
+
+    LOCAL_TIMEZONE: ClassVar[ZoneInfo] = ZoneInfo("Asia/Kolkata")
+
+    @field_validator("consumed_at", "measured_at", check_fields=False)
+    @classmethod
+    def localize_timestamp(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=cls.LOCAL_TIMEZONE)
+        return value.astimezone(cls.LOCAL_TIMEZONE)
+
+
+class FoodEntryCreate(LocalTimestampModel):
     food_name: str = Field(min_length=1, max_length=200)
     quantity: str = Field(min_length=1, max_length=300)
     meal_type: MealType = "other"
@@ -24,7 +40,7 @@ class FoodEntryCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=2_000)
 
 
-class HealthMeasurementCreate(BaseModel):
+class HealthMeasurementCreate(LocalTimestampModel):
     metric: str = Field(min_length=1, max_length=100)
     value: float
     unit: str = Field(min_length=1, max_length=50)
