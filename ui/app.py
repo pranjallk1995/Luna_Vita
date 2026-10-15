@@ -881,6 +881,10 @@ class LunaVitaApp:
             SummaryView(self.api).render(selected_day)
             FoodLogView(self.api).render(selected_day)
             WeightView(self.api).render(selected_day)
+        elif period == "weekly":
+            st.info("Not enough data for the weekly view yet.")
+        else:
+            st.info("Not enough data for the monthly view yet.")
 
     @classmethod
     def run(cls) -> None:
