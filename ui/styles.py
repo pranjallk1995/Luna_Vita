@@ -8,7 +8,7 @@ import streamlit as st
 
 
 class LunaStyle:
-    """Luna Vault-inspired presentation layer."""
+    """Luna Visia-inspired presentation layer."""
 
     @staticmethod
     def apply() -> None:

@@ -89,4 +89,4 @@ volumes:
 networks:
   lunavita_network:
     external: true
-    name: luna_vault_lunavault_network
+    name: luna_visia_lunavisia_network

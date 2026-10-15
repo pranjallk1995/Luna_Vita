@@ -3,25 +3,25 @@
 ![Docker required](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)
 ![Docker Compose v2](https://img.shields.io/badge/Docker_Compose-v2-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![Luna Vault network required](https://img.shields.io/badge/Luna_Vault_network-required-6C5CE7?logo=docker&logoColor=white)
+![Luna Visia network required](https://img.shields.io/badge/Luna_Visia_network-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL included](https://img.shields.io/badge/PostgreSQL-included-4169E1?logo=postgresql&logoColor=white)
 
 > **Work in progress:** Luna Vita is a local-first and desktop first nutrition and body-measurement tracker under active development.
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using AI
 
-Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Vault](https://github.com/pranjallk1995/Luna_Vault) on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
+Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
 
-> **Required Docker network:** Luna Vita expects the external `luna_vault_lunavault_network` network to exist before it starts. Luna Vault normally creates this network. If you are running Luna Vita without Luna Vault, create the network manually by following the [Start](#start) instructions below.
+> **Required Docker network:** Luna Vita expects the external `luna_visia_lunavisia_network` network to exist before it starts. Luna Visia normally creates this network. If you are running Luna Vita without Luna Visia, create the network manually by following the [Start](#start) instructions below.
 
 <p align="center">
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
 </p>
 
-[Luna Vault](https://github.com/pranjallk1995/Luna_Vault) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share one private Docker network, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
+[Luna Visia](https://github.com/pranjallk1995/Luna_Visia) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share one private Docker network, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
 
 <p align="center">
-  <img src="docs/assets/luna-vita-luna-vault.png" alt="Luna Vault food-image workflow working alongside the Luna Vita nutrition dashboard" width="1200">
+  <img src="docs/assets/luna-vita-luna-visia.png" alt="Luna Visia food-image workflow working alongside the Luna Vita nutrition dashboard" width="1200">
 </p>
 
 The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition estimation before calling Luna Vita. For example:
@@ -81,7 +81,7 @@ Weight and Morning/Night are required. Measured time is optional and controlled 
 
 ### Responsive interface
 
-- Luna Vault-inspired dark, monochrome styling and Luna Vita branding.
+- Luna Visia-inspired dark, monochrome styling and Luna Vita branding.
 - The mobile logo and title remain on one line.
 - Daily/Weekly/Monthly navigation becomes icon-only on mobile.
 - Morning and Night deletion controls use compact one-line mobile buttons.
@@ -104,7 +104,7 @@ All user-facing energy values are labeled in kcal.
 | UI | Streamlit | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
 | HTTP and MCP | FastMCP custom routes + tools | UI endpoints and conversational tools on one server |
 | Database | PostgreSQL 17 | Food, health measurements, recommendations, and daily context |
-| Network | `luna_vault_lunavault_network` | Shared private network with Luna Vault |
+| Network | `luna_visia_lunavisia_network` | Shared private network with Luna Visia |
 
 The services use unique network aliases:
 
@@ -112,14 +112,14 @@ The services use unique network aliases:
 - `luna-vita-mcp`
 - `luna-vita-ui`
 
-This avoids collisions with Luna Vault services such as `postgres` or `mcp`.
+This avoids collisions with Luna Visia services such as `postgres` or `mcp`.
 
 ## Start
 
 Luna Vita uses an external Docker network. Create it once if it does not already exist:
 
 ```powershell
-docker network create luna_vault_lunavault_network
+docker network create luna_visia_lunavisia_network
 ```
 
 Then start Luna Vita:
@@ -172,7 +172,7 @@ Adminer is available at <http://127.0.0.1:19080> after starting the stack. Use:
 - Password: your `POSTGRES_PASSWORD`, or `lunavita-dev` when unset
 - Database: `lunavita`
 
-Adminer is bound to localhost and reaches PostgreSQL only through the private Luna Vault network. The database port itself remains unavailable from the host.
+Adminer is bound to localhost and reaches PostgreSQL only through the private Luna Visia network. The database port itself remains unavailable from the host.
 
 ## MCP tools
 
