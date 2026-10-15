@@ -147,7 +147,7 @@ Environment overrides remain available when needed, but they are not required fo
 
 Docker is not started automatically by repository setup or validation.
 
-## Codex MCP configuration (optionasl)
+## Codex MCP configuration (optional)
 
 Add the following to the Codex `config.toml` in `.codex` directory in root:
 
