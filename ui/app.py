@@ -15,7 +15,7 @@ import streamlit as st
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 UI_ROOT = Path(__file__).resolve().parent
-LOGO_PATH = UI_ROOT / "assets" / "luna-vita-logo.png"
+LOGO_PATH = UI_ROOT / "assets" / "lunavita_logo.png"
 
 
 class SourceReloadMonitor:
@@ -594,7 +594,7 @@ class WeightView:
         with title_column:
             st.markdown(
                 '<div class="food-log-heading"><h2>Body measurements</h2>'
-                '<p>Track morning and night weight, BMR, health score, body age, BMI, and water ratio.</p></div>',
+                "<p>Track morning and night weight, BMR, health score, body age, BMI, and water ratio.</p></div>",
                 unsafe_allow_html=True,
             )
         with action_column:
