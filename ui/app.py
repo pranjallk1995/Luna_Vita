@@ -566,6 +566,27 @@ class WeightView:
             return f"{value:g}"
         return f"{value:g} {unit}"
 
+    @classmethod
+    def measurement_frame(cls, rows: list[dict[str, Any]], day: date) -> pd.DataFrame:
+        """Normalize measurements and safely retain only the selected day."""
+        frame = pd.DataFrame(rows)
+        if frame.empty:
+            return pd.DataFrame(
+                columns=["metric", "value", "unit", "measured_at", "period"]
+            )
+
+        frame["measured_at"] = pd.to_datetime(frame["measured_at"], errors="coerce")
+        frame = frame[
+            frame["metric"].isin(cls.METRICS)
+            & frame["measured_at"].notna()
+            & (frame["measured_at"].dt.date == day)
+        ].copy()
+        if frame.empty:
+            frame["period"] = pd.Series(index=frame.index, dtype="object")
+        else:
+            frame["period"] = frame.apply(cls.period, axis=1)
+        return frame
+
     def render(self, day: date) -> None:
         title_column, action_column = st.columns(
             [5, 1], vertical_alignment="center", gap="medium"
@@ -579,15 +600,7 @@ class WeightView:
         with action_column:
             self.add_form(day)
 
-        rows = self.api.measurements()
-        frame = pd.DataFrame(rows)
-        if not frame.empty:
-            frame["measured_at"] = pd.to_datetime(frame["measured_at"])
-            frame = frame[
-                frame["metric"].isin(self.METRICS)
-                & (frame["measured_at"].dt.date == day)
-            ].copy()
-            frame["period"] = frame.apply(self.period, axis=1)
+        frame = self.measurement_frame(self.api.measurements(), day)
 
         display_rows = []
         for metric, (label, _) in self.METRICS.items():
@@ -841,4 +854,3 @@ class LunaVitaApp:
 
 if __name__ == "__main__":
     LunaVitaApp.run()
-
