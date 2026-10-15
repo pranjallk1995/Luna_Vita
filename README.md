@@ -125,7 +125,7 @@ docker network create luna_vault_lunavault_network
 Then start Luna Vita:
 
 ```powershell
-docker compose up --build --watch
+docker compose up --build
 ```
 
 Open:
