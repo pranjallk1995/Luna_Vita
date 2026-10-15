@@ -3,19 +3,34 @@
 ![Docker required](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)
 ![Docker Compose v2](https://img.shields.io/badge/Docker_Compose-v2-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![Streamlit included](https://img.shields.io/badge/Streamlit-included-FF4B4B?logo=streamlit&logoColor=white)
-![FastMCP included](https://img.shields.io/badge/FastMCP-included-5C4EE5?logo=python&logoColor=white)
+![Luna Vault network required](https://img.shields.io/badge/Luna_Vault_network-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL included](https://img.shields.io/badge/PostgreSQL-included-4169E1?logo=postgresql&logoColor=white)
 
 > **Work in progress:** Luna Vita is a local-first and desktop first nutrition and body-measurement tracker under active development.
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using AI
 
-Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside Luna Vault on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
+Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Vault](https://github.com/pranjallk1995/Luna_Vault) on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
+
+> **Required Docker network:** Luna Vita expects the external `luna_vault_lunavault_network` network to exist before it starts. Luna Vault normally creates this network. If you are running Luna Vita without Luna Vault, create the network manually by following the [Start](#start) instructions below.
 
 <p align="center">
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
 </p>
+
+[Luna Vault](https://github.com/pranjallk1995/Luna_Vault) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share one private Docker network, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
+
+<p align="center">
+  <img src="docs/assets/luna-vita-luna-vault.png" alt="Luna Vault food-image workflow working alongside the Luna Vita nutrition dashboard" width="1200">
+</p>
+
+The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition estimation before calling Luna Vita. For example:
+
+> I had 4 parathas of 40 g each right now.
+
+The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. A verified representative image URL or data URI can be supplied when available; otherwise the image must be left empty rather than invented.
+
+Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
 
 ## Current features
 
@@ -101,13 +116,13 @@ This avoids collisions with Luna Vault services such as `postgres` or `mcp`.
 
 ## Start
 
-Luna Vault's Docker network must exist first because Luna Vita joins it as an external network:
+Luna Vita uses an external Docker network. Create it once if it does not already exist:
 
 ```powershell
-docker network inspect luna_vault_lunavault_network
+docker network create luna_vault_lunavault_network
 ```
 
-If Luna Vault normally creates this network, start Luna Vault first. Then, from the Luna Vita repository, run:
+Then start Luna Vita:
 
 ```powershell
 docker compose up --build --watch
@@ -132,9 +147,9 @@ Environment overrides remain available when needed, but they are not required fo
 
 Docker is not started automatically by repository setup or validation.
 
-## Codex MCP configuration
+## Codex MCP configuration (optionasl)
 
-Add the following to the Codex `config.toml`:
+Add the following to the Codex `config.toml` in `.codex` directory in root:
 
 ```toml
 [mcp_servers.lunavita]
@@ -147,15 +162,17 @@ tool_timeout_sec = 60
 
 A task that was already open before a new tool was added may need to be reloaded or reopened for tool discovery.
 
-## Conversational food logging
+## Database UI
 
-The active ChatGPT/Codex model performs nutrition estimation before calling Luna Vita. For example:
+Adminer is available at <http://127.0.0.1:19080> after starting the stack. Use:
 
-> I had 4 parathas of 40 g each right now.
+- System: `PostgreSQL`
+- Server: `postgres`
+- Username: `lunavita`
+- Password: your `POSTGRES_PASSWORD`, or `lunavita-dev` when unset
+- Database: `lunavita`
 
-The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. A verified representative image URL or data URI can be supplied when available; otherwise the image must be left empty rather than invented.
-
-Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
+Adminer is bound to localhost and reaches PostgreSQL only through the private Luna Vault network. The database port itself remains unavailable from the host.
 
 ## MCP tools
 
@@ -207,22 +224,6 @@ Nutrition fields reject negative values, food names and quantities cannot be bla
 
 The idempotent schema in `mcp/app/database.py` is applied whenever the Luna Vita service starts. It creates a new database structure when needed and applies safe additive upgrades to existing databases.
 
-## Configuration
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `POSTGRES_DB` | `lunavita` | Database name |
-| `POSTGRES_USER` | `lunavita` | Database user used by the health check |
-| `POSTGRES_PASSWORD` | `lunavita-dev` | Database password |
-| `LUNAVITA_API_URL` | `http://luna-vita-mcp:8000` | API address used by the UI container |
-
-Published host ports are intentionally fixed and separate from Luna Vault:
-
-- `127.0.0.1:18001` → API and MCP
-- `127.0.0.1:18502` → Streamlit UI
-
-Both bind to loopback only, so they are not exposed directly to the local network.
-
 ## Development workflow
 
 Compose Watch synchronizes source changes while the foreground watcher is running:
@@ -244,3 +245,28 @@ docker compose watch --no-up
 ```
 
 Stopping the foreground watcher also stops automatic source synchronization.
+
+### UI modules
+
+- `ui/app.py` - Streamlit application composition, daily navigation, summary cards, editable food log, body-measurement views, dialogs, charts, and PDF download controls.
+- `ui/api.py` - typed HTTP client for food entries, measurements, recommendations, daily context, summaries, and reports.
+- `ui/config.py` - reads UI environment settings, including the Luna Vita API URL and request timeout.
+- `ui/styles.py` - shared dark visual system, responsive layout rules, and component styling.
+- `ui/assets/` - Luna Vita logo assets used by the desktop and mobile layouts.
+- `ui/tests/` - focused UI behavior tests, including consumed-time display and ordering.
+- `ui/.streamlit/config.toml` - Streamlit theme and server settings.
+- `ui/requirements.txt` - Python dependencies used by the UI container.
+- `ui/Dockerfile` - builds the UI container image.
+
+### MCP modules
+
+- `mcp/app/main.py` - FastMCP application entry point, conversational tools, HTTP routes, dependency composition, and service startup.
+- `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
+- `mcp/app/services.py` - application use cases shared by MCP tools and HTTP routes.
+- `mcp/app/repository.py` - PostgreSQL persistence and query operations.
+- `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
+- `mcp/app/reports.py` - in-memory ReportLab generation for daily nutrition and body-measurement PDFs.
+- `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
+- `mcp/tests/` - unit tests for schemas, models, services, report formatting, and MCP report delivery.
+- `mcp/requirements.txt` - Python dependencies used by the MCP/API container.
+- `mcp/Dockerfile` - builds the MCP/API container image.

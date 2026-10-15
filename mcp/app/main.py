@@ -255,7 +255,6 @@ class LunaVitaMCPAdapter:
             DailyLogUpsert.model_validate(context),
         )
 
-
     def update_daily_recommendations(
         self,
         calories_kcal: int,
@@ -295,7 +294,6 @@ class LunaVitaMCPAdapter:
         """Return the current daily nutrition recommendations and body profile."""
         return self.service.daily_recommendations()
 
-
     def update_body_profile(
         self,
         height_cm: float | None = None,
@@ -308,10 +306,7 @@ class LunaVitaMCPAdapter:
         Store date_of_birth as YYYY-MM-DD. Age is calculated dynamically from
         that date, so it automatically changes on the person's birthday.
         """
-        if all(
-            value is None
-            for value in (height_cm, date_of_birth, sex, weight_kg)
-        ):
+        if all(value is None for value in (height_cm, date_of_birth, sex, weight_kg)):
             raise ValueError("Provide at least one body-profile field.")
         if height_cm is not None and not 0 < height_cm <= 300:
             raise ValueError("height_cm must be between 0 and 300.")
@@ -320,9 +315,10 @@ class LunaVitaMCPAdapter:
         if sex is not None and sex not in {"male", "female", "other"}:
             raise ValueError("sex must be male, female, or other.")
         birth_date = date.fromisoformat(date_of_birth) if date_of_birth else None
-        if birth_date is not None and birth_date > datetime.now(
-            self.LOCAL_TIMEZONE
-        ).date():
+        if (
+            birth_date is not None
+            and birth_date > datetime.now(self.LOCAL_TIMEZONE).date()
+        ):
             raise ValueError("date_of_birth cannot be in the future.")
         updated = self.service.update_body_profile(
             height_cm=height_cm,
@@ -376,7 +372,9 @@ class LunaVitaHTTPAdapter:
     @classmethod
     def error_response(cls, error: Exception) -> JSONResponse:
         if isinstance(error, ValidationError):
-            return cls.json_response({"error": "Invalid request", "details": error.errors()}, 422)
+            return cls.json_response(
+                {"error": "Invalid request", "details": error.errors()}, 422
+            )
         if isinstance(error, (ValueError, TypeError)):
             return cls.json_response({"error": str(error)}, 400)
         return cls.json_response({"error": str(error)}, 500)
@@ -387,7 +385,7 @@ class LunaVitaHTTPAdapter:
         @self.server.custom_route("/health", methods=["GET"])
         async def health_route(request: Request) -> JSONResponse:
             del request
-            return self.json_response({"status": "ok"})
+            return self.json_response({"status": "ok", "service": "luna-vita"})
 
         @self.server.custom_route("/api/food", methods=["POST"])
         async def create_food_route(request: Request) -> JSONResponse:
@@ -415,7 +413,9 @@ class LunaVitaHTTPAdapter:
         async def replace_food_route(request: Request) -> JSONResponse:
             try:
                 entry = await self.payload(request, FoodEntryCreate)
-                result = service.update_food(int(request.path_params["entry_id"]), entry)
+                result = service.update_food(
+                    int(request.path_params["entry_id"]), entry
+                )
                 if result is None:
                     return self.json_response({"error": "Food entry not found"}, 404)
                 return self.json_response(result)
@@ -443,7 +443,9 @@ class LunaVitaHTTPAdapter:
         async def create_measurement_batch_route(request: Request) -> JSONResponse:
             try:
                 batch = await self.payload(request, HealthMeasurementBatchCreate)
-                return self.json_response(service.record_measurements(batch.measurements), 201)
+                return self.json_response(
+                    service.record_measurements(batch.measurements), 201
+                )
             except Exception as error:
                 return self.error_response(error)
 
