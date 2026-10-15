@@ -216,6 +216,27 @@ class FoodLogView:
     def nullable(value: Any) -> Any:
         return None if pd.isna(value) else value
 
+    @classmethod
+    def row_time_sort_key(cls, row: dict[str, Any]) -> tuple[int, time, int]:
+        """Return an IST clock key, placing free-form label-only rows last."""
+        timestamp_text = str(row.get("consumed_at") or "")
+        label = str(row.get("time_label") or "").strip()
+        try:
+            timestamp = datetime.fromisoformat(timestamp_text)
+            if timestamp.tzinfo is not None:
+                timestamp = timestamp.astimezone(LunaVitaClock.LOCAL_TIMEZONE)
+            clock_time = timestamp.time().replace(tzinfo=None)
+        except ValueError:
+            return (1, time.max, int(row.get("id") or 0))
+        if clock_time == time.min and label:
+            return (1, time.max, int(row.get("id") or 0))
+        return (0, clock_time, int(row.get("id") or 0))
+
+    @classmethod
+    def rows_by_time(cls, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Order timed entries chronologically and keep label-only rows last."""
+        return sorted(rows, key=cls.row_time_sort_key)
+
     @staticmethod
     def uploaded_image_data_url(uploaded_file: Any) -> str:
         """Normalize an uploaded photo into a compact database-safe data URL."""
@@ -397,7 +418,7 @@ class FoodLogView:
         rows = self.api.food(day)
         edited = None
         if rows:
-            frame = pd.DataFrame(rows)[self.COLUMNS]
+            frame = pd.DataFrame(self.rows_by_time(rows))[self.COLUMNS]
             frame["display_time"] = frame.apply(self.display_time, axis=1)
             frame.insert(0, "remove", False)
             edited = st.data_editor(
