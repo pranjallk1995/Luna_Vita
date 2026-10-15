@@ -8,7 +8,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lunavita-dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     networks:
       lunavita_network:
         aliases:

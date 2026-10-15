@@ -20,21 +20,8 @@ class LunaVitaRepository:
         self.database = database
 
     def ensure_schema(self) -> None:
-        """Apply additive migrations required by the running application."""
-        with self.database.cursor() as cursor:
-            cursor.execute(
-                "ALTER TABLE food_entries ADD COLUMN IF NOT EXISTS image_url TEXT"
-            )
-            cursor.execute(
-                """
-                UPDATE food_entries
-                SET quantity='Not specified'
-                WHERE quantity IS NULL OR length(trim(quantity))=0
-                """
-            )
-            cursor.execute(
-                "ALTER TABLE food_entries ALTER COLUMN quantity SET NOT NULL"
-            )
+        """Create or upgrade the database schema before serving requests."""
+        self.database.initialize_schema()
 
     @staticmethod
     def serialize(row: dict[str, Any]) -> dict[str, Any]:

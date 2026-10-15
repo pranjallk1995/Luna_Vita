@@ -204,7 +204,7 @@ Stores date-specific goals, reported totals, activity notes, supplement notes, d
 
 Nutrition fields reject negative values, food names and quantities cannot be blank, and timestamps are stored with time-zone support.
 
-The initialization schema in `database/init.sql` is applied only when PostgreSQL creates a new data volume. Existing databases should be changed through migrations or explicit schema updates rather than by assuming the initialization file will rerun.
+The idempotent schema in `mcp/app/database.py` is applied whenever the Luna Vita service starts. It creates a new database structure when needed and applies safe additive upgrades to existing databases.
 
 ## Configuration
 
