@@ -862,14 +862,23 @@ class LunaVitaApp:
             "monthly": ":material/calendar_month: Monthly Tracking",
         }
         navigation_container = st.container(key="nutrition_navigation")
+        active_period = st.session_state.get(
+            self.PERIOD_KEY,
+            st.session_state.get(self.LAST_PERIOD_KEY, "daily"),
+        )
+        navigation_container.markdown(
+            f'<span class="lv-selected-{active_period}"></span>',
+            unsafe_allow_html=True,
+        )
         navigation_options = {
             "options": list(period_labels),
-            "default": "daily",
             "format_func": period_labels.__getitem__,
             "label_visibility": "collapsed",
             "key": self.PERIOD_KEY,
             "on_change": self.preserve_period_selection,
         }
+        if self.PERIOD_KEY not in st.session_state:
+            navigation_options["default"] = "daily"
         if "width" in inspect.signature(st.segmented_control).parameters:
             navigation_options["width"] = "stretch"
         period = navigation_container.segmented_control(

@@ -30,9 +30,25 @@ class LunaStyle:
             .lv-date-anchor { height:0; overflow:hidden; }
             div[data-testid="stButtonGroup"] { gap:.2rem; margin:.2rem 0 1.15rem; padding:.4rem; border:1px solid var(--border); border-radius:.9rem; background:var(--panel); }
             div[data-testid="stButtonGroup"] button { min-height:2.55rem!important; border:0!important; border-radius:.65rem!important; box-shadow:none!important; }
-            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { margin-inline:.16rem!important; padding-inline:1rem!important; border:0!important; background:transparent!important; box-shadow:none!important; transition:background 140ms ease,transform 140ms ease!important; }
-            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover { background:transparent!important; transform:translateY(-1px)!important; }
-            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button[aria-pressed="true"] { background:rgba(255,255,255,.12)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] { overflow:visible!important; border-color:var(--border)!important; background:var(--panel)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { position:relative; margin-inline:.16rem!important; padding-inline:1rem!important; border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; box-shadow:none!important; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:not([aria-pressed="true"]):not([kind="primary"]):not([data-testid="stBaseButton-primary"]),
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:not([aria-pressed="true"]):not([kind="primary"]):not([data-testid="stBaseButton-primary"]) p,
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:not([aria-pressed="true"]):not([kind="primary"]):not([data-testid="stBaseButton-primary"]) span { color:var(--muted)!important; -webkit-text-fill-color:var(--muted)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; transform:translateY(-1px)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) { border:2px solid var(--accent)!important; background:var(--soft)!important; box-shadow:0 0 0 1px var(--strong)!important; }
+            .st-key-nutrition_navigation:has(.lv-selected-daily) div[data-testid="stButtonGroup"] button:nth-of-type(1),
+            .st-key-nutrition_navigation:has(.lv-selected-weekly) div[data-testid="stButtonGroup"] button:nth-of-type(2),
+            .st-key-nutrition_navigation:has(.lv-selected-monthly) div[data-testid="stButtonGroup"] button:nth-of-type(3) { border:1px solid var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; box-shadow:0 0 0 1px var(--border)!important; }
+            .lv-selected-daily,.lv-selected-weekly,.lv-selected-monthly { display:none!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]),
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]) p,
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]) span,
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover p,
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover span { color:var(--text)!important; -webkit-text-fill-color:var(--text)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]),
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) p,
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) span { color:var(--text)!important; -webkit-text-fill-color:var(--text)!important; }
             .lv-mark { display:block; flex:0 0 5.75rem; width:5.75rem; height:4.5rem; border:0; border-radius:0; object-fit:contain; object-position:center; box-shadow:none; }
             .lv-title { margin:0; color:var(--text); font-family:inherit; font-size:clamp(1.65rem,3vw,2.15rem); font-weight:720; letter-spacing:-.04em; line-height:1; }
             .lv-subtitle { margin:.32rem 0 0; color:var(--muted); font-size:.84rem; }
@@ -113,10 +129,16 @@ class LunaStyle:
                 .lv-mark { flex:0 0 4.25rem; width:4.25rem; height:3.5rem; }
                 .lv-title { white-space:nowrap; font-size:clamp(1.55rem,8vw,2rem); }
                 .lv-subtitle { display:none; }
-                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { padding-inline:.55rem!important; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { overflow:visible!important; padding-inline:.55rem!important; }
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button p { font-size:0!important; line-height:0!important; }
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button span[data-testid="stIconMaterial"],
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button .material-symbols-rounded { font-size:1.25rem!important; line-height:1!important; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button::after { position:absolute; top:calc(100% + .45rem); left:50%; z-index:50; padding:.28rem .48rem; border:1px solid var(--border); border-radius:.4rem; background:var(--panel); color:var(--text); box-shadow:0 8px 20px rgba(0,0,0,.28); font-size:.72rem; line-height:1rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(-50%,-.2rem); transition:opacity 120ms ease,transform 120ms ease; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(1)::after { content:"Daily Tracking"; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(2)::after { content:"Weekly Tracking"; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(3)::after { content:"Monthly Tracking"; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover::after,
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:focus-visible::after { opacity:1; transform:translate(-50%,0); }
                 .st-key-desktop_weight_actions { display:none; }
                 .st-key-mobile_weight_actions { display:block; }
                 .st-key-mobile_weight_actions div[data-testid="stHorizontalBlock"] { flex-wrap:nowrap!important; }
