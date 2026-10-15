@@ -76,6 +76,20 @@ class DailyReportService:
             return f"{value:g}%"
         return f"{value:g} {unit}"
 
+    @classmethod
+    def food_entry_time(cls, entry: dict) -> str:
+        """Prefer the recorded consumption time, then its free-form label."""
+        consumed_at = entry.get("consumed_at")
+        if consumed_at:
+            try:
+                timestamp = datetime.fromisoformat(str(consumed_at))
+                if timestamp.tzinfo is not None:
+                    timestamp = timestamp.astimezone(cls.LOCAL_TIMEZONE)
+                return timestamp.strftime("%I:%M %p").lstrip("0")
+            except (TypeError, ValueError):
+                pass
+        return str(entry.get("time_label") or "").strip()
+
     def body_measurement_rows(self, day: date) -> list[list[str]]:
         measurements = self.repository.list_health_measurements_for_day(day)
         latest: dict[tuple[str, str], dict] = {}
@@ -141,7 +155,7 @@ class DailyReportService:
         food_rows.extend(
             [
                 [
-                    entry.get("time_label") or "",
+                    self.food_entry_time(entry),
                     entry["food_name"],
                     entry.get("quantity") or "",
                     entry["calories"],
