@@ -75,8 +75,10 @@ class LunaVitaMCPAdapter:
         Food name and quantity are mandatory. When the user omits kcal, protein,
         carbs, fat, natural sugar, added sugar, or an image, infer those values
         from the stated food and complete quantity before calling this tool.
-        Supply a representative verified image URL/data URI when available;
-        otherwise pass null rather than inventing a URL.
+        Always search Luna Visia for an appropriate representative image before
+        calling this tool. Prefer a verified Luna Visia public image URL when a
+        suitable match exists. Only pass null when that search finds no suitable
+        image; never invent a URL.
         """
         return self.service.record_food(
             FoodEntryCreate(
@@ -118,10 +120,12 @@ class LunaVitaMCPAdapter:
         LunaVita to track it, including natural statements such as "I had 4
         parathas of 40 g each right now". Food name and quantity are mandatory.
         Infer kcal, protein, carbs, fat, natural sugar, and added sugar for the
-        complete stated quantity before calling the tool. Also supply a
-        representative verified image URL/data URI when available; pass null
-        rather than inventing a URL. Use the current date/time when the user says
-        "now"; otherwise preserve the stated time.
+        complete stated quantity before calling the tool. Always search Luna
+        Visia for an appropriate representative image first and prefer its
+        verified public image URL when a suitable match exists. Only pass null
+        when that search finds no suitable image; never invent a URL. Use the
+        current date/time when the user says "now"; otherwise preserve the
+        stated time.
         """
         return self.service.log_consumed_food(
             description=description,

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     PageBreak,
     Paragraph,
@@ -90,6 +90,12 @@ class DailyReportService:
                 pass
         return str(entry.get("time_label") or "").strip()
 
+    @staticmethod
+    def wrapped_cell(value: object, style: ParagraphStyle) -> Paragraph:
+        """Create a table cell that wraps and escapes arbitrary text."""
+        text = escape(str(value or "")).replace("\n", "<br/>")
+        return Paragraph(text, style)
+
     def body_measurement_rows(self, day: date) -> list[list[str]]:
         measurements = self.repository.list_health_measurements_for_day(day)
         latest: dict[tuple[str, str], dict] = {}
@@ -124,6 +130,24 @@ class DailyReportService:
             title=f"LunaVita {day.isoformat()}",
         )
         styles = getSampleStyleSheet()
+        table_header_style = ParagraphStyle(
+            "TableHeader",
+            parent=styles["BodyText"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=9,
+            textColor=colors.white,
+        )
+        table_cell_style = ParagraphStyle(
+            "TableCell",
+            parent=styles["BodyText"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+
         story = [
             Paragraph("LunaVita Daily Nutrition Report", styles["Title"]),
             Paragraph(day.strftime("%A, %d %B %Y"), styles["Heading2"]),
@@ -141,23 +165,26 @@ class DailyReportService:
         ]
         food_rows = [
             [
-                "Time",
-                "Food / supplement",
-                "Quantity",
-                "kcal",
-                "Protein",
-                "Carbs",
-                "Fat",
-                "Natural sugar",
-                "Added sugar",
+                self.wrapped_cell(label, table_header_style)
+                for label in (
+                    "Time",
+                    "Food / supplement",
+                    "Quantity",
+                    "kcal",
+                    "Protein",
+                    "Carbs",
+                    "Fat",
+                    "Natural sugar",
+                    "Added sugar",
+                )
             ]
         ]
         food_rows.extend(
             [
                 [
-                    self.food_entry_time(entry),
-                    entry["food_name"],
-                    entry.get("quantity") or "",
+                    self.wrapped_cell(self.food_entry_time(entry), table_cell_style),
+                    self.wrapped_cell(entry["food_name"], table_cell_style),
+                    self.wrapped_cell(entry.get("quantity") or "", table_cell_style),
                     entry["calories"],
                     f"{entry['protein_g']:.1f}",
                     f"{entry['carbs_g']:.1f}",
