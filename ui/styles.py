@@ -15,7 +15,7 @@ class LunaStyle:
         st.markdown(
             """
             <style>
-            :root { --bg:#111111; --panel:rgba(255,255,255,.055); --control:rgba(255,255,255,.07); --control-hover:rgba(255,255,255,.12); --text:#f5f5f5; --muted:#a3a3a3; --border:rgba(255,255,255,.14); --strong:rgba(255,255,255,.34); --accent:#f5f5f5; --soft:rgba(255,255,255,.09); }
+            :root { --bg:#111111; --panel:rgba(255,255,255,.055); --control:rgba(255,255,255,.07); --control-hover:rgba(255,255,255,.12); --text:#f5f5f5; --muted:#a3a3a3; --border:rgba(255,255,255,.14); --strong:rgba(255,255,255,.34); --accent:#f5f5f5; --soft:rgba(255,255,255,.09); --luna-text-title:clamp(1.65rem,3vw,2.15rem); --luna-text-subtitle:.78rem; --luna-text-body:.88rem; --luna-text-small:.72rem; }
             .stApp { color:var(--text); background:radial-gradient(circle at 82% -10%,rgba(255,255,255,.07),transparent 30rem),var(--bg); }
             .block-container { max-width:1180px; padding-top:1.35rem; padding-bottom:3rem; }
             header[data-testid="stHeader"] { background:transparent; }
@@ -50,8 +50,8 @@ class LunaStyle:
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) p,
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) span { color:var(--text)!important; -webkit-text-fill-color:var(--text)!important; }
             .lv-mark { display:block; flex:0 0 5.75rem; width:5.75rem; height:4.5rem; border:0; border-radius:0; object-fit:contain; object-position:center; box-shadow:none; }
-            .lv-title { margin:0; color:var(--text); font-family:inherit; font-size:clamp(1.65rem,3vw,2.15rem); font-weight:720; letter-spacing:-.04em; line-height:1; }
-            .lv-subtitle { margin:.32rem 0 0; color:var(--muted); font-size:.84rem; }
+            .lv-title { margin:0; color:var(--text); font-family:inherit; font-size:var(--luna-text-title); font-weight:720; letter-spacing:-.04em; line-height:1; }
+            .stApp .lv-subtitle { margin:.32rem 0 0; color:var(--muted); font-size:var(--luna-text-subtitle); font-weight:400; }
             .vita-section { margin:1.2rem 0 .75rem; }
             .vita-eyebrow { color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.13em; text-transform:uppercase; }
             .vita-section h2 { margin:.25rem 0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
