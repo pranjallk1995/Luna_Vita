@@ -189,6 +189,8 @@ Adminer is bound to localhost and reaches PostgreSQL only through the private Lu
 
 - `record_health_measurement` — store weight, BMI, BMR, water ratio, or another measurement.
 - `get_health_measurements` — list recent measurements, optionally filtered by metric.
+- `update_health_measurement` — replace an entire measurement entry by its database ID.
+- `remove_health_measurement` — delete an entire measurement entry by its database ID.
 - `get_daily_nutrition_summary` — return daily totals in kcal and grams.
 - `get_current_log_pdf` — generate and return today's complete log as a PDF.
 

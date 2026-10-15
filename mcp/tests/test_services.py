@@ -36,6 +36,16 @@ class FakeRepository:
         self.calls.append(("add_health_measurements", entries))
         return [{"id": index + 1} for index, _ in enumerate(entries)]
 
+    def update_health_measurement(
+        self, entry_id: int, entry: HealthMeasurementCreate
+    ) -> dict:
+        self.calls.append(("update_health_measurement", (entry_id, entry)))
+        return {"id": entry_id, **entry.model_dump()}
+
+    def delete_health_measurement(self, entry_id: int) -> bool:
+        self.calls.append(("delete_health_measurement", entry_id))
+        return True
+
     def update_body_profile(self, **values: Any) -> dict:
         self.calls.append(("update_body_profile", values))
         return values
@@ -133,6 +143,31 @@ class LunaVitaServiceTests(unittest.TestCase):
 
         self.assertEqual(result, [{"id": 1}, {"id": 2}])
         self.assertEqual(self.repository.calls[-1][1], entries)
+
+    def test_update_measurement_replaces_complete_entry(self) -> None:
+        entry = HealthMeasurementCreate(
+            metric="weight",
+            value=69.5,
+            unit="kg",
+            measured_at="2026-10-16T08:00:00+05:30",
+            time_label="Morning",
+            notes="After waking",
+        )
+
+        result = self.service.update_measurement(12, entry)
+
+        self.assertEqual(result["id"], 12)
+        self.assertEqual(
+            self.repository.calls[-1],
+            ("update_health_measurement", (12, entry)),
+        )
+
+    def test_remove_measurement_deletes_complete_entry(self) -> None:
+        self.assertTrue(self.service.remove_measurement(12))
+        self.assertEqual(
+            self.repository.calls[-1],
+            ("delete_health_measurement", 12),
+        )
 
     def test_body_profile_update_preserves_named_fields(self) -> None:
         result = self.service.update_body_profile(

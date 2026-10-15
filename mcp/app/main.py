@@ -43,6 +43,8 @@ class LunaVitaMCPAdapter:
             self.remove_food,
             self.record_health_measurement,
             self.get_health_measurements,
+            self.update_health_measurement,
+            self.remove_health_measurement,
             self.get_daily_nutrition_summary,
             self.get_day_context,
             self.save_day_context,
@@ -234,6 +236,35 @@ class LunaVitaMCPAdapter:
     ) -> list[dict[str, Any]]:
         """List recent health measurements, optionally filtered by metric."""
         return self.service.list_measurements(metric, limit)
+
+    def update_health_measurement(
+        self,
+        entry_id: int,
+        metric: str,
+        value: float,
+        unit: str,
+        measured_at: str | None = None,
+        time_label: str | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace an entire body-measurement entry by its database id."""
+        entry = HealthMeasurementCreate(
+            metric=metric,
+            value=value,
+            unit=unit,
+            measured_at=measured_at,
+            time_label=time_label,
+            notes=notes,
+        )
+        updated = self.service.update_measurement(entry_id, entry)
+        return {"updated": updated is not None, "entry": updated}
+
+    def remove_health_measurement(self, entry_id: int) -> dict[str, Any]:
+        """Remove an entire body-measurement entry by its database id."""
+        return {
+            "deleted": self.service.remove_measurement(entry_id),
+            "entry_id": entry_id,
+        }
 
     def get_daily_nutrition_summary(self, day: str) -> dict[str, Any]:
         """Return kcal and macronutrient totals for a YYYY-MM-DD date."""
