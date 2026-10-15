@@ -1,7 +1,6 @@
 from datetime import date
 from typing import Any
 
-from .inference import NutritionEstimate, NutritionInferenceRequest, NutritionInferenceService
 from .models import (
     DailyLogUpsert,
     DailyRecommendationsUpsert,
@@ -18,11 +17,9 @@ class LunaVitaService:
     def __init__(
         self,
         repository: LunaVitaRepository,
-        inference: NutritionInferenceService,
         reports: DailyReportService,
     ) -> None:
         self.repository = repository
-        self.inference = inference
         self.reports = reports
 
     def record_food(self, entry: FoodEntryCreate) -> dict[str, Any]:
@@ -153,11 +150,6 @@ class LunaVitaService:
             sex=sex,
             weight_kg=weight_kg,
         )
-
-    def infer_nutrition(
-        self, request: NutritionInferenceRequest
-    ) -> NutritionEstimate:
-        return self.inference.infer(request)
 
     def daily_report(self, day: date) -> bytes:
         return self.reports.build(day)

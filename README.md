@@ -11,7 +11,7 @@
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using AI
 
-Luna Vita combines a responsive Streamlit interface, a Python REST/MCP service, and PostgreSQL persistence. It is designed to run beside Luna Vault on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
+Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside Luna Vault on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
 
 <p align="center">
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
@@ -87,7 +87,7 @@ All user-facing energy values are labeled in kcal.
 | Component | Technology | Purpose |
 | --- | --- | --- |
 | UI | Streamlit | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
-| API and MCP | FastAPI + FastMCP | REST endpoints and conversational tools |
+| HTTP and MCP | FastMCP custom routes + tools | UI endpoints and conversational tools on one server |
 | Database | PostgreSQL 17 | Food, health measurements, recommendations, and daily context |
 | Network | `luna_vault_lunavault_network` | Shared private network with Luna Vault |
 
@@ -116,7 +116,7 @@ docker compose up --build --watch
 Open:
 
 - UI: <http://127.0.0.1:18502>
-- REST API documentation: <http://127.0.0.1:18001/docs>
+- Service health: <http://127.0.0.1:18001/health>
 - MCP endpoint: <http://127.0.0.1:18001/mcp>
 
 The built-in development credentials work without creating a `.env` file:

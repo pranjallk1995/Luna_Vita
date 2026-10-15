@@ -1,16 +1,13 @@
-from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Response
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ValidationError
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from .database import Database
-from .inference import (
-    NutritionInferenceRequest,
-    NutritionInferenceService,
-    NutritionInferenceUnavailable,
-)
 from .models import (
     DailyLogUpsert,
     DailyRecommendationsUpsert,
@@ -321,196 +318,231 @@ class LunaVitaMCPAdapter:
         return updated
 
 
-class LunaVitaAPIAdapter:
-    """Configure FastAPI routes around the application service."""
+class LunaVitaHTTPAdapter:
+    """Expose UI-facing HTTP routes through the existing FastMCP server."""
 
-    def __init__(
-        self,
-        database: Database,
-        service: LunaVitaService,
-        mcp_server: FastMCP,
-    ) -> None:
-        self.database = database
+    def __init__(self, server: FastMCP, service: LunaVitaService) -> None:
+        self.server = server
         self.service = service
-        self.mcp_server = mcp_server
-        self.app = FastAPI(
-            title="LunaVita API",
-            version="0.1.0",
-            lifespan=self.lifespan,
-        )
         self.register_routes()
-        self.app.mount("/", self.mcp_server.streamable_http_app())
 
-    @asynccontextmanager
-    async def lifespan(self, app: FastAPI):
-        self.database.open()
-        self.service.ensure_schema()
-        async with self.mcp_server.session_manager.run():
-            yield
-        self.database.close()
+    @classmethod
+    def json_value(cls, value: Any) -> Any:
+        """Convert repository values into JSON-compatible primitives."""
+        if isinstance(value, BaseModel):
+            return cls.json_value(value.model_dump())
+        if isinstance(value, dict):
+            return {key: cls.json_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls.json_value(item) for item in value]
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return float(value)
+        return value
+
+    @classmethod
+    def json_response(cls, value: Any, status_code: int = 200) -> JSONResponse:
+        return JSONResponse(cls.json_value(value), status_code=status_code)
+
+    @staticmethod
+    async def payload(request: Request, model: type[BaseModel]) -> BaseModel:
+        return model.model_validate(await request.json())
+
+    @staticmethod
+    def bounded_limit(request: Request) -> int:
+        limit = int(request.query_params.get("limit", "100"))
+        if not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        return limit
+
+    @classmethod
+    def error_response(cls, error: Exception) -> JSONResponse:
+        if isinstance(error, ValidationError):
+            return cls.json_response({"error": "Invalid request", "details": error.errors()}, 422)
+        if isinstance(error, (ValueError, TypeError)):
+            return cls.json_response({"error": str(error)}, 400)
+        return cls.json_response({"error": str(error)}, 500)
 
     def register_routes(self) -> None:
-        self.app.add_api_route("/health", self.health, methods=["GET"])
-        self.app.add_api_route(
-            "/api/nutrition/infer",
-            self.infer_food_nutrition,
-            methods=["POST"],
-        )
-        self.app.add_api_route("/api/food", self.create_food, methods=["POST"])
-        self.app.add_api_route(
-            "/api/food/{entry_id}",
-            self.replace_food,
-            methods=["PUT"],
-        )
-        self.app.add_api_route(
-            "/api/food/{entry_id}",
-            self.remove_food,
-            methods=["DELETE"],
-            status_code=204,
-        )
-        self.app.add_api_route("/api/food", self.read_food, methods=["GET"])
-        self.app.add_api_route(
-            "/api/measurements",
-            self.create_measurement,
-            methods=["POST"],
-        )
-        self.app.add_api_route(
-            "/api/measurements/batch",
-            self.create_measurement_batch,
-            methods=["POST"],
-        )
-        self.app.add_api_route(
-            "/api/measurements",
-            self.read_measurements,
-            methods=["GET"],
-        )
-        self.app.add_api_route(
-            "/api/measurements/{entry_id}",
-            self.replace_measurement,
-            methods=["PUT"],
-        )
-        self.app.add_api_route(
-            "/api/measurements/{entry_id}",
-            self.remove_measurement,
-            methods=["DELETE"],
-            status_code=204,
-        )
-        self.app.add_api_route(
-            "/api/recommendations",
-            self.read_recommendations,
-            methods=["GET"],
-        )
-        self.app.add_api_route(
-            "/api/summary/{day}",
-            self.read_summary,
-            methods=["GET"],
-        )
-        self.app.add_api_route("/api/days/{day}", self.read_day, methods=["GET"])
-        self.app.add_api_route("/api/days/{day}", self.save_day, methods=["PUT"])
-        self.app.add_api_route(
-            "/api/reports/daily/{day}",
-            self.daily_pdf,
-            methods=["GET"],
-        )
+        service = self.service
 
-    def health(self) -> dict[str, str]:
-        return {"status": "ok"}
+        @self.server.custom_route("/health", methods=["GET"])
+        async def health_route(request: Request) -> JSONResponse:
+            del request
+            return self.json_response({"status": "ok"})
 
-    def infer_food_nutrition(
-        self, request: NutritionInferenceRequest
-    ) -> dict[str, Any]:
-        try:
-            return self.service.infer_nutrition(request).model_dump()
-        except NutritionInferenceUnavailable as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        @self.server.custom_route("/api/food", methods=["POST"])
+        async def create_food_route(request: Request) -> JSONResponse:
+            try:
+                entry = await self.payload(request, FoodEntryCreate)
+                return self.json_response(service.record_food(entry), 201)
+            except Exception as error:
+                return self.error_response(error)
 
-    def create_food(self, entry: FoodEntryCreate) -> dict[str, Any]:
-        return self.service.record_food(entry)
-
-    def replace_food(
-        self, entry_id: int, entry: FoodEntryCreate
-    ) -> dict[str, Any]:
-        updated = self.service.update_food(entry_id, entry)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="Food entry not found")
-        return updated
-
-    def remove_food(self, entry_id: int) -> Response:
-        if not self.service.remove_food(entry_id):
-            raise HTTPException(status_code=404, detail="Food entry not found")
-        return Response(status_code=204)
-
-    def read_food(
-        self,
-        start: date | None = None,
-        end: date | None = None,
-        limit: int = Query(100, ge=1, le=500),
-    ) -> list[dict[str, Any]]:
-        return self.service.list_food(start, end, limit)
-
-    def create_measurement(
-        self, entry: HealthMeasurementCreate
-    ) -> dict[str, Any]:
-        return self.service.record_measurement(entry)
-
-    def create_measurement_batch(
-        self, batch: HealthMeasurementBatchCreate
-    ) -> list[dict[str, Any]]:
-        return self.service.record_measurements(batch.measurements)
-
-    def replace_measurement(
-        self, entry_id: int, entry: HealthMeasurementCreate
-    ) -> dict[str, Any]:
-        updated = self.service.update_measurement(entry_id, entry)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="Measurement not found")
-        return updated
-
-    def remove_measurement(self, entry_id: int) -> Response:
-        if not self.service.remove_measurement(entry_id):
-            raise HTTPException(status_code=404, detail="Measurement not found")
-        return Response(status_code=204)
-
-    def read_measurements(
-        self,
-        metric: str | None = None,
-        limit: int = Query(100, ge=1, le=500),
-    ) -> list[dict[str, Any]]:
-        return self.service.list_measurements(metric, limit)
-
-    def read_recommendations(self) -> dict[str, Any] | None:
-        return self.service.daily_recommendations()
-
-    def read_summary(self, day: date) -> dict[str, Any]:
-        return self.service.summary(day)
-
-    def read_day(self, day: date) -> dict[str, Any]:
-        return self.service.day_context(day)
-
-    def save_day(
-        self, day: date, entry: DailyLogUpsert
-    ) -> dict[str, Any]:
-        return self.service.save_day_context(day, entry)
-
-    def daily_pdf(self, day: date) -> Response:
-        return Response(
-            content=self.service.daily_report(day),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": (
-                    f'attachment; filename="lunavita-{day.isoformat()}.pdf"'
+        @self.server.custom_route("/api/food", methods=["GET"])
+        async def read_food_route(request: Request) -> JSONResponse:
+            try:
+                start = request.query_params.get("start")
+                end = request.query_params.get("end")
+                result = service.list_food(
+                    date.fromisoformat(start) if start else None,
+                    date.fromisoformat(end) if end else None,
+                    self.bounded_limit(request),
                 )
-            },
+                return self.json_response(result)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/food/{entry_id}", methods=["PUT"])
+        async def replace_food_route(request: Request) -> JSONResponse:
+            try:
+                entry = await self.payload(request, FoodEntryCreate)
+                result = service.update_food(int(request.path_params["entry_id"]), entry)
+                if result is None:
+                    return self.json_response({"error": "Food entry not found"}, 404)
+                return self.json_response(result)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/food/{entry_id}", methods=["DELETE"])
+        async def delete_food_route(request: Request) -> Response:
+            try:
+                if not service.remove_food(int(request.path_params["entry_id"])):
+                    return self.json_response({"error": "Food entry not found"}, 404)
+                return Response(status_code=204)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/measurements", methods=["POST"])
+        async def create_measurement_route(request: Request) -> JSONResponse:
+            try:
+                entry = await self.payload(request, HealthMeasurementCreate)
+                return self.json_response(service.record_measurement(entry), 201)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/measurements/batch", methods=["POST"])
+        async def create_measurement_batch_route(request: Request) -> JSONResponse:
+            try:
+                batch = await self.payload(request, HealthMeasurementBatchCreate)
+                return self.json_response(service.record_measurements(batch.measurements), 201)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/measurements", methods=["GET"])
+        async def read_measurements_route(request: Request) -> JSONResponse:
+            try:
+                result = service.list_measurements(
+                    request.query_params.get("metric"), self.bounded_limit(request)
+                )
+                return self.json_response(result)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/measurements/{entry_id}", methods=["PUT"])
+        async def replace_measurement_route(request: Request) -> JSONResponse:
+            try:
+                entry = await self.payload(request, HealthMeasurementCreate)
+                result = service.update_measurement(
+                    int(request.path_params["entry_id"]), entry
+                )
+                if result is None:
+                    return self.json_response({"error": "Measurement not found"}, 404)
+                return self.json_response(result)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/measurements/{entry_id}", methods=["DELETE"])
+        async def delete_measurement_route(request: Request) -> Response:
+            try:
+                if not service.remove_measurement(int(request.path_params["entry_id"])):
+                    return self.json_response({"error": "Measurement not found"}, 404)
+                return Response(status_code=204)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/recommendations", methods=["GET"])
+        async def recommendations_route(request: Request) -> JSONResponse:
+            del request
+            return self.json_response(service.daily_recommendations())
+
+        @self.server.custom_route("/api/summary/{day}", methods=["GET"])
+        async def summary_route(request: Request) -> JSONResponse:
+            try:
+                return self.json_response(
+                    service.summary(date.fromisoformat(request.path_params["day"]))
+                )
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/days/{day}", methods=["GET"])
+        async def day_route(request: Request) -> JSONResponse:
+            try:
+                return self.json_response(
+                    service.day_context(date.fromisoformat(request.path_params["day"]))
+                )
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/days/{day}", methods=["PUT"])
+        async def save_day_route(request: Request) -> JSONResponse:
+            try:
+                entry = await self.payload(request, DailyLogUpsert)
+                result = service.save_day_context(
+                    date.fromisoformat(request.path_params["day"]), entry
+                )
+                return self.json_response(result)
+            except Exception as error:
+                return self.error_response(error)
+
+        @self.server.custom_route("/api/reports/daily/{day}", methods=["GET"])
+        async def daily_report_route(request: Request) -> Response:
+            try:
+                day = date.fromisoformat(request.path_params["day"])
+                return Response(
+                    service.daily_report(day),
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": (
+                            f'attachment; filename="lunavita-{day.isoformat()}.pdf"'
+                        )
+                    },
+                )
+            except Exception as error:
+                return self.error_response(error)
+
+
+class LunaVitaApplication:
+    """Compose and own Luna Vita's database, services, MCP, and HTTP adapters."""
+
+    def __init__(self) -> None:
+        self.database = Database.from_env()
+        self.repository = LunaVitaRepository(self.database)
+        self.reports = DailyReportService(self.repository)
+        self.service = LunaVitaService(self.repository, self.reports)
+        self.database.open()
+        self.service.ensure_schema()
+        self.mcp = FastMCP(
+            "LunaVita",
+            host="0.0.0.0",
+            port=8000,
+            stateless_http=True,
+            json_response=True,
         )
+        self.mcp_adapter = LunaVitaMCPAdapter(self.mcp, self.service)
+        self.http_adapter = LunaVitaHTTPAdapter(self.mcp, self.service)
+
+    def run(self) -> None:
+        try:
+            self.mcp.run(transport="streamable-http")
+        finally:
+            self.database.close()
 
 
-database = Database.from_env()
-repository = LunaVitaRepository(database)
-inference = NutritionInferenceService()
-reports = DailyReportService(repository)
-service = LunaVitaService(repository, inference, reports)
+application = LunaVitaApplication()
+mcp = application.mcp
+app = mcp.streamable_http_app()
 
-mcp = FastMCP("LunaVita", stateless_http=True, json_response=True)
-mcp_adapter = LunaVitaMCPAdapter(mcp, service)
-api_adapter = LunaVitaAPIAdapter(database, service, mcp)
-app = api_adapter.app
+if __name__ == "__main__":
+    application.run()
