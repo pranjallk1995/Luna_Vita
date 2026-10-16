@@ -208,7 +208,7 @@ Age is calculated dynamically from the stored date of birth, so it changes autom
 
 ### `food_entries`
 
-Stores the consumed date and timestamp, optional display-time label, food/supplement name, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, optional image, and notes.
+Stores the consumed date and timestamp, optional display-time label, food/supplement name, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, optional image, and notes. Luna Visia images are referenced through their immutable image-ID URLs, so renaming a file in Visia does not break its Vita entry.
 
 ### `health_measurements`
 

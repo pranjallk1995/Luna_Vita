@@ -78,9 +78,9 @@ class LunaVitaMCPAdapter:
         carbs, fat, natural sugar, added sugar, or an image, infer those values
         from the stated food and complete quantity before calling this tool.
         Always search Luna Visia for an appropriate representative image before
-        calling this tool. Prefer a verified Luna Visia public image URL when a
-        suitable match exists. Only pass null when that search finds no suitable
-        image; never invent a URL.
+        calling this tool. Prefer a verified immutable image-ID URL returned by
+        Luna Visia when a suitable match exists. Only pass null when that search
+        finds no suitable image; never invent or construct a filename-based URL.
         """
         return self.service.record_food(
             FoodEntryCreate(
@@ -124,8 +124,9 @@ class LunaVitaMCPAdapter:
         Infer kcal, protein, carbs, fat, natural sugar, and added sugar for the
         complete stated quantity before calling the tool. Always search Luna
         Visia for an appropriate representative image first and prefer its
-        verified public image URL when a suitable match exists. Only pass null
-        when that search finds no suitable image; never invent a URL. Use the
+        verified immutable image-ID URL when a suitable match exists. Only pass
+        null when that search finds no suitable image; never invent or construct
+        a filename-based URL. Use the
         current date/time when the user says "now"; otherwise preserve the
         stated time.
         """
