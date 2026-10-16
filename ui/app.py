@@ -291,6 +291,25 @@ class FoodLogView:
         return LunaVitaClock.combine(original.date(), time.min).isoformat(), text
 
     @staticmethod
+    def macro_percentages(values: list[float]) -> list[int]:
+        """Round non-negative macro shares to integers totaling exactly 100%."""
+        total = sum(values)
+        if total <= 0:
+            return [0] * len(values)
+
+        exact = [value * 100 / total for value in values]
+        percentages = [int(value) for value in exact]
+        remaining = 100 - sum(percentages)
+        by_largest_remainder = sorted(
+            range(len(values)),
+            key=lambda index: (exact[index] - percentages[index], -index),
+            reverse=True,
+        )
+        for index in by_largest_remainder[:remaining]:
+            percentages[index] += 1
+        return percentages
+
+    @staticmethod
     def render_macro_distribution(rows: list[dict[str, Any]]) -> None:
         calories = sum(float(row["calories"]) for row in rows)
         values = [
@@ -300,14 +319,7 @@ class FoodLogView:
             sum(float(row["natural_sugar_g"]) for row in rows),
             sum(float(row["added_sugar_g"]) for row in rows),
         ]
-        total = sum(values)
-        percentages = (
-            [round(value * 100 / total) for value in values]
-            if total
-            else [0, 0, 0, 0, 0]
-        )
-        if total:
-            percentages[-1] += 100 - sum(percentages)
+        percentages = FoodLogView.macro_percentages(values)
         colors = ["#4ade80", "#60a5fa", "#fbbf24", "#c084fc", "#fb7185"]
         labels = ["Protein", "Carbs", "Fat", "Natural sugar", "Added sugar"]
         cursor = 0
@@ -640,6 +652,32 @@ class WeightView:
             frame["period"] = frame.apply(cls.period, axis=1)
         return frame
 
+    @classmethod
+    def display_frame(cls, frame: pd.DataFrame) -> pd.DataFrame:
+        """Build the measurement table with Morning permanently before Night."""
+        display_rows = []
+        for metric, (label, _) in cls.METRICS.items():
+            display = {
+                "Measurement": label,
+                "Morning": "Not recorded",
+                "Night": "Not recorded",
+            }
+            if not frame.empty:
+                metric_rows = frame[frame["metric"] == metric]
+                for period in ("Morning", "Night"):
+                    matches = metric_rows[metric_rows["period"] == period].sort_values(
+                        "measured_at"
+                    )
+                    if not matches.empty:
+                        row = matches.iloc[-1]
+                        display[period] = cls.format_value(
+                            metric, float(row["value"]), str(row["unit"])
+                        )
+            display_rows.append(display)
+        return pd.DataFrame(
+            display_rows, columns=["Measurement", "Morning", "Night"]
+        )
+
     def render(self, day: date) -> None:
         title_column, action_column = st.columns(
             [5, 1], vertical_alignment="center", gap="medium"
@@ -655,28 +693,9 @@ class WeightView:
 
         frame = self.measurement_frame(self.api.measurements(), day)
 
-        display_rows = []
-        for metric, (label, _) in self.METRICS.items():
-            display = {
-                "Measurement": label,
-                "Morning": "Not recorded",
-                "Night": "Not recorded",
-            }
-            if not frame.empty:
-                metric_rows = frame[frame["metric"] == metric]
-                for period in ("Morning", "Night"):
-                    matches = metric_rows[metric_rows["period"] == period].sort_values(
-                        "measured_at"
-                    )
-                    if not matches.empty:
-                        row = matches.iloc[-1]
-                        display[period] = self.format_value(
-                            metric, float(row["value"]), str(row["unit"])
-                        )
-            display_rows.append(display)
-
         st.dataframe(
-            pd.DataFrame(display_rows),
+            self.display_frame(frame),
+            column_order=("Measurement", "Morning", "Night"),
             hide_index=True,
             use_container_width=True,
         )
