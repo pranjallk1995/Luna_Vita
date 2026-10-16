@@ -6,7 +6,6 @@ import inspect
 from io import BytesIO
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -14,10 +13,6 @@ import pandas as pd
 import httpx
 import streamlit as st
 from PIL import Image, ImageOps, UnidentifiedImageError
-
-UI_ROOT = Path(__file__).resolve().parent
-LOGO_PATH = UI_ROOT / "assets" / "lunavita_logo.png"
-
 
 class LunaVitaClock:
     """Provide timezone-aware dates and timestamps for the UI."""
@@ -42,14 +37,16 @@ class SourceReloadMonitor:
 
     @staticmethod
     def revision() -> str:
-        source_files = sorted(UI_ROOT.rglob("*.py"))
-        source_files.append(UI_ROOT / ".streamlit" / "config.toml")
-        source_files.append(LOGO_PATH)
+        source_files = sorted(UIConfig.UI_ROOT.rglob("*.py"))
+        source_files.append(UIConfig.UI_ROOT / ".streamlit" / "config.toml")
+        source_files.append(UIConfig.LOGO_PATH)
         digest = hashlib.sha256()
         for source_file in source_files:
             if not source_file.is_file():
                 continue
-            digest.update(source_file.relative_to(UI_ROOT).as_posix().encode())
+            digest.update(
+                source_file.relative_to(UIConfig.UI_ROOT).as_posix().encode()
+            )
             digest.update(source_file.read_bytes())
         return digest.hexdigest()
 
@@ -242,7 +239,6 @@ class FoodLogView:
         """Normalize an uploaded photo into a compact database-safe data URL."""
         try:
             image = ImageOps.exif_transpose(Image.open(uploaded_file))
-            image.thumbnail((360, 360), Image.Resampling.LANCZOS)
             if image.mode in {"RGBA", "LA"}:
                 rgba = image.convert("RGBA")
                 background = Image.new("RGB", rgba.size, (17, 17, 17))
@@ -250,6 +246,12 @@ class FoodLogView:
                 image = background
             else:
                 image = image.convert("RGB")
+            image = ImageOps.fit(
+                image,
+                UIConfig.FOOD_IMAGE_DISPLAY_SIZE,
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
             output = BytesIO()
             image.save(output, format="JPEG", quality=85, optimize=True)
         except (UnidentifiedImageError, OSError, ValueError) as exc:
@@ -420,17 +422,23 @@ class FoodLogView:
         if rows:
             frame = pd.DataFrame(self.rows_by_time(rows))[self.COLUMNS]
             frame["display_time"] = frame.apply(self.display_time, axis=1)
+            frame["display_image"] = frame["image_url"].fillna("").map(
+                UIConfig.food_image_preview
+            )
             frame.insert(0, "remove", False)
             edited = st.data_editor(
                 frame,
                 hide_index=True,
                 use_container_width=True,
-                disabled=["id", "image_url"],
-                height=min(680, 88 + 54 * len(frame)),
-                row_height=52,
+                disabled=["id", "image_url", "display_image"],
+                height=min(
+                    760,
+                    88 + (UIConfig.FOOD_IMAGE_ROW_HEIGHT + 2) * len(frame),
+                ),
+                row_height=UIConfig.FOOD_IMAGE_ROW_HEIGHT,
                 column_order=[
                     "display_time",
-                    "image_url",
+                    "display_image",
                     "food_name",
                     "quantity",
                     "calories",
@@ -447,8 +455,11 @@ class FoodLogView:
                         "Delete", help="Select rows to delete, then save."
                     ),
                     "display_time": st.column_config.TextColumn("Time", pinned=True),
-                    "image_url": st.column_config.ImageColumn(
-                        "Image", help="Optional food image", width="small", pinned=True
+                    "display_image": st.column_config.ImageColumn(
+                        "Image",
+                        help="Optional food image",
+                        width=UIConfig.FOOD_IMAGE_COLUMN_WIDTH,
+                        pinned=True,
                     ),
                     "food_name": st.column_config.TextColumn(
                         "Food / supplement", required=True, width="large"
@@ -855,7 +866,9 @@ class LunaVitaApp:
     def render(self) -> None:
         LunaStyle.apply()
         SourceReloadMonitor.notify()
-        selected_day = LunaStyle.header(LunaVitaClock.today(), LOGO_PATH)
+        selected_day = LunaStyle.header(
+            LunaVitaClock.today(), UIConfig.LOGO_PATH
+        )
         period_labels = {
             "daily": ":material/today: Daily Tracking",
             "weekly": ":material/date_range: Weekly Tracking",
@@ -899,7 +912,7 @@ class LunaVitaApp:
     def run(cls) -> None:
         st.set_page_config(
             page_title="Luna Vita",
-            page_icon=Image.open(LOGO_PATH),
+            page_icon=Image.open(UIConfig.LOGO_PATH),
             layout="wide",
             initial_sidebar_state="collapsed",
         )
