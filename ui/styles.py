@@ -12,12 +12,12 @@ class LunaStyle:
 
     @staticmethod
     def apply() -> None:
-        st.markdown(
+        st.html(
             """
             <style>
             :root { --bg:#111111; --panel:rgba(255,255,255,.055); --control:rgba(255,255,255,.07); --control-hover:rgba(255,255,255,.12); --text:#f5f5f5; --muted:#a3a3a3; --border:rgba(255,255,255,.14); --strong:rgba(255,255,255,.34); --accent:#f5f5f5; --soft:rgba(255,255,255,.09); --luna-text-title:clamp(1.65rem,3vw,2.15rem); --luna-text-subtitle:.78rem; --luna-text-body:.88rem; --luna-text-small:.72rem; }
             .stApp { color:var(--text); background:radial-gradient(circle at 82% -10%,rgba(255,255,255,.07),transparent 30rem),var(--bg); }
-            .block-container { max-width:1180px; padding-top:1.35rem; padding-bottom:3rem; }
+            .block-container { max-width:1180px; padding-top:2.35rem; padding-bottom:3rem; }
             header[data-testid="stHeader"] { background:transparent; }
             #MainMenu,footer,div[data-testid="stDecoration"] { display:none; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) { align-items:center; margin-bottom:.55rem; }
@@ -27,10 +27,9 @@ class LunaStyle:
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-baseweb="input"] { min-height:2.625rem; border-color:var(--strong)!important; background:var(--control)!important; }
             div[data-testid="stDateInput"] input { color:#d4d4d4!important; -webkit-text-fill-color:#d4d4d4!important; }
             .lv-header { display:flex; align-items:center; gap:1rem; min-height:4.5rem; margin-bottom:1rem; }
-            .lv-date-anchor { height:0; overflow:hidden; }
             div[data-testid="stButtonGroup"] { gap:.2rem; margin:.2rem 0 1.15rem; padding:.4rem; border:1px solid var(--border); border-radius:.9rem; background:var(--panel); }
             div[data-testid="stButtonGroup"] button { min-height:2.55rem!important; border:0!important; border-radius:.65rem!important; box-shadow:none!important; }
-            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] { overflow:visible!important; border-color:var(--border)!important; background:var(--panel)!important; }
+            .st-key-nutrition_navigation div[data-testid="stButtonGroup"] { margin:.2rem 0 1.15rem!important; overflow:visible!important; border-color:var(--border)!important; background:var(--panel)!important; }
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button { position:relative; margin-inline:.16rem!important; padding-inline:1rem!important; border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; box-shadow:none!important; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease!important; }
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:not([aria-pressed="true"]):not([kind="primary"]):not([data-testid="stBaseButton-primary"]),
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:not([aria-pressed="true"]):not([kind="primary"]):not([data-testid="stBaseButton-primary"]) p,
@@ -147,7 +146,6 @@ class LunaStyle:
             }
             </style>
             """,
-            unsafe_allow_html=True,
         )
     @staticmethod
     def header(default_day: date, logo_path: Path) -> date:
@@ -171,7 +169,6 @@ class LunaStyle:
                 unsafe_allow_html=True,
             )
         with date_column:
-            st.markdown('<div class="lv-date-anchor"></div>', unsafe_allow_html=True)
             return st.date_input(
                 "Log date",
                 value=default_day,
