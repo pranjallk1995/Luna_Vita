@@ -1,4 +1,6 @@
 from datetime import date, datetime
+import re
+import unicodedata
 from typing import ClassVar, Literal
 from zoneinfo import ZoneInfo
 
@@ -24,6 +26,9 @@ class LocalTimestampModel(BaseModel):
 
 
 class FoodEntryCreate(LocalTimestampModel):
+    EMOJI_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
+    )
     food_name: str = Field(min_length=1, max_length=200)
     quantity: str = Field(min_length=1, max_length=300)
     meal_type: MealType = "other"
@@ -38,6 +43,30 @@ class FoodEntryCreate(LocalTimestampModel):
     consumed_date: date | None = None
     time_label: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("food_name", "quantity", "time_label", "notes")
+    @classmethod
+    def reject_unsafe_text(cls, value: str | None) -> str | None:
+        """Reject emojis and control characters from editable food text."""
+        if value is None:
+            return None
+        text = value.strip()
+        if cls.EMOJI_PATTERN.search(text):
+            raise ValueError("Food entry text cannot contain emojis.")
+        if any(
+            unicodedata.category(character).startswith("C")
+            and character not in {"\n", "\t"}
+            for character in text
+        ):
+            raise ValueError("Food entry text contains unsupported characters.")
+        return text
+
+    @field_validator("food_name", "quantity")
+    @classmethod
+    def require_nonblank_text(cls, value: str) -> str:
+        if not value:
+            raise ValueError("Food name and quantity cannot be blank.")
+        return value
 
 
 class HealthMeasurementCreate(LocalTimestampModel):

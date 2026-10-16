@@ -2,6 +2,8 @@
 
 import os
 import base64
+import re
+import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -19,9 +21,37 @@ class UIConfig:
     FOOD_IMAGE_DISPLAY_SIZE: ClassVar[tuple[int, int]] = (360, 240)
     FOOD_IMAGE_COLUMN_WIDTH: ClassVar[int] = 96
     FOOD_IMAGE_ROW_HEIGHT: ClassVar[int] = 64
+    EMOJI_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
+    )
 
     api_url: str
     timeout: float = 10.0
+
+    @classmethod
+    def text_validation_error(
+        cls,
+        value: object,
+        label: str,
+        *,
+        required: bool = False,
+        max_length: int,
+    ) -> str | None:
+        """Return a user-facing error for unsafe editable text."""
+        text = "" if value is None else str(value).strip()
+        if required and not text:
+            return f"{label} cannot be blank."
+        if len(text) > max_length:
+            return f"{label} must be {max_length} characters or fewer."
+        if cls.EMOJI_PATTERN.search(text):
+            return f"{label} cannot contain emojis."
+        if any(
+            unicodedata.category(character).startswith("C")
+            and character not in {"\n", "\t"}
+            for character in text
+        ):
+            return f"{label} contains unsupported control characters."
+        return None
 
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=256)

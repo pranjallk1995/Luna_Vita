@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import inspect
+import math
 from io import BytesIO
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -363,7 +364,13 @@ class FoodLogView:
 
     def save_rows(self, rows: list[dict[str, Any]], edited: pd.DataFrame) -> None:
         original = {int(row["id"]): row for row in rows}
-        for row in edited.to_dict("records"):
+        edited_rows = edited.to_dict("records")
+        errors = self.editor_validation_errors(edited_rows)
+        if errors:
+            st.error("Please correct the daily log before saving:\n\n- " + "\n- ".join(errors))
+            return
+
+        for row in edited_rows:
             entry_id = int(row["id"])
             if row["remove"]:
                 self.api.delete_food(entry_id)
@@ -392,6 +399,56 @@ class FoodLogView:
             )
         st.toast("Daily log saved")
         st.rerun()
+
+    @staticmethod
+    def editor_validation_errors(rows: list[dict[str, Any]]) -> list[str]:
+        """Validate every editable food row before applying any mutations."""
+        errors: list[str] = []
+        text_fields = (
+            ("food_name", "Food / supplement", True, 200),
+            ("quantity", "Quantity", True, 300),
+            ("display_time", "Time", False, 100),
+            ("notes", "Notes", False, 2_000),
+        )
+        numeric_fields = (
+            ("calories", "Calories", 100_000, True),
+            ("protein_g", "Protein", 10_000, False),
+            ("carbs_g", "Carbs", 10_000, False),
+            ("fat_g", "Fat", 10_000, False),
+            ("natural_sugar_g", "Natural sugar", 10_000, False),
+            ("added_sugar_g", "Added sugar", 10_000, False),
+        )
+        for position, row in enumerate(rows, start=1):
+            if row.get("remove"):
+                continue
+            for key, label, required, max_length in text_fields:
+                value = row.get(key)
+                if pd.isna(value):
+                    value = ""
+                error = UIConfig.text_validation_error(
+                    value,
+                    f"Row {position} {label}",
+                    required=required,
+                    max_length=max_length,
+                )
+                if error:
+                    errors.append(error)
+            for key, label, maximum, whole_number in numeric_fields:
+                value = row.get(key)
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    number = math.nan
+                field = f"Row {position} {label}"
+                if not math.isfinite(number):
+                    errors.append(f"{field} must be a valid number.")
+                elif number < 0:
+                    errors.append(f"{field} cannot be negative.")
+                elif number > maximum:
+                    errors.append(f"{field} cannot exceed {maximum:,}.")
+                elif whole_number and not number.is_integer():
+                    errors.append(f"{field} must be a whole number.")
+        return errors
 
     def render_actions(
         self, day: date, rows: list[dict[str, Any]], edited: pd.DataFrame | None

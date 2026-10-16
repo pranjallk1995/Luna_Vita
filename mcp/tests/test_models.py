@@ -41,6 +41,21 @@ class RequestModelTests(unittest.TestCase):
                 added_sugar_g=0,
             )
 
+    def test_food_rejects_emojis_and_whitespace_only_required_text(self) -> None:
+        for food_name, quantity in (("Apple 🍎", "1"), ("Apple", "   ")):
+            with self.subTest(food_name=food_name, quantity=quantity):
+                with self.assertRaises(ValidationError):
+                    FoodEntryCreate(
+                        food_name=food_name,
+                        quantity=quantity,
+                        calories=95,
+                        protein_g=0.5,
+                        carbs_g=25,
+                        fat_g=0.3,
+                        natural_sugar_g=19,
+                        added_sugar_g=0,
+                    )
+
     def test_measurement_batch_requires_at_least_one_entry(self) -> None:
         with self.assertRaises(ValidationError):
             HealthMeasurementBatchCreate(measurements=[])

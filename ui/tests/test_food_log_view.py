@@ -31,6 +31,43 @@ class FoodLogViewTests(unittest.TestCase):
     def test_empty_macro_distribution_remains_zero(self) -> None:
         self.assertEqual(FoodLogView.macro_percentages([0, 0, 0]), [0, 0, 0])
 
+    def test_editor_rejects_negative_numbers_and_emojis(self) -> None:
+        row = {
+            "food_name": "Apple 🍎",
+            "quantity": "1",
+            "display_time": "8:00 AM",
+            "notes": None,
+            "calories": -10,
+            "protein_g": 0,
+            "carbs_g": 20,
+            "fat_g": 0,
+            "natural_sugar_g": 15,
+            "added_sugar_g": 0,
+            "remove": False,
+        }
+
+        errors = FoodLogView.editor_validation_errors([row])
+
+        self.assertTrue(any("cannot contain emojis" in error for error in errors))
+        self.assertTrue(any("cannot be negative" in error for error in errors))
+
+    def test_editor_accepts_normal_food_values(self) -> None:
+        row = {
+            "food_name": "Apple",
+            "quantity": "1 medium (180 g)",
+            "display_time": "8:00 AM",
+            "notes": "With breakfast",
+            "calories": 95,
+            "protein_g": 0.5,
+            "carbs_g": 25,
+            "fat_g": 0.3,
+            "natural_sugar_g": 19,
+            "added_sugar_g": 0,
+            "remove": False,
+        }
+
+        self.assertEqual(FoodLogView.editor_validation_errors([row]), [])
+
 
 class WeightViewTests(unittest.TestCase):
     def test_display_columns_always_put_morning_before_night(self) -> None:
