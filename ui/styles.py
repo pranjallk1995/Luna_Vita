@@ -147,6 +147,7 @@ class LunaStyle:
             </style>
             """,
         )
+
     @staticmethod
     def header(default_day: date, logo_path: Path) -> date:
         logo_data = base64.b64encode(logo_path.read_bytes()).decode("ascii")
