@@ -8,7 +8,7 @@
 
 > **Work in progress:** Luna Vita is a local-first and desktop first nutrition and body-measurement tracker under active development.
 
-## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using AI
+## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using LLMs
 
 Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
 
