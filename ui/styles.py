@@ -104,6 +104,8 @@ class LunaStyle:
             .macro-dot { width:.62rem; height:.62rem; border-radius:50%; background:var(--dot); }
             @media (max-width:620px) { .macro-content { grid-template-columns:1fr; } .macro-legend,.macro-donut { grid-column:1; grid-row:auto; } }
             div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:var(--panel); }
+            [data-testid="InputInstructions"] span:first-child { display:none!important; }
+            [data-testid="InputInstructions"] span:nth-child(2)::before { display:none!important; }
             div[data-baseweb="input"] > div,div[data-baseweb="select"] > div { border-color:var(--border)!important; border-radius:.5rem!important; background:var(--panel)!important; }
             div[data-testid="stNumberInput"] button { background:rgba(255,255,255,.09)!important; color:#d4d4d4!important; border-color:rgba(255,255,255,.14)!important; }
             div[data-testid="stNumberInput"] button:hover { background:rgba(255,255,255,.15)!important; color:#f5f5f5!important; }
