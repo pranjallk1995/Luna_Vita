@@ -6,10 +6,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .models import (
+    AnalysisRange,
     BodyProfileUpdate,
     DailyLogUpsert,
     DailyRecommendationsUpsert,
     FoodEntryCreate,
+    FoodRename,
+    FoodVerdictUpsert,
     HealthMeasurementCreate,
 )
 from .report_tools import CurrentLogPdfTool
@@ -26,6 +29,7 @@ class LunaVitaMCPTools:
         self._register_measurement_tools()
         self._register_day_tools()
         self._register_profile_tools()
+        self._register_analysis_tools()
 
     @staticmethod
     def optional_date(value: str | None) -> date | None:
@@ -339,3 +343,99 @@ class LunaVitaMCPTools:
                 weight_kg=weight_kg,
             )
             return profile.update_body(entry)
+
+    def _register_analysis_tools(self) -> None:
+        server, analysis = self.server, self.service.analysis
+        optional_date = self.optional_date
+
+        @server.tool()
+        def get_food_analysis(
+            start_date: str | None = None, end_date: str | None = None
+        ) -> dict[str, Any]:
+            """Return Luna Vita's food analysis for the Monthly Tracking tab.
+
+            With no dates, returns exactly what the tab currently shows: the saved
+            range from set_monthly_range, or the current calendar month. With both
+            YYYY-MM-DD dates that range is analysed; with one date, that date's
+            calendar month. Neither changes what the tab shows. The result lists
+            every food with its count, days eaten, macro totals, calorie shares,
+            and verdict (source "rule" or "override"), plus top contributors per
+            nutrient, the prefer/avoid lists, and range_source ("saved", "month",
+            or "requested"). Call this before renaming foods or changing verdicts.
+            """
+            if start_date or end_date:
+                return analysis.analyze(optional_date(start_date), optional_date(end_date))
+            return analysis.analyze_displayed()
+
+        @server.tool()
+        def set_monthly_range(start_date: str, end_date: str) -> dict[str, Any]:
+            """Choose the inclusive YYYY-MM-DD date range the Monthly tab shows.
+
+            Use this when the user wants the Monthly Tracking view to cover a
+            specific period, such as "the last 3 days", "1-15 October", or "since I
+            started tracking". The range stays until reset_monthly_range is called
+            and can cover at most 366 days. Resolve relative phrases to dates in
+            the Asia/Kolkata timezone. Returns the range now shown.
+            """
+            return analysis.set_range(
+                AnalysisRange(start_date=start_date, end_date=end_date)
+            )
+
+        @server.tool()
+        def reset_monthly_range() -> dict[str, Any]:
+            """Return the Monthly tab to the calendar month of the selected date."""
+            return analysis.reset_range()
+
+        @server.tool()
+        def get_monthly_range() -> dict[str, Any]:
+            """Report the date range the Monthly tab shows and whether it was saved."""
+            return analysis.range_status()
+
+        @server.tool()
+        def rename_food(
+            current_name: str,
+            new_name: str,
+            start_date: str | None = None,
+            end_date: str | None = None,
+        ) -> dict[str, Any]:
+            """Rename every food entry matching current_name, optionally within dates.
+
+            Matching ignores case, punctuation, spacing, and a trailing plural "s",
+            so "parathas" also matches "Paratha". Use this to fix a misspelling or
+            to merge duplicates (for example rename "ON Gold Standard Whey" to
+            "Whey protein"). Counts, macro totals, top contributors, and rule-based
+            verdicts are derived from the entries, so they update automatically.
+            A verdict override moves to the new name once no entry uses the old
+            one. Returns the number renamed and the merged food's new summary.
+            """
+            return analysis.rename(
+                FoodRename(
+                    current_name=current_name,
+                    new_name=new_name,
+                    start_date=optional_date(start_date),
+                    end_date=optional_date(end_date),
+                )
+            )
+
+        @server.tool()
+        def set_food_verdict(food_name: str, verdict: str, reason: str) -> dict[str, Any]:
+            """Set a food's Food choices verdict, replacing the macro-based rating.
+
+            verdict is "prefer", "avoid", or "neutral" ("neutral" removes it from
+            both lists). reason is the short explanation shown in the UI, for
+            example "Homemade, so far less oil than the macros suggest". The
+            override applies to every period and to all spellings of the name.
+            """
+            return analysis.set_verdict(
+                FoodVerdictUpsert(food_name=food_name, verdict=verdict, reason=reason)
+            )
+
+        @server.tool()
+        def clear_food_verdict(food_name: str) -> dict[str, Any]:
+            """Remove a verdict override so the food is rated by its macros again."""
+            return {"cleared": analysis.clear_verdict(food_name), "food_name": food_name}
+
+        @server.tool()
+        def list_food_verdicts() -> list[dict[str, Any]]:
+            """List every verdict override with its food name, verdict, and reason."""
+            return analysis.list_verdicts()

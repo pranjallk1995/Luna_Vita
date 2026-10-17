@@ -45,8 +45,19 @@ Inference happens in the active AI conversation. Luna Vita stores the supplied s
 - Optional image upload from the device. Images are resized before being stored with the entry.
 - Row deletion through the final **Delete** column.
 - Save and daily PDF actions on one row.
-- Daily, Weekly, and Monthly navigation; Daily is implemented and the other two are placeholders.
+- Daily, Weekly, and Monthly navigation; Daily and Monthly are implemented and Weekly is a placeholder.
 - Persistent navigation selection, including repeated clicks on the active segment.
+
+### Monthly tracking
+
+The Monthly tab analyses the calendar month containing the selected date, however many days have been logged so far. The assistant can instead save a custom date range with `set_monthly_range`; the tab then shows that range (marked "range set through the assistant") until `reset_monthly_range` is called.
+
+- **Overview** - entries, distinct foods, days logged, and daily-average nutrient cards against your targets. Averages use logged days only, so unlogged or future days don't dilute them. Below each card, a per-day column chart in the card's color shows that nutrient for every day of the range against its target line; hover a column for the exact value, and unlogged days stay empty.
+- **What you had** - how many times each food was logged and on how many days, with its monthly totals and verdict. Spelling variants such as "Paratha" and "parathas" are grouped.
+- **Top contributors** - the three foods that supplied the most calories, protein, carbs, fat, and added sugar, as a share of the month's total.
+- **Food choices** - foods to prefer and to avoid, rated on macros unless you set a rating through the assistant (shown as "Your rating"). Shares are of each food's logged calories (4 kcal/g protein and carbs, 9 kcal/g fat); foods under 50 kcal per serving, such as supplements, are not rated.
+  - *Prefer*: at least 20% of calories from protein, at most 40% from carbs, and under 5% from added sugar. Ranked by macro score.
+  - *Avoid*: 10% or more of calories from added sugar (the WHO free-sugar guideline), or under 10% from protein. Ranked by calories consumed, so the biggest wins come first.
 
 ### Macro distribution
 
@@ -194,6 +205,17 @@ Adminer is bound to localhost and reaches PostgreSQL only through the private Lu
 - `get_daily_nutrition_summary` — return daily totals in kcal and grams.
 - `get_current_log_pdf` — generate and return today's complete log as a PDF.
 
+### Monthly analysis
+
+- `get_food_analysis` - return the Monthly Tracking data: counts, macro totals, verdicts, top contributors, and prefer/avoid lists. Without dates it returns exactly what the tab shows; with dates it analyses that range or month without changing the tab.
+- `set_monthly_range` - choose the date range the Monthly tab shows (up to 366 days).
+- `reset_monthly_range` - return the Monthly tab to the calendar month of the selected date.
+- `get_monthly_range` - report the range the Monthly tab shows and whether it is saved.
+- `rename_food` - rename or merge a food across its entries (matching ignores case, punctuation, and a trailing plural "s"), optionally within dates. Counts, totals, and computed verdicts follow automatically.
+- `set_food_verdict` - rate a food prefer, avoid, or neutral with a reason, replacing its macro-based rating in every period.
+- `clear_food_verdict` - remove a rating so the food is judged on its macros again.
+- `list_food_verdicts` - list every rating set this way.
+
 ### Daily context and recommendations
 
 - `get_day_context` — read goals, reported totals, activity, supplements, and notes.
@@ -217,6 +239,14 @@ Stores one metric per row with its value, unit, timestamp, Morning/Night label, 
 ### `daily_recommendations`
 
 Stores the current kcal and macro recommendations plus height, sex, date of birth, weight, goal, and notes.
+
+### `food_verdicts`
+
+Stores explicit prefer/avoid/neutral ratings and their reasons, keyed by the normalized food name so every spelling of a food shares one rating.
+
+### `analysis_range`
+
+A single optional row holding the custom date range the Monthly tab shows. When it is absent, the tab shows the selected date's calendar month.
 
 ### `daily_logs`
 
@@ -256,8 +286,9 @@ Pure logic modules have no Streamlit session dependency and are unit tested dire
 - `ui/views/summary_view.py` - recommendation-aware nutrition summary cards.
 - `ui/views/food_log_view.py` - editable food log, add-entry dialog, save/PDF actions, and macro donut chart.
 - `ui/views/measurements_view.py` - Morning/Night body-measurement table, period deletion, and add dialog.
+- `ui/views/monthly_view.py` - renders the backend's monthly analysis: overview, item counts, top contributors, and prefer/avoid lists.
 - `ui/views/navigation.py` - Daily/Weekly/Monthly selector that keeps its selection on repeated clicks.
-- `ui/views/shared.py` - view base class and the shared section header with its "Add entry" button.
+- `ui/views/shared.py` - view base class, the shared section header with its "Add entry" button, and the nutrient cards used by the daily and monthly views.
 - `ui/nutrition.py` - nutrient card definitions, target status rules, and macro percentages.
 - `ui/food_entries.py` - consumed-time display, ordering, and parsing, plus food-entry payload building.
 - `ui/body_measurements.py` - tracked body metrics, Morning/Night tables, and measurement payloads.
@@ -281,10 +312,11 @@ Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call s
 - `mcp/app/config.py` - validated backend settings loaded from the environment.
 - `mcp/app/mcp_tools.py` - conversational MCP tools, grouped by food, measurements, day context, and profile.
 - `mcp/app/http_routes.py` - UI-facing REST routes with uniform JSON error translation.
-- `mcp/app/services.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, and `ReportService`, grouped by the `LunaVitaService` facade.
+- `mcp/app/services.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, `ReportService`, and `AnalysisService`, grouped by the `LunaVitaService` facade.
 - `mcp/app/repositories.py` - PostgreSQL persistence, one repository per table on a shared `Repository` base.
 - `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
 - `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
+- `mcp/app/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
 - `mcp/app/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
 - `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
 - `mcp/app/clock.py` - Asia/Kolkata dates and timestamp localization.

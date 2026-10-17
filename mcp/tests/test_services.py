@@ -9,8 +9,16 @@ from pydantic import ValidationError
 
 from app.errors import NotFoundError
 from app.http_routes import LunaVitaHTTPRoutes
-from app.models import BodyProfileUpdate, FoodEntryCreate, HealthMeasurementCreate
+from app.models import (
+    AnalysisRange,
+    BodyProfileUpdate,
+    FoodEntryCreate,
+    FoodRename,
+    FoodVerdictUpsert,
+    HealthMeasurementCreate,
+)
 from app.services import (
+    AnalysisService,
     DayContextService,
     FoodService,
     MeasurementService,
@@ -225,6 +233,175 @@ class ReportServiceTests(unittest.TestCase):
 
     def test_filename_is_dated(self) -> None:
         self.assertEqual(ReportService.filename(date(2026, 10, 15)), "lunavita-2026-10-15.pdf")
+
+
+class FakeAnalysisFood:
+    """Food entries kept in memory so renames are visible to later reads."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+
+    def list_between(self, start=None, end=None) -> list[dict]:
+        return [
+            row for row in self.rows
+            if (start is None or row["consumed_date"] >= start.isoformat())
+            and (end is None or row["consumed_date"] <= end.isoformat())
+        ]
+
+    def names(self) -> list[str]:
+        return sorted({row["food_name"] for row in self.rows})
+
+    def rename(self, entry_ids: list[int], food_name: str) -> int:
+        changed = [row for row in self.rows if row["id"] in entry_ids]
+        for row in changed:
+            row["food_name"] = food_name
+        return len(changed)
+
+
+class FakeVerdicts:
+    def __init__(self, rows: dict | None = None) -> None:
+        self.rows = rows or {}
+
+    def list(self) -> list[dict]:
+        return list(self.rows.values())
+
+    def get(self, food_key: str) -> dict | None:
+        return self.rows.get(food_key)
+
+    def upsert(self, food_key, food_name, verdict, reason) -> dict:
+        self.rows[food_key] = {"food_key": food_key, "food_name": food_name,
+                               "verdict": verdict, "reason": reason}
+        return self.rows[food_key]
+
+    def delete(self, food_key: str) -> bool:
+        return self.rows.pop(food_key, None) is not None
+
+
+class FakeRanges:
+    def __init__(self) -> None:
+        self.row = None
+
+    def get(self) -> dict | None:
+        return self.row
+
+    def upsert(self, start: date, end: date) -> dict:
+        self.row = {"start_date": start.isoformat(), "end_date": end.isoformat()}
+        return self.row
+
+    def delete(self) -> bool:
+        existed, self.row = self.row is not None, None
+        return existed
+
+
+def food_row(entry_id, name, day="2026-10-15", calories=120, protein=25):
+    return {"id": entry_id, "food_name": name, "consumed_date": day, "calories": calories,
+            "protein_g": protein, "carbs_g": 3, "fat_g": 1.5,
+            "natural_sugar_g": 0, "added_sugar_g": 0}
+
+
+class AnalysisFixture(unittest.TestCase):
+    """In-memory entries, verdicts, and saved range for analysis tests."""
+
+    def setUp(self) -> None:
+        self.food = FakeAnalysisFood([
+            food_row(1, "Whey protein", "2026-10-14"),
+            food_row(2, "ON Gold Standard Whey", "2026-10-15"),
+            food_row(3, "ON gold standard whey", "2026-09-30"),
+            food_row(4, "Paratha", calories=300, protein=6),
+        ])
+        self.verdicts = FakeVerdicts()
+        self.ranges = FakeRanges()
+        self.service = AnalysisService(self.food, self.verdicts, self.ranges)
+
+
+class AnalysisServiceTests(AnalysisFixture):
+
+    def test_window_defaults_to_month_of_the_given_date(self) -> None:
+        window = AnalysisService.window(date(2026, 10, 17), None)
+
+        self.assertEqual((window.start, window.end), (date(2026, 10, 1), date(2026, 10, 31)))
+        with self.assertRaises(ValueError):
+            AnalysisService.window(date(2026, 10, 17), date(2026, 10, 1))
+
+    def test_rename_merges_counts_within_range(self) -> None:
+        result = self.service.rename(FoodRename(
+            current_name="on gold standard whey", new_name="Whey protein",
+            start_date=date(2026, 10, 1), end_date=date(2026, 10, 31),
+        ))
+
+        self.assertEqual(result["renamed"], 1)
+        self.assertEqual(result["from"], ["ON Gold Standard Whey"])
+        self.assertEqual(result["food"]["count"], 2)
+        self.assertEqual(result["food"]["totals"]["protein_g"], 50)
+        self.assertEqual(self.food.rows[2]["food_name"], "ON gold standard whey")
+
+    def test_analysis_reflects_rename(self) -> None:
+        self.service.rename(FoodRename(current_name="ON Gold Standard Whey", new_name="Whey protein"))
+
+        foods = self.service.analyze(date(2026, 10, 17))["foods"]
+        self.assertEqual(foods[0]["name"], "Whey protein")
+        self.assertEqual(foods[0]["count"], 2)
+
+    def test_rename_of_unknown_food_is_not_found(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.rename(FoodRename(current_name="Pizza", new_name="Pie"))
+
+    def test_override_moves_only_when_old_name_is_gone(self) -> None:
+        self.service.set_verdict(FoodVerdictUpsert(
+            food_name="ON Gold Standard Whey", verdict="prefer", reason="Clean protein"))
+
+        partial = self.service.rename(FoodRename(
+            current_name="ON Gold Standard Whey", new_name="Whey protein",
+            start_date=date(2026, 10, 1), end_date=date(2026, 10, 31)))
+        self.assertIn("keeps its prefer verdict", partial["verdict_note"])
+
+        full = self.service.rename(FoodRename(
+            current_name="ON Gold Standard Whey", new_name="Whey protein"))
+        self.assertEqual(full["verdict_note"], "Moved the prefer verdict to 'Whey protein'.")
+        self.assertEqual(list(self.verdicts.rows), ["whey protein"])
+
+    def test_verdict_override_appears_in_analysis_and_can_be_cleared(self) -> None:
+        self.service.set_verdict(FoodVerdictUpsert(
+            food_name="parathas", verdict="prefer", reason="Homemade"))
+
+        prefer = [f["name"] for f in self.service.analyze(date(2026, 10, 17))["prefer"]]
+        self.assertIn("Paratha", prefer)
+
+        self.assertTrue(self.service.clear_verdict("Paratha"))
+        with self.assertRaises(NotFoundError):
+            self.service.clear_verdict("Paratha")
+
+
+class AnalysisRangeTests(AnalysisFixture):
+    def test_displayed_analysis_defaults_to_month_of_day(self) -> None:
+        result = self.service.analyze_displayed(date(2026, 10, 17))
+
+        self.assertEqual(result["range_source"], "month")
+        self.assertEqual(result["window"]["start"], "2026-10-01")
+        self.assertEqual(result["entries"], 3)
+
+    def test_saved_range_replaces_month_until_reset(self) -> None:
+        status = self.service.set_range(
+            AnalysisRange(start_date="2026-09-30", end_date="2026-10-14")
+        )
+        self.assertEqual((status["source"], status["days"]), ("saved", 15))
+
+        result = self.service.analyze_displayed(date(2026, 10, 17))
+        self.assertEqual(result["range_source"], "saved")
+        self.assertEqual({f["name"] for f in result["foods"]},
+                         {"Whey protein", "ON gold standard whey"})
+
+        reset = self.service.reset_range()
+        self.assertTrue(reset["reset"])
+        self.assertEqual(reset["source"], "month")
+        self.assertFalse(self.service.reset_range()["reset"])
+
+    def test_explicit_request_ignores_saved_range(self) -> None:
+        self.service.set_range(AnalysisRange(start_date="2026-09-01", end_date="2026-09-30"))
+
+        result = self.service.analyze(date(2026, 10, 17))
+        self.assertEqual(result["range_source"], "requested")
+        self.assertEqual(result["window"]["start"], "2026-10-01")
 
 
 class HTTPErrorMappingTests(unittest.TestCase):

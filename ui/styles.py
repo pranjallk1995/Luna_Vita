@@ -59,7 +59,7 @@ class LunaStyle:
             div[data-testid="stMetricValue"] { color:var(--text); letter-spacing:-.04em; }
             .nutrition-panel { padding:0; margin:.35rem 0 1.15rem; border:0; border-radius:0; background:transparent; box-shadow:none; }
             .nutrition-head { display:flex; align-items:end; justify-content:space-between; gap:2rem; margin-bottom:.9rem; }
-            .nutrition-title h2 { margin:0; color:var(--text); font-size:1.08rem; letter-spacing:-.02em; }
+            .nutrition-title h2 { margin:0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
             .nutrition-title p { margin:.22rem 0 0; color:var(--muted); font-size:.72rem; }
             .nutrition-overall { width:min(31%,20rem); min-width:15rem; }
             .nutrition-overall-row { display:flex; justify-content:space-between; gap:.8rem; margin-bottom:.38rem; color:var(--text); font-size:.72rem; }
@@ -79,7 +79,48 @@ class LunaStyle:
             .nutrition-ring { --ring-value:0deg; position:relative; display:grid; place-items:center; width:3.15rem; height:3.15rem; margin-left:auto; border-radius:50%; background:conic-gradient(var(--card-accent) var(--ring-value),rgba(255,255,255,.10) 0); }
             .nutrition-ring::after { content:""; position:absolute; inset:.38rem; border-radius:50%; background:#13171d; }
             .nutrition-ring span { position:relative; z-index:1; color:var(--card-accent); font-size:.68rem; font-weight:750; }
-            @media (max-width:900px) { .nutrition-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .nutrition-head { align-items:start; flex-direction:column; gap:.8rem; } .nutrition-overall { width:100%; min-width:0; } }
+            .nutrient-stack { display:grid; gap:.45rem; min-width:0; align-content:start; }
+            .nutrition-card.nutrient-trend { display:block; min-height:0; padding:.55rem .7rem .5rem; }
+            .nutrient-trend-head { display:flex; justify-content:space-between; gap:.4rem; margin-bottom:.35rem; color:var(--muted); font-size:.62rem; white-space:nowrap; }
+            .nutrient-trend-head span:last-child { display:flex; align-items:center; gap:.3rem; overflow:hidden; text-overflow:ellipsis; }
+            .nutrient-trend-key { display:inline-block; flex:0 0 auto; width:.7rem; height:1px; background:var(--card-accent); opacity:.7; }
+            .nutrient-trend-plot { display:block; width:100%; height:3.4rem; overflow:visible; }
+            .nutrient-trend-hit { fill:transparent; cursor:help; }
+            .nutrient-trend-bar { fill:var(--card-accent); opacity:.78; transition:opacity 120ms ease; }
+            .nutrient-trend-day:hover .nutrient-trend-hit { fill:rgba(var(--card-rgb),.10); }
+            .nutrient-trend-day:hover .nutrient-trend-bar { opacity:1; }
+            .nutrient-trend-target { stroke:var(--card-accent); stroke-width:1; opacity:.6; vector-effect:non-scaling-stroke; }
+            .nutrient-trend-base { stroke:rgba(255,255,255,.16); stroke-width:1; vector-effect:non-scaling-stroke; }
+            .nutrient-trend-axis { display:flex; justify-content:space-between; margin-top:.3rem; color:var(--muted); font-size:.6rem; }
+            .analysis-caption { margin:.1rem 0 .55rem; color:var(--muted); font-size:.72rem; }
+            .analysis-icon { font-family:"Material Symbols Rounded","Material Symbols Outlined"; font-size:1.05rem; font-weight:400; font-style:normal; line-height:1; letter-spacing:normal; text-transform:none; white-space:nowrap; -webkit-font-feature-settings:"liga"; font-feature-settings:"liga"; }
+            .analysis-contributors { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.65rem; margin-bottom:.4rem; }
+            .analysis-panel,.analysis-suggestions { min-width:0; padding:.85rem .8rem; border:1px solid var(--border); border-radius:12px; background:var(--panel); }
+            .analysis-panel h3,.analysis-suggestions h3 { display:flex; align-items:center; gap:.38rem; margin:0; padding:0; color:var(--text); font-size:.8rem; font-weight:650; }
+            .analysis-panel h3 .analysis-icon { color:var(--muted); }
+            .analysis-panel-total { margin:.2rem 0 .7rem; color:var(--muted); font-size:.68rem; }
+            .analysis-bar-row { margin-bottom:.6rem; cursor:help; }
+            .analysis-bar-row:last-child { margin-bottom:0; }
+            .analysis-bar-name { margin-bottom:.22rem; overflow:hidden; color:#d4d4d4; font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+            .analysis-bar-line { display:flex; align-items:center; gap:.5rem; }
+            .analysis-bar-line strong { flex:0 0 2.2rem; color:var(--text); font-size:.7rem; font-weight:650; text-align:right; }
+            .analysis-bar-track { flex:1 1 auto; height:.4rem; border-radius:999px; background:rgba(255,255,255,.08); }
+            .analysis-bar-fill { height:100%; min-width:2px; border-radius:0 4px 4px 0; background:rgba(245,245,245,.72); transition:background 140ms ease; }
+            .analysis-bar-row:hover .analysis-bar-fill { background:#f5f5f5; }
+            .analysis-empty { margin:0; color:var(--muted); font-size:.72rem; }
+            .analysis-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
+            .analysis-suggestions.prefer { border-color:rgba(74,222,128,.28); }
+            .analysis-suggestions.prefer h3 .analysis-icon { color:#4ade80; }
+            .analysis-suggestions.avoid { border-color:rgba(251,113,133,.34); }
+            .analysis-suggestions.avoid h3 .analysis-icon { color:#fb7185; }
+            .analysis-suggestions > p { margin:.25rem 0 .75rem; color:var(--muted); font-size:.7rem; }
+            .analysis-suggestions ul { display:grid; gap:.5rem; margin:0; padding:0; list-style:none; }
+            .analysis-suggestions li { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.15rem .6rem; margin:0; padding:.55rem .65rem; border-radius:9px; background:var(--control); }
+            .analysis-food { min-width:0; overflow:hidden; color:var(--text); font-size:.8rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+            .analysis-badge { display:inline-block; margin-left:.45rem; padding:.05rem .4rem; border:1px solid var(--strong); border-radius:999px; color:var(--muted); font-size:.62rem; font-weight:500; vertical-align:middle; }
+            .analysis-meta { color:var(--muted); font-size:.7rem; white-space:nowrap; }
+            .analysis-reason { grid-column:1 / -1; color:#d4d4d4; font-size:.7rem; }
+            @media (max-width:900px) { .analysis-contributors { grid-template-columns:repeat(2,minmax(0,1fr)); }  .nutrition-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .nutrition-head { align-items:start; flex-direction:column; gap:.8rem; } .nutrition-overall { width:100%; min-width:0; } }
             @media (max-width:520px) { .nutrition-cards { grid-template-columns:1fr; } }
             .food-log-heading { margin:1.2rem 0 .75rem; }
             .food-log-heading h2 { margin:0; color:var(--text); font-size:1.3rem; letter-spacing:-.025em; }
@@ -102,7 +143,7 @@ class LunaStyle:
             .macro-legend { grid-column:1; grid-row:1; display:grid; gap:.65rem; width:min(100%,20rem); }
             .macro-row { display:grid; grid-template-columns:.65rem 1fr auto; align-items:center; gap:.5rem; color:var(--text); font-size:.75rem; }
             .macro-dot { width:.62rem; height:.62rem; border-radius:50%; background:var(--dot); }
-            @media (max-width:620px) { .macro-content { grid-template-columns:1fr; } .macro-legend,.macro-donut { grid-column:1; grid-row:auto; } }
+            @media (max-width:620px) { .analysis-contributors,.analysis-choices { grid-template-columns:1fr; }  .macro-content { grid-template-columns:1fr; } .macro-legend,.macro-donut { grid-column:1; grid-row:auto; } }
             div[data-testid="stForm"],div[data-testid="stExpander"] { border-color:var(--border); border-radius:14px; background:var(--panel); }
             [data-testid="InputInstructions"] span:first-child { display:none!important; }
             [data-testid="InputInstructions"] span:nth-child(2)::before { display:none!important; }

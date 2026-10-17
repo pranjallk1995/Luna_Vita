@@ -14,6 +14,8 @@ class DatabaseSchemaTests(unittest.TestCase):
             "daily_logs",
             "health_measurements",
             "daily_recommendations",
+            "food_verdicts",
+            "analysis_range",
         ):
             with self.subTest(table=table):
                 self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", SCHEMA_SQL)

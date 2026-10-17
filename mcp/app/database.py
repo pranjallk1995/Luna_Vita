@@ -84,6 +84,21 @@ CREATE TABLE IF NOT EXISTS health_measurements (
 CREATE INDEX IF NOT EXISTS health_measurements_metric_time_idx
     ON health_measurements (metric, measured_at DESC);
 
+CREATE TABLE IF NOT EXISTS food_verdicts (
+    food_key TEXT PRIMARY KEY CHECK (length(trim(food_key)) > 0),
+    food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),
+    verdict TEXT NOT NULL CHECK (verdict IN ('prefer', 'avoid', 'neutral')),
+    reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS analysis_range (
+    range_id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (range_id = 1),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL CHECK (end_date >= start_date),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS daily_recommendations (
     profile_id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (profile_id = 1),
     calories_kcal INTEGER NOT NULL CHECK (calories_kcal > 0),

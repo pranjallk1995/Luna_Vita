@@ -147,6 +147,30 @@ class FoodRepository(Repository):
             (start, start, end, end, self.page_size(limit)),
         )
 
+    def list_between(self, start: date | None = None, end: date | None = None) -> list[Row]:
+        """Every entry in an optional inclusive range, without a page-size cap."""
+        return self.fetch_all(
+            """
+            SELECT * FROM food_entries
+            WHERE (%s::date IS NULL OR consumed_date >= %s)
+              AND (%s::date IS NULL OR consumed_date <= %s)
+            ORDER BY consumed_at, id
+            """,
+            (start, start, end, end),
+        )
+
+    def names(self) -> list[str]:
+        return [row["food_name"] for row in self.fetch_all("SELECT DISTINCT food_name FROM food_entries")]
+
+    def rename(self, entry_ids: list[int], food_name: str) -> int:
+        """Rename the given entries in one transaction; return how many changed."""
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                "UPDATE food_entries SET food_name=%s WHERE id = ANY(%s)",
+                (food_name, entry_ids),
+            )
+            return cursor.rowcount
+
     def daily_totals(self, day: date) -> Row:
         totals = self.fetch_one(
             """
@@ -261,6 +285,60 @@ class DailyLogRepository(Repository):
             """,
             [day, *(getattr(entry, field) for field in fields)],
         )
+
+
+class VerdictRepository(Repository):
+    """Explicit prefer/avoid/neutral ratings keyed by normalized food name."""
+
+    def list(self) -> list[Row]:
+        return self.fetch_all("SELECT * FROM food_verdicts ORDER BY food_name")
+
+    def get(self, food_key: str) -> Row | None:
+        return self.fetch_one("SELECT * FROM food_verdicts WHERE food_key=%s", (food_key,))
+
+    def upsert(self, food_key: str, food_name: str, verdict: str, reason: str) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO food_verdicts (food_key, food_name, verdict, reason)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (food_key) DO UPDATE SET
+                food_name=EXCLUDED.food_name,
+                verdict=EXCLUDED.verdict,
+                reason=EXCLUDED.reason,
+                updated_at=NOW()
+            RETURNING *
+            """,
+            (food_key, food_name, verdict, reason),
+        )
+
+    def delete(self, food_key: str) -> bool:
+        return self.affects_row(
+            "DELETE FROM food_verdicts WHERE food_key=%s RETURNING food_key", (food_key,)
+        )
+
+
+class AnalysisRangeRepository(Repository):
+    """The single saved date range for the Monthly Tracking tab."""
+
+    def get(self) -> Row | None:
+        return self.fetch_one("SELECT * FROM analysis_range WHERE range_id=1")
+
+    def upsert(self, start: date, end: date) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO analysis_range (range_id, start_date, end_date)
+            VALUES (1, %s, %s)
+            ON CONFLICT (range_id) DO UPDATE SET
+                start_date=EXCLUDED.start_date,
+                end_date=EXCLUDED.end_date,
+                updated_at=NOW()
+            RETURNING *
+            """,
+            (start, end),
+        )
+
+    def delete(self) -> bool:
+        return self.affects_row("DELETE FROM analysis_range WHERE range_id=1 RETURNING range_id")
 
 
 class RecommendationRepository(Repository):

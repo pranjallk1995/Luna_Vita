@@ -7,8 +7,11 @@ from pydantic import ValidationError
 
 from app.clock import LocalClock
 from app.models import (
+    AnalysisRange,
     BodyProfileUpdate,
     DailyRecommendationsUpsert,
+    FoodRename,
+    FoodVerdictUpsert,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
@@ -132,6 +135,34 @@ class RequestModelTests(unittest.TestCase):
 
         self.assertEqual(entry.birth_date.isoformat(), "1990-01-02")
         self.assertIsNone(entry.height_cm)
+
+    def test_rename_requires_a_real_change_and_ordered_dates(self) -> None:
+        for values in (
+            {"current_name": "Paratha", "new_name": "Paratha"},
+            {"current_name": "Paratha", "new_name": "   "},
+            {"current_name": "Paratha", "new_name": "Roti 🍞"},
+            {"current_name": "Paratha", "new_name": "Roti",
+             "start_date": "2026-10-17", "end_date": "2026-10-01"},
+        ):
+            with self.subTest(values=values):
+                with self.assertRaises(ValidationError):
+                    FoodRename(**values)
+
+    def test_verdict_accepts_known_kinds_only(self) -> None:
+        entry = FoodVerdictUpsert(food_name=" Paratha ", verdict="avoid", reason=" Fried ")
+
+        self.assertEqual((entry.food_name, entry.reason), ("Paratha", "Fried"))
+        with self.assertRaises(ValidationError):
+            FoodVerdictUpsert(food_name="Paratha", verdict="great", reason="x")
+
+    def test_analysis_range_must_be_ordered_and_at_most_a_year(self) -> None:
+        self.assertEqual(
+            AnalysisRange(start_date="2026-10-15", end_date="2026-10-17").start_date.day, 15
+        )
+        for start, end in (("2026-10-17", "2026-10-15"), ("2025-01-01", "2026-01-02")):
+            with self.subTest(start=start, end=end):
+                with self.assertRaises(ValidationError):
+                    AnalysisRange(start_date=start, end_date=end)
 
 
 if __name__ == "__main__":

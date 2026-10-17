@@ -12,7 +12,7 @@ class TextRules:
     """Reject blank, oversized, emoji, or control-character text."""
 
     EMOJI_PATTERN = re.compile(
-        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿️‍]"
+        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
     )
 
     @classmethod

@@ -175,6 +175,14 @@ class LunaVitaHTTPRoutes:
     def _register_days(self) -> None:
         service = self.service
 
+        async def food_analysis(request: Request):
+            return service.analysis.analyze(
+                self.query_date(request, "start"), self.query_date(request, "end")
+            )
+
+        async def displayed_analysis(request: Request):
+            return service.analysis.analyze_displayed(self.query_date(request, "day"))
+
         async def recommendations(request: Request):
             return service.profile.get()
 
@@ -197,6 +205,8 @@ class LunaVitaHTTPRoutes:
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
 
+        self.route("GET", "/api/analysis", food_analysis)
+        self.route("GET", "/api/analysis/displayed", displayed_analysis)
         self.route("GET", "/api/recommendations", recommendations)
         self.route("GET", "/api/summary/{day}", summary)
         self.route("GET", "/api/days/{day}", read_day)

@@ -39,6 +39,12 @@ class LunaVitaAPI:
             params={"start": day.isoformat(), "end": day.isoformat(), "limit": 500},
         )
 
+    def analysis(self, day: date) -> dict[str, Any]:
+        """The Monthly tab's analysis: the saved range, or the month of ``day``."""
+        return self.request(
+            "GET", "/api/analysis/displayed", params={"day": day.isoformat()}
+        )
+
     def create_food(self, payload: dict[str, Any]) -> None:
         self.request("POST", "/api/food", json=payload)
 

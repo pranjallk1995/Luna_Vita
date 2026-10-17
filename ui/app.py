@@ -13,6 +13,7 @@ from styles import LunaStyle
 from views.food_log_view import FoodLogView
 from views.measurements_view import MeasurementsView
 from views.navigation import PeriodNavigation
+from views.monthly_view import MonthlyView
 from views.summary_view import SummaryView
 
 
@@ -43,11 +44,11 @@ class SourceReloadMonitor:
 class LunaVitaApp:
     """Compose and render the Luna Vita nutrition tracker."""
 
-    DAILY_VIEWS = (SummaryView, FoodLogView, MeasurementsView)
-    PLACEHOLDERS = {
-        "weekly": "Not enough data for the weekly view yet.",
-        "monthly": "Not enough data for the monthly view yet.",
+    PERIOD_VIEWS = {
+        "daily": (SummaryView, FoodLogView, MeasurementsView),
+        "monthly": (MonthlyView,),
     }
+    PLACEHOLDERS = {"weekly": "Not enough data for the weekly view yet."}
 
     def __init__(self) -> None:
         self.config = UIConfig.from_env()
@@ -61,7 +62,7 @@ class LunaVitaApp:
         if period in self.PLACEHOLDERS:
             st.info(self.PLACEHOLDERS[period])
             return
-        for view_class in self.DAILY_VIEWS:
+        for view_class in self.PERIOD_VIEWS[period]:
             view_class(self.api).render(selected_day)
 
     @classmethod

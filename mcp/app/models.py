@@ -11,6 +11,32 @@ from .clock import LocalClock
 
 MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 Sex = Literal["male", "female", "other"]
+VerdictKind = Literal["prefer", "avoid", "neutral"]
+
+
+class SafeText:
+    """Strip text and reject emojis or control characters in stored food text."""
+
+    EMOJI_PATTERN = re.compile(
+        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
+    )
+
+    @classmethod
+    def clean(cls, value: str | None, *, required: bool = False) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if cls.EMOJI_PATTERN.search(text):
+            raise ValueError("Food entry text cannot contain emojis.")
+        if any(
+            unicodedata.category(character).startswith("C")
+            and character not in {"\n", "\t"}
+            for character in text
+        ):
+            raise ValueError("Food entry text contains unsupported characters.")
+        if required and not text:
+            raise ValueError("Food name and quantity cannot be blank.")
+        return text
 
 
 class LocalTimestampModel(BaseModel):
@@ -23,9 +49,6 @@ class LocalTimestampModel(BaseModel):
 
 
 class FoodEntryCreate(LocalTimestampModel):
-    EMOJI_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿️‍]"
-    )
     food_name: str = Field(min_length=1, max_length=200)
     quantity: str = Field(min_length=1, max_length=300)
     meal_type: MealType = "other"
@@ -45,25 +68,12 @@ class FoodEntryCreate(LocalTimestampModel):
     @classmethod
     def reject_unsafe_text(cls, value: str | None) -> str | None:
         """Reject emojis and control characters from editable food text."""
-        if value is None:
-            return None
-        text = value.strip()
-        if cls.EMOJI_PATTERN.search(text):
-            raise ValueError("Food entry text cannot contain emojis.")
-        if any(
-            unicodedata.category(character).startswith("C")
-            and character not in {"\n", "\t"}
-            for character in text
-        ):
-            raise ValueError("Food entry text contains unsupported characters.")
-        return text
+        return SafeText.clean(value)
 
     @field_validator("food_name", "quantity")
     @classmethod
     def require_nonblank_text(cls, value: str) -> str:
-        if not value:
-            raise ValueError("Food name and quantity cannot be blank.")
-        return value
+        return SafeText.clean(value, required=True)
 
     @property
     def effective_consumed_date(self) -> date:
@@ -150,3 +160,55 @@ class DailyLogUpsert(BaseModel):
     supplement_notes: str | None = None
     daily_notes: str | None = None
     report_caveats: str | None = None
+
+
+class FoodRename(BaseModel):
+    """Rename every entry of one food, optionally within a date range."""
+
+    current_name: str = Field(min_length=1, max_length=200)
+    new_name: str = Field(min_length=1, max_length=200)
+    start_date: date | None = None
+    end_date: date | None = None
+
+    @field_validator("current_name", "new_name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        return SafeText.clean(value, required=True)
+
+    @model_validator(mode="after")
+    def valid_change(self) -> "FoodRename":
+        if self.current_name == self.new_name:
+            raise ValueError("new_name must differ from current_name.")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date cannot be after end_date.")
+        return self
+
+
+class FoodVerdictUpsert(BaseModel):
+    """An explicit prefer/avoid/neutral rating that replaces the macro rule."""
+
+    food_name: str = Field(min_length=1, max_length=200)
+    verdict: VerdictKind
+    reason: str = Field(min_length=1, max_length=300)
+
+    @field_validator("food_name", "reason")
+    @classmethod
+    def clean_text(cls, value: str) -> str:
+        return SafeText.clean(value, required=True)
+
+
+class AnalysisRange(BaseModel):
+    """The date range the Monthly Tracking tab shows instead of a calendar month."""
+
+    MAX_DAYS: ClassVar[int] = 366
+
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def valid_range(self) -> "AnalysisRange":
+        if self.start_date > self.end_date:
+            raise ValueError("start_date cannot be after end_date.")
+        if (self.end_date - self.start_date).days + 1 > self.MAX_DAYS:
+            raise ValueError(f"The range can cover at most {self.MAX_DAYS} days.")
+        return self

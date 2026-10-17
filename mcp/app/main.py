@@ -7,12 +7,15 @@ from .database import Database
 from .http_routes import LunaVitaHTTPRoutes
 from .mcp_tools import LunaVitaMCPTools
 from .repositories import (
+    AnalysisRangeRepository,
     DailyLogRepository,
     FoodRepository,
     MeasurementRepository,
     RecommendationRepository,
+    VerdictRepository,
 )
 from .services import (
+    AnalysisService,
     DayContextService,
     FoodService,
     LunaVitaService,
@@ -42,7 +45,8 @@ class LunaVitaApplication:
         LunaVitaHTTPRoutes(self.mcp, self.service)
 
     def _build_service(self) -> LunaVitaService:
-        food = FoodService(FoodRepository(self.database))
+        food_entries = FoodRepository(self.database)
+        food = FoodService(food_entries)
         measurements = MeasurementService(MeasurementRepository(self.database))
         days = DayContextService(DailyLogRepository(self.database))
         return LunaVitaService(
@@ -51,6 +55,11 @@ class LunaVitaApplication:
             days=days,
             profile=ProfileService(RecommendationRepository(self.database)),
             reports=ReportService(food, measurements, days),
+            analysis=AnalysisService(
+                food_entries,
+                VerdictRepository(self.database),
+                AnalysisRangeRepository(self.database),
+            ),
         )
 
     def run(self) -> None:
