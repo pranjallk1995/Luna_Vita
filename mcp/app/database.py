@@ -1,7 +1,7 @@
-import os
+"""PostgreSQL schema and connection pool for Luna Vita."""
+
+from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Iterator
 
 from psycopg import Cursor
 from psycopg.rows import dict_row
@@ -102,31 +102,17 @@ CREATE TABLE IF NOT EXISTS daily_recommendations (
 """
 
 
-@dataclass
 class Database:
-    """Own the PostgreSQL connection pool used by LunaVita."""
+    """Own the connection pool; each cursor block runs in one transaction."""
 
-    url: str
-    min_size: int = 1
-    max_size: int = 8
-
-    def __post_init__(self) -> None:
-        self._pool = ConnectionPool(
-            self.url,
-            min_size=self.min_size,
-            max_size=self.max_size,
-            open=False,
-        )
-
-    @classmethod
-    def from_env(cls) -> "Database":
-        return cls(os.environ["DATABASE_URL"])
+    def __init__(self, url: str, min_size: int = 1, max_size: int = 8) -> None:
+        self.pool = ConnectionPool(url, min_size=min_size, max_size=max_size, open=False)
 
     def open(self) -> None:
-        self._pool.open(wait=True)
+        self.pool.open(wait=True)
 
     def close(self) -> None:
-        self._pool.close()
+        self.pool.close()
 
     def initialize_schema(self) -> None:
         """Create or upgrade the complete idempotent Luna Vita schema."""
@@ -135,6 +121,6 @@ class Database:
 
     @contextmanager
     def cursor(self) -> Iterator[Cursor]:
-        with self._pool.connection() as connection:
+        with self.pool.connection() as connection:
             with connection.cursor(row_factory=dict_row) as cursor:
                 yield cursor

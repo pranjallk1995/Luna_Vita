@@ -15,11 +15,15 @@ class LunaVitaAPI:
         self.base_url = config.api_url
         self.timeout = config.timeout
 
-    def request(self, method: str, path: str, **kwargs: Any) -> Any:
+    def send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         response = httpx.request(
             method, f"{self.base_url}{path}", timeout=self.timeout, **kwargs
         )
         response.raise_for_status()
+        return response
+
+    def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        response = self.send(method, path, **kwargs)
         return response.json() if response.content else None
 
     def summary(self, day: date) -> dict[str, Any]:
@@ -60,9 +64,4 @@ class LunaVitaAPI:
         self.request("DELETE", f"/api/measurements/{entry_id}")
 
     def report(self, day: date) -> bytes:
-        response = httpx.get(
-            f"{self.base_url}/api/reports/daily/{day.isoformat()}",
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.content
+        return self.send("GET", f"/api/reports/daily/{day.isoformat()}").content

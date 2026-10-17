@@ -1,30 +1,28 @@
 """MCP-facing report artifacts for Luna Vita."""
 
 import base64
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+from datetime import date
 
 from mcp.types import BlobResourceContents, EmbeddedResource
 
-from .services import LunaVitaService
+from .clock import LocalClock
+from .services import ReportService
 
 
 class CurrentLogPdfTool:
     """Generate the current local day's log as an embedded PDF resource."""
 
-    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+    def __init__(self, reports: ReportService) -> None:
+        self.reports = reports
 
-    def __init__(self, service: LunaVitaService) -> None:
-        self.service = service
-
-    @classmethod
-    def current_day(cls) -> date:
-        return datetime.now(cls.LOCAL_TIMEZONE).date()
+    @staticmethod
+    def current_day() -> date:
+        return LocalClock.today()
 
     def generate(self) -> EmbeddedResource:
         day = self.current_day()
-        filename = f"lunavita-{day.isoformat()}.pdf"
-        encoded_pdf = base64.b64encode(self.service.daily_report(day)).decode("ascii")
+        filename = ReportService.filename(day)
+        encoded_pdf = base64.b64encode(self.reports.daily_pdf(day)).decode("ascii")
         return EmbeddedResource(
             type="resource",
             resource=BlobResourceContents(

@@ -1,33 +1,30 @@
-from datetime import date, datetime
+"""Validated request models shared by the MCP tools and HTTP routes."""
+
 import re
 import unicodedata
+from datetime import date, datetime
 from typing import ClassVar, Literal
-from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .clock import LocalClock
 
 MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
+Sex = Literal["male", "female", "other"]
 
 
 class LocalTimestampModel(BaseModel):
     """Interpret timezone-free client timestamps as Asia/Kolkata local time."""
 
-    LOCAL_TIMEZONE: ClassVar[ZoneInfo] = ZoneInfo("Asia/Kolkata")
-
     @field_validator("consumed_at", "measured_at", check_fields=False)
     @classmethod
     def localize_timestamp(cls, value: datetime | None) -> datetime | None:
-        if value is None:
-            return None
-        if value.tzinfo is None:
-            return value.replace(tzinfo=cls.LOCAL_TIMEZONE)
-        return value.astimezone(cls.LOCAL_TIMEZONE)
+        return LocalClock.localize(value) if value is not None else None
 
 
 class FoodEntryCreate(LocalTimestampModel):
     EMOJI_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
+        "[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF☀-➿️‍]"
     )
     food_name: str = Field(min_length=1, max_length=200)
     quantity: str = Field(min_length=1, max_length=300)
@@ -68,6 +65,13 @@ class FoodEntryCreate(LocalTimestampModel):
             raise ValueError("Food name and quantity cannot be blank.")
         return value
 
+    @property
+    def effective_consumed_date(self) -> date:
+        """The calendar day this entry belongs to, defaulting to today."""
+        if self.consumed_date:
+            return self.consumed_date
+        return self.consumed_at.date() if self.consumed_at else LocalClock.today()
+
 
 class HealthMeasurementCreate(LocalTimestampModel):
     metric: str = Field(min_length=1, max_length=100)
@@ -77,12 +81,19 @@ class HealthMeasurementCreate(LocalTimestampModel):
     time_label: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, max_length=2_000)
 
+    @field_validator("metric")
+    @classmethod
+    def normalize_metric(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("unit")
+    @classmethod
+    def normalize_unit(cls, value: str) -> str:
+        return value.strip()
 
 
 class HealthMeasurementBatchCreate(BaseModel):
     measurements: list[HealthMeasurementCreate] = Field(min_length=1, max_length=20)
-
-
 
 
 class DailyRecommendationsUpsert(BaseModel):
@@ -92,11 +103,33 @@ class DailyRecommendationsUpsert(BaseModel):
     fat_g: float = Field(gt=0, le=1_000)
     sugars_g: float = Field(ge=0, le=1_000)
     height_cm: float = Field(gt=0, le=300)
-    sex: Literal["male", "female", "other"]
+    sex: Sex
     birth_date: date | None = None
     weight_kg: float | None = Field(default=None, gt=0, le=1_000)
     goal: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=2_000)
+
+
+class BodyProfileUpdate(BaseModel):
+    """A partial body-profile change; omitted fields keep their stored values."""
+
+    height_cm: float | None = Field(default=None, gt=0, le=300)
+    birth_date: date | None = None
+    sex: Sex | None = None
+    weight_kg: float | None = Field(default=None, gt=0, le=1_000)
+
+    @field_validator("birth_date")
+    @classmethod
+    def reject_future_birth_date(cls, value: date | None) -> date | None:
+        if value is not None and value > LocalClock.today():
+            raise ValueError("date_of_birth cannot be in the future.")
+        return value
+
+    @model_validator(mode="after")
+    def require_any_field(self) -> "BodyProfileUpdate":
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("Provide at least one body-profile field.")
+        return self
 
 
 class DailyLogUpsert(BaseModel):

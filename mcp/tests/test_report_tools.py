@@ -14,7 +14,7 @@ class FakeReportService:
     def __init__(self) -> None:
         self.requested_day: date | None = None
 
-    def daily_report(self, day: date) -> bytes:
+    def daily_pdf(self, day: date) -> bytes:
         self.requested_day = day
         return b"%PDF-current-log"
 

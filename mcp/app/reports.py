@@ -1,7 +1,10 @@
+"""In-memory ReportLab rendering of the daily nutrition and body PDF."""
+
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from io import BytesIO
+from typing import Any
 from xml.sax.saxutils import escape
-from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
@@ -15,13 +18,25 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .repository import LunaVitaRepository
+from .clock import LocalClock
+
+Row = dict[str, Any]
 
 
-class DailyReportService:
-    """Build the daily nutrition and body-measurement PDF."""
+@dataclass(frozen=True)
+class DailyReport:
+    """Everything one day's PDF shows, gathered before rendering starts."""
 
-    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+    day: date
+    food_entries: list[Row]
+    totals: Row
+    context: Row = field(default_factory=dict)
+    measurements: list[Row] = field(default_factory=list)
+
+
+class DailyReportRenderer:
+    """Render a ``DailyReport`` as a two-page landscape PDF."""
+
     BODY_METRICS = {
         "weight": ("Weight", "kg"),
         "bmr": ("BMR", "kcal/day"),
@@ -30,9 +45,6 @@ class DailyReportService:
         "bmi": ("BMI", ""),
         "water_ratio": ("Water ratio", "%"),
     }
-
-    def __init__(self, repository: LunaVitaRepository) -> None:
-        self.repository = repository
 
     @staticmethod
     def table_style() -> TableStyle:
@@ -62,7 +74,7 @@ class DailyReportService:
             return "Night"
         measured_at = datetime.fromisoformat(measurement["measured_at"])
         if measured_at.tzinfo is not None:
-            measured_at = measured_at.astimezone(cls.LOCAL_TIMEZONE)
+            measured_at = LocalClock.localize(measured_at)
         return "Morning" if measured_at.hour < 12 else "Night"
 
     @classmethod
@@ -84,7 +96,7 @@ class DailyReportService:
             try:
                 timestamp = datetime.fromisoformat(str(consumed_at))
                 if timestamp.tzinfo is not None:
-                    timestamp = timestamp.astimezone(cls.LOCAL_TIMEZONE)
+                    timestamp = LocalClock.localize(timestamp)
                 return timestamp.strftime("%I:%M %p").lstrip("0")
             except (TypeError, ValueError):
                 pass
@@ -96,33 +108,33 @@ class DailyReportService:
         text = escape(str(value or "")).replace("\n", "<br/>")
         return Paragraph(text, style)
 
-    def body_measurement_rows(self, day: date) -> list[list[str]]:
-        measurements = self.repository.list_health_measurements_for_day(day)
+    @classmethod
+    def body_measurement_rows(cls, measurements: list[Row]) -> list[list[str]]:
+        """Keep the latest Morning and Night value of every body metric."""
         latest: dict[tuple[str, str], dict] = {}
         for measurement in measurements:
             metric = measurement["metric"]
-            if metric not in self.BODY_METRICS:
+            if metric not in cls.BODY_METRICS:
                 continue
-            period = self.measurement_period(measurement)
+            period = cls.measurement_period(measurement)
             latest[(metric, period)] = measurement
 
         rows = [["Measurement", "Morning", "Night"]]
-        for metric, (label, _) in self.BODY_METRICS.items():
+        for metric, (label, _) in cls.BODY_METRICS.items():
             row = [label]
             for period in ("Morning", "Night"):
                 measurement = latest.get((metric, period))
                 row.append(
-                    self.format_measurement(metric, float(measurement["value"]))
+                    cls.format_measurement(metric, float(measurement["value"]))
                     if measurement
                     else "Not recorded"
                 )
             rows.append(row)
         return rows
 
-    def build(self, day: date) -> bytes:
-        entries = self.repository.list_food_entries(day, day, 500)
-        summary = self.repository.daily_summary(day)
-        context = self.repository.get_daily_log(day)
+    def render(self, report: DailyReport) -> bytes:
+        day, entries = report.day, report.food_entries
+        summary, context = report.totals, report.context
         buffer = BytesIO()
         document = SimpleDocTemplate(
             buffer,
@@ -234,7 +246,7 @@ class DailyReportService:
             ]
         )
         measurement_table = Table(
-            self.body_measurement_rows(day),
+            self.body_measurement_rows(report.measurements),
             repeatRows=1,
             colWidths=[220, 220, 220],
         )

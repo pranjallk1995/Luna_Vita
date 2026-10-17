@@ -250,25 +250,45 @@ Stopping the foreground watcher also stops automatic source synchronization.
 
 ### UI modules
 
-- `ui/app.py` - Streamlit application composition, daily navigation, summary cards, editable food log, body-measurement views, dialogs, charts, and PDF download controls.
+Pure logic modules have no Streamlit session dependency and are unit tested directly; the `views/` package only renders.
+
+- `ui/app.py` - `LunaVitaApp` composition root: styling, header, period navigation, and the daily views; plus the source-reload notice.
+- `ui/views/summary_view.py` - recommendation-aware nutrition summary cards.
+- `ui/views/food_log_view.py` - editable food log, add-entry dialog, save/PDF actions, and macro donut chart.
+- `ui/views/measurements_view.py` - Morning/Night body-measurement table, period deletion, and add dialog.
+- `ui/views/navigation.py` - Daily/Weekly/Monthly selector that keeps its selection on repeated clicks.
+- `ui/views/shared.py` - view base class and the shared section header with its "Add entry" button.
+- `ui/nutrition.py` - nutrient card definitions, target status rules, and macro percentages.
+- `ui/food_entries.py` - consumed-time display, ordering, and parsing, plus food-entry payload building.
+- `ui/body_measurements.py` - tracked body metrics, Morning/Night tables, and measurement payloads.
+- `ui/validation.py` - client-side mirrors of the backend text and number rules for the editable log.
+- `ui/images.py` - food-photo normalization for uploads and table previews.
+- `ui/clock.py` - Asia/Kolkata dates and timestamps.
 - `ui/api.py` - typed HTTP client for food entries, measurements, recommendations, daily context, summaries, and reports.
-- `ui/config.py` - reads UI environment settings, including the Luna Vita API URL and request timeout.
+- `ui/config.py` - validated UI environment settings, including the Luna Vita API URL and request timeout.
 - `ui/styles.py` - shared dark visual system, responsive layout rules, and component styling.
 - `ui/assets/` - Luna Vita logo assets used by the desktop and mobile layouts.
-- `ui/tests/` - focused UI behavior tests, including consumed-time display and ordering.
+- `ui/tests/` - unit tests for UI logic: ordering, validation, macro math, measurement tables, and payloads.
 - `ui/.streamlit/config.toml` - Streamlit theme and server settings.
 - `ui/requirements.txt` - Python dependencies used by the UI container.
 - `ui/Dockerfile` - builds the UI container image.
 
 ### MCP modules
 
-- `mcp/app/main.py` - FastMCP application entry point, conversational tools, HTTP routes, dependency composition, and service startup.
+Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call services, services call repositories, and only `main.py` knows the concrete wiring.
+
+- `mcp/app/main.py` - `LunaVitaApplication` composition root: builds the database, repositories, and services, then registers the MCP tools and HTTP routes on one FastMCP server.
+- `mcp/app/config.py` - validated backend settings loaded from the environment.
+- `mcp/app/mcp_tools.py` - conversational MCP tools, grouped by food, measurements, day context, and profile.
+- `mcp/app/http_routes.py` - UI-facing REST routes with uniform JSON error translation.
+- `mcp/app/services.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, and `ReportService`, grouped by the `LunaVitaService` facade.
+- `mcp/app/repositories.py` - PostgreSQL persistence, one repository per table on a shared `Repository` base.
 - `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
-- `mcp/app/services.py` - application use cases shared by MCP tools and HTTP routes.
-- `mcp/app/repository.py` - PostgreSQL persistence and query operations.
 - `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
-- `mcp/app/reports.py` - in-memory ReportLab generation for daily nutrition and body-measurement PDFs.
+- `mcp/app/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
 - `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
-- `mcp/tests/` - unit tests for schemas, models, services, report formatting, and MCP report delivery.
+- `mcp/app/clock.py` - Asia/Kolkata dates and timestamp localization.
+- `mcp/app/errors.py` - domain errors that the HTTP routes map to status codes.
+- `mcp/tests/` - unit tests for schemas, models, services, HTTP error mapping, report formatting, and MCP report delivery.
 - `mcp/requirements.txt` - Python dependencies used by the MCP/API container.
 - `mcp/Dockerfile` - builds the MCP/API container image.
