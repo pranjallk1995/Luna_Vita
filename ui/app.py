@@ -48,7 +48,6 @@ class LunaVitaApp:
         "daily": (SummaryView, FoodLogView, MeasurementsView),
         "monthly": (MonthlyView,),
     }
-    PLACEHOLDERS = {"weekly": "Not enough data for the weekly view yet."}
 
     def __init__(self) -> None:
         self.config = UIConfig.from_env()
@@ -59,9 +58,6 @@ class LunaVitaApp:
         SourceReloadMonitor.notify()
         selected_day = LunaStyle.header(LunaVitaClock.today(), UIConfig.LOGO_PATH)
         period = PeriodNavigation.render()
-        if period in self.PLACEHOLDERS:
-            st.info(self.PLACEHOLDERS[period])
-            return
         for view_class in self.PERIOD_VIEWS[period]:
             view_class(self.api).render(selected_day)
 

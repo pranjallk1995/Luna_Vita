@@ -37,9 +37,8 @@ class LunaStyle:
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; transform:translateY(-1px)!important; }
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[data-state="on"],[kind="primary"],[data-testid="stBaseButton-primary"]) { border:2px solid var(--accent)!important; background:var(--soft)!important; box-shadow:0 0 0 1px var(--strong)!important; }
             .st-key-nutrition_navigation:has(.lv-selected-daily) div[data-testid="stButtonGroup"] button:nth-of-type(1),
-            .st-key-nutrition_navigation:has(.lv-selected-weekly) div[data-testid="stButtonGroup"] button:nth-of-type(2),
-            .st-key-nutrition_navigation:has(.lv-selected-monthly) div[data-testid="stButtonGroup"] button:nth-of-type(3) { border:1px solid var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; box-shadow:0 0 0 1px var(--border)!important; }
-            .lv-selected-daily,.lv-selected-weekly,.lv-selected-monthly { display:none!important; }
+            .st-key-nutrition_navigation:has(.lv-selected-monthly) div[data-testid="stButtonGroup"] button:nth-of-type(2) { border:1px solid var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; box-shadow:0 0 0 1px var(--border)!important; }
+            .lv-selected-daily,.lv-selected-monthly { display:none!important; }
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]),
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]) p,
             .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[kind="primary"],[data-testid="stBaseButton-primary"]) span,
@@ -109,6 +108,22 @@ class LunaStyle:
             .analysis-bar-row:hover .analysis-bar-fill { background:#f5f5f5; }
             .analysis-empty { margin:0; color:var(--muted); font-size:.72rem; }
             .analysis-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
+            .st-key-analysis_range_bar { margin-bottom:.4rem; }
+            .st-key-analysis_range_bar .stButton>button { height:2.5rem; min-height:2.5rem; white-space:nowrap; }
+            .overview-grid { display:grid; grid-auto-rows:1fr; gap:.65rem; }
+            .body-trend-card { --card-accent:#f5f5f5; --card-rgb:245,245,245; display:flex; flex-direction:column; align-items:stretch; gap:.45rem; min-height:0; padding:.7rem .85rem .55rem; }
+            .body-trend-section { display:flex; flex:1 1 0; flex-direction:column; gap:.3rem; min-height:0; }
+            .body-trend-head { display:flex; align-items:baseline; gap:.6rem; min-width:0; }
+            .body-trend-head strong { color:var(--text); font-size:.92rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
+            .body-trend-note { display:flex; align-items:center; gap:.8rem; margin-left:auto; color:var(--muted); font-size:.62rem; white-space:nowrap; }
+            .body-trend-note span { display:inline-flex; align-items:center; gap:.3rem; }
+            .body-trend-key { display:inline-block; width:.55rem; height:.55rem; border-radius:2px; }
+            .body-trend-key.morning, .body-trend-bar.morning { background:rgba(245,245,245,.78); fill:rgba(245,245,245,.78); }
+            .body-trend-key.night, .body-trend-bar.night { background:#737373; fill:#737373; }
+            .body-trend-card .body-trend-plot { flex:1 1 0; height:0; min-height:1.5rem; }
+            .nutrient-trend-day:hover .body-trend-bar.morning { fill:#f5f5f5; }
+            .nutrient-trend-day:hover .body-trend-bar.night { fill:#8a8a8a; }
+            @media (max-width:900px) { .overview-grid { grid-auto-rows:auto; } .body-trend-card { height:15rem; } }
             .analysis-suggestions.prefer { border-color:rgba(74,222,128,.28); }
             .analysis-suggestions.prefer h3 .analysis-icon { color:#4ade80; }
             .analysis-suggestions.avoid { border-color:rgba(251,113,133,.34); }
@@ -177,8 +192,7 @@ class LunaStyle:
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button .material-symbols-rounded { font-size:1.25rem!important; line-height:1!important; }
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button::after { position:absolute; top:calc(100% + .45rem); left:50%; z-index:50; padding:.28rem .48rem; border:1px solid var(--border); border-radius:.4rem; background:var(--panel); color:var(--text); box-shadow:0 8px 20px rgba(0,0,0,.28); font-size:.72rem; line-height:1rem; white-space:nowrap; opacity:0; pointer-events:none; transform:translate(-50%,-.2rem); transition:opacity 120ms ease,transform 120ms ease; }
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(1)::after { content:"Daily Tracking"; }
-                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(2)::after { content:"Weekly Tracking"; }
-                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(3)::after { content:"Monthly Tracking"; }
+                .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:nth-of-type(2)::after { content:"Monthly Tracking"; }
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:hover::after,
                 .st-key-nutrition_navigation div[data-testid="stButtonGroup"] button:focus-visible::after { opacity:1; transform:translate(-50%,0); }
                 .st-key-desktop_weight_actions { display:none; }

@@ -232,6 +232,18 @@ class MeasurementRepository(Repository):
             (normalized_metric, normalized_metric, self.page_size(limit)),
         )
 
+    def list_between(self, start: date, end: date, metrics: list[str]) -> list[Row]:
+        """Return the given metrics measured on local days ``start``..``end`` inclusive."""
+        return self.fetch_all(
+            """
+            SELECT * FROM health_measurements
+            WHERE (measured_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN %s AND %s
+              AND metric = ANY(%s)
+            ORDER BY measured_at, id
+            """,
+            (start, end, metrics),
+        )
+
     def list_for_day(self, day: date) -> list[Row]:
         """Return measurements belonging to a local calendar day."""
         return self.fetch_all(
@@ -349,6 +361,23 @@ class RecommendationRepository(Repository):
     def get(self) -> Row | None:
         return self.fetch_one(
             f"SELECT *, {self.AGE_COLUMN} FROM daily_recommendations WHERE profile_id=1"
+        )
+
+    def body_fat_target(self) -> float | None:
+        row = self.fetch_one(
+            "SELECT body_fat_target_percent FROM daily_recommendations WHERE profile_id=1"
+        )
+        return float(row["body_fat_target_percent"]) if row else None
+
+    def update_body_fat_target(self, percent: float) -> Row | None:
+        return self.fetch_one(
+            f"""
+            UPDATE daily_recommendations
+            SET body_fat_target_percent=%s, updated_at=NOW()
+            WHERE profile_id=1
+            RETURNING *, {self.AGE_COLUMN}
+            """,
+            (percent,),
         )
 
     def upsert(self, entry: DailyRecommendationsUpsert) -> Row:

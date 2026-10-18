@@ -114,6 +114,9 @@ CREATE TABLE IF NOT EXISTS daily_recommendations (
     notes TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE daily_recommendations
+    ADD COLUMN IF NOT EXISTS body_fat_target_percent NUMERIC(4,1) NOT NULL DEFAULT 18
+    CHECK (body_fat_target_percent > 0 AND body_fat_target_percent < 75);
 """
 
 

@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse, Response
 
 from .errors import NotFoundError
 from .models import (
+    AnalysisRange,
     DailyLogUpsert,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
@@ -159,6 +160,12 @@ class LunaVitaHTTPRoutes:
                 request.query_params.get("metric"), self.bounded_limit(request)
             )
 
+        async def body_composition(request: Request):
+            return self.service.body.series(
+                date.fromisoformat(request.query_params.get("start", "")),
+                date.fromisoformat(request.query_params.get("end", "")),
+            )
+
         async def replace(request: Request):
             entry = await self.payload(request, HealthMeasurementCreate)
             return self.found(measurements.update(self.path_id(request), entry), missing)
@@ -169,6 +176,7 @@ class LunaVitaHTTPRoutes:
         self.route("POST", "/api/measurements", create, 201)
         self.route("POST", "/api/measurements/batch", create_batch, 201)
         self.route("GET", "/api/measurements", read)
+        self.route("GET", "/api/body-composition", body_composition)
         self.route("PUT", "/api/measurements/{entry_id}", replace)
         self.route("DELETE", "/api/measurements/{entry_id}", delete, NO_CONTENT)
 
@@ -182,6 +190,12 @@ class LunaVitaHTTPRoutes:
 
         async def displayed_analysis(request: Request):
             return service.analysis.analyze_displayed(self.query_date(request, "day"))
+
+        async def set_range(request: Request):
+            return service.analysis.set_range(await self.payload(request, AnalysisRange))
+
+        async def reset_range(request: Request):
+            return service.analysis.reset_range()
 
         async def recommendations(request: Request):
             return service.profile.get()
@@ -207,6 +221,8 @@ class LunaVitaHTTPRoutes:
 
         self.route("GET", "/api/analysis", food_analysis)
         self.route("GET", "/api/analysis/displayed", displayed_analysis)
+        self.route("PUT", "/api/analysis/range", set_range)
+        self.route("DELETE", "/api/analysis/range", reset_range)
         self.route("GET", "/api/recommendations", recommendations)
         self.route("GET", "/api/summary/{day}", summary)
         self.route("GET", "/api/days/{day}", read_day)

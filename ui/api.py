@@ -45,6 +45,18 @@ class LunaVitaAPI:
             "GET", "/api/analysis/displayed", params={"day": day.isoformat()}
         )
 
+    def set_analysis_range(self, start: date, end: date) -> dict[str, Any]:
+        """Save the Monthly tab's date range (shared with the assistant)."""
+        return self.request(
+            "PUT",
+            "/api/analysis/range",
+            json={"start_date": start.isoformat(), "end_date": end.isoformat()},
+        )
+
+    def reset_analysis_range(self) -> dict[str, Any]:
+        """Return the Monthly tab to the calendar month of the selected day."""
+        return self.request("DELETE", "/api/analysis/range")
+
     def create_food(self, payload: dict[str, Any]) -> None:
         self.request("POST", "/api/food", json=payload)
 
@@ -56,6 +68,14 @@ class LunaVitaAPI:
 
     def measurements(self) -> list[dict[str, Any]]:
         return self.request("GET", "/api/measurements", params={"limit": 500})
+
+    def body_composition(self, start: date, end: date) -> dict[str, Any]:
+        """Weight and body fat % (recorded or estimated) for each weigh-in in the range."""
+        return self.request(
+            "GET",
+            "/api/body-composition",
+            params={"start": start.isoformat(), "end": end.isoformat()},
+        )
 
     def create_measurement(self, payload: dict[str, Any]) -> None:
         self.request("POST", "/api/measurements", json=payload)

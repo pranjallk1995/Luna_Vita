@@ -120,6 +120,10 @@ class DailyRecommendationsUpsert(BaseModel):
     notes: str | None = Field(default=None, max_length=2_000)
 
 
+class BodyFatTargetUpdate(BaseModel):
+    percent: float = Field(gt=3, lt=60)
+
+
 class BodyProfileUpdate(BaseModel):
     """A partial body-profile change; omitted fields keep their stored values."""
 

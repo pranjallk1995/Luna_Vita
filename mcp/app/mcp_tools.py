@@ -1,11 +1,13 @@
 """MCP tools that let LLM clients track Luna Vita nutrition and measurements."""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from .clock import LocalClock
 from .models import (
+    BodyFatTargetUpdate,
     AnalysisRange,
     BodyProfileUpdate,
     DailyLogUpsert,
@@ -230,6 +232,27 @@ class LunaVitaMCPTools:
         ) -> list[dict[str, Any]]:
             """List recent health measurements, optionally filtered by metric."""
             return measurements.list(metric, limit)
+
+        body = self.service.body
+
+        @server.tool()
+        def get_body_composition(
+            start_date: str | None = None, end_date: str | None = None
+        ) -> dict[str, Any]:
+            """Get weight (kg) and body fat % for every weigh-in between two YYYY-MM-DD dates (inclusive; defaults to the last 30 days), plus the body fat % target.
+
+            Body fat uses recorded values when present; otherwise it is estimated
+            from that weigh-in's total body water and flagged "estimated": true.
+            "body_fat_estimate_method" explains the estimate and its accuracy.
+            """
+            end = date.fromisoformat(end_date) if end_date else LocalClock.today()
+            start = date.fromisoformat(start_date) if start_date else end - timedelta(days=29)
+            return body.series(start, end)
+
+        @server.tool()
+        def set_body_fat_target(percent: float) -> dict[str, Any]:
+            """Set the body fat % target shown as the target line on the monthly body chart."""
+            return body.set_fat_target(BodyFatTargetUpdate(percent=percent).percent)
 
         @server.tool()
         def update_health_measurement(

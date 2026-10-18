@@ -1,4 +1,4 @@
-"""Daily/Weekly/Monthly period selector that survives repeated clicks."""
+"""Daily/Monthly period selector that survives repeated clicks."""
 
 import inspect
 
@@ -13,7 +13,6 @@ class PeriodNavigation:
     DEFAULT = "daily"
     LABELS = {
         "daily": ":material/today: Daily Tracking",
-        "weekly": ":material/date_range: Weekly Tracking",
         "monthly": ":material/calendar_month: Monthly Tracking",
     }
 
@@ -28,12 +27,22 @@ class PeriodNavigation:
 
     @classmethod
     def last_selection(cls) -> str:
-        return st.session_state.get(cls.LAST_KEY, cls.DEFAULT)
+        last = st.session_state.get(cls.LAST_KEY, cls.DEFAULT)
+        return last if last in cls.LABELS else cls.DEFAULT
+
+    @classmethod
+    def drop_retired_selection(cls) -> None:
+        """Forget a stored period that is no longer offered (e.g. the old Weekly tab)."""
+        for key in (cls.KEY, cls.LAST_KEY):
+            if st.session_state.get(key) not in (None, *cls.LABELS):
+                del st.session_state[key]
 
     @classmethod
     def render(cls) -> str:
+        cls.drop_retired_selection()
         container = st.container(key="nutrition_navigation")
-        active = st.session_state.get(cls.KEY, cls.last_selection())
+        # The stored value can be None after reruns started by other widgets.
+        active = st.session_state.get(cls.KEY) or cls.last_selection()
         # The marker lets the stylesheet highlight the active segment reliably.
         container.markdown(f'<span class="lv-selected-{active}"></span>', unsafe_allow_html=True)
         options = {

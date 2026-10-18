@@ -4,14 +4,17 @@ from datetime import date
 from html import escape
 from typing import Any
 
+import httpx
 import pandas as pd
 import streamlit as st
 
 from api import LunaVitaAPI
+from body_trends import BodyTrendChart, Reading
 from nutrition import NUTRIENTS, Nutrient
 from views.shared import LunaVitaView, NutrientCards, SectionHeader
 
 Analysis = dict[str, Any]
+RANGE_ERROR_KEY = "analysis-range-error"
 
 # (summary field, label, unit, material icon) for the contributor panels.
 CONTRIBUTOR_NUTRIENTS = (
@@ -116,7 +119,7 @@ class MonthlyView(LunaVitaView):
 
     @property
     def title(self) -> str:
-        return "Custom range overview" if self.custom_range else "Monthly overview"
+        return "Overview"
 
     @staticmethod
     def amount(value: float, unit: str) -> str:
@@ -132,15 +135,17 @@ class MonthlyView(LunaVitaView):
 
     def render_overview(self, analysis: Analysis) -> None:
         window = analysis["window"]
-        source_note = " · range set through the assistant" if self.custom_range else ""
+        source_note = " · custom range" if self.custom_range else ""
         SectionHeader.heading(
             self.title,
             f"{window['label']}{source_note} · {analysis['entries']} entries · "
             f"{len(analysis['foods'])} different foods · "
             f"{analysis['days_logged']} of {window['days']} days logged",
         )
+        body_card = self.body_card_html(window)
         recommendations = self.api.recommendations()
         if not recommendations:
+            st.markdown(body_card, unsafe_allow_html=True)
             return
         averages = analysis["daily_averages"]
         values = {n.key: averages[n.summary_field] for n in NUTRIENTS}
@@ -151,10 +156,11 @@ class MonthlyView(LunaVitaView):
             )
             for n in NUTRIENTS
         }
+        # One grid so the body card matches the height of a macro card + chart stack.
         st.markdown(
             '<div class="analysis-caption">Daily average across logged days, '
             "with each day below</div>"
-            f"{NutrientCards.html(values, targets, charts)}",
+            f'<div class="overview-grid">{NutrientCards.html(values, targets, charts)}{body_card}</div>',
             unsafe_allow_html=True,
         )
 
@@ -292,12 +298,85 @@ class MonthlyView(LunaVitaView):
         )
         st.markdown(f'<section class="analysis-choices">{prefer}{avoid}</section>', unsafe_allow_html=True)
 
+    def body_card_html(self, window: dict[str, Any]) -> str:
+        """Weight and body fat % bars for the window, styled as an overview card."""
+        start, end = date.fromisoformat(window["start"]), date.fromisoformat(window["end"])
+        data = self.api.body_composition(start, end)
+        return BodyTrendChart.html(
+            Reading.parse(data["weight"]),
+            Reading.parse(data["body_fat"]),
+            start,
+            end,
+            float(data["body_fat_target_percent"]),
+        )
+
+    @staticmethod
+    def range_error(error: httpx.HTTPError) -> str:
+        """The backend's validation message, e.g. for a range longer than a year."""
+        if isinstance(error, httpx.HTTPStatusError):
+            try:
+                body = error.response.json()
+                details = body.get("details") or []
+                return details[0].get("msg", body["error"]) if details else body["error"]
+            except (ValueError, KeyError, AttributeError):
+                pass
+        return f"Could not update the date range: {error}"
+
+    # Widget callbacks run before the next script pass; failures are kept in
+    # session state and shown under the picker on that pass.
+    @staticmethod
+    def save_range(api: LunaVitaAPI, key: str) -> None:
+        picked = st.session_state.get(key) or ()
+        if len(picked) != 2:  # the user has picked only the start date so far
+            return
+        try:
+            api.set_analysis_range(*picked)
+            st.session_state.pop(RANGE_ERROR_KEY, None)
+        except httpx.HTTPError as error:
+            st.session_state[RANGE_ERROR_KEY] = MonthlyView.range_error(error)
+
+    @staticmethod
+    def reset_range(api: LunaVitaAPI) -> None:
+        try:
+            api.reset_analysis_range()
+            st.session_state.pop(RANGE_ERROR_KEY, None)
+        except httpx.HTTPError as error:
+            st.session_state[RANGE_ERROR_KEY] = MonthlyView.range_error(error)
+
+    def render_range_picker(self, window: dict[str, Any]) -> None:
+        """Date range shared with the assistant; "This month" clears a custom range."""
+        start, end = date.fromisoformat(window["start"]), date.fromisoformat(window["end"])
+        # Keyed by the window so the picker follows ranges set elsewhere (the assistant).
+        key = f"analysis-range-{start.isoformat()}-{end.isoformat()}"
+        with st.container(key="analysis_range_bar"):
+            picker_column, reset_column, _ = st.columns([2.2, 1.3, 3.8], vertical_alignment="bottom")
+            picker_column.date_input(
+                "Date range",
+                value=(start, end),
+                format="DD/MM/YYYY",
+                key=key,
+                on_change=self.save_range,
+                args=(self.api, key),
+            )
+            if self.custom_range:
+                reset_column.button(
+                    "This month",
+                    icon=":material/calendar_month:",
+                    use_container_width=True,
+                    on_click=self.reset_range,
+                    args=(self.api,),
+                )
+        if st.session_state.get(RANGE_ERROR_KEY):
+            st.error(st.session_state[RANGE_ERROR_KEY])
+
     def render(self, day: date) -> None:
         analysis = self.api.analysis(day)
         self.period = "range" if analysis["range_source"] == "saved" else "month"
+        self.render_range_picker(analysis["window"])
         if not analysis["foods"]:
             SectionHeader.heading(self.title, analysis["window"]["label"])
-            st.info(f"No food entries in {self.span} yet.")
+            st.markdown(self.body_card_html(analysis["window"]), unsafe_allow_html=True)
+            st.info(f"No food entries {self.span} yet.")
             return
         self.render_overview(analysis)
         self.render_item_counts(analysis)

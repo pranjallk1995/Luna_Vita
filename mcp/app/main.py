@@ -16,6 +16,7 @@ from .repositories import (
 )
 from .services import (
     AnalysisService,
+    BodyCompositionService,
     DayContextService,
     FoodService,
     LunaVitaService,
@@ -47,13 +48,16 @@ class LunaVitaApplication:
     def _build_service(self) -> LunaVitaService:
         food_entries = FoodRepository(self.database)
         food = FoodService(food_entries)
-        measurements = MeasurementService(MeasurementRepository(self.database))
+        measurement_entries = MeasurementRepository(self.database)
+        recommendations = RecommendationRepository(self.database)
+        measurements = MeasurementService(measurement_entries)
         days = DayContextService(DailyLogRepository(self.database))
         return LunaVitaService(
             food=food,
             measurements=measurements,
+            body=BodyCompositionService(measurement_entries, recommendations),
             days=days,
-            profile=ProfileService(RecommendationRepository(self.database)),
+            profile=ProfileService(recommendations),
             reports=ReportService(food, measurements, days),
             analysis=AnalysisService(
                 food_entries,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from .analysis import FoodAnalysis, FoodName, PeriodWindow
+from .body_composition import BodyComposition
 from .clock import LocalClock
 from .errors import NotFoundError
 from .models import (
@@ -97,6 +98,41 @@ class MeasurementService:
 
     def remove(self, entry_id: int) -> bool:
         return self.measurements.delete(entry_id)
+
+
+class BodyCompositionService:
+    """Weight and body fat % over time, and the body fat % target."""
+
+    DEFAULT_FAT_TARGET = 18.0
+
+    def __init__(
+        self, measurements: MeasurementRepository, recommendations: RecommendationRepository
+    ) -> None:
+        self.measurements = measurements
+        self.recommendations = recommendations
+
+    def fat_target(self) -> float:
+        target = self.recommendations.body_fat_target()
+        return self.DEFAULT_FAT_TARGET if target is None else target
+
+    def set_fat_target(self, percent: float) -> Row:
+        updated = self.recommendations.update_body_fat_target(percent)
+        if updated is None:
+            raise NotFoundError("Daily recommendations have not been created.")
+        return updated
+
+    def series(self, start: date, end: date) -> dict:
+        """Weight and body fat % readings for local days ``start``..``end``, plus the target."""
+        if end < start:
+            raise ValueError("end must be on or after start")
+        metrics = ["weight", "total_body_water", *sorted(BodyComposition.FAT_METRICS)]
+        series = BodyComposition.series(self.measurements.list_between(start, end, metrics))
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "body_fat_target_percent": self.fat_target(),
+            **series,
+        }
 
 
 class DayContextService:
@@ -301,6 +337,7 @@ class LunaVitaService:
         self,
         food: FoodService,
         measurements: MeasurementService,
+        body: BodyCompositionService,
         days: DayContextService,
         profile: ProfileService,
         reports: ReportService,
@@ -308,6 +345,7 @@ class LunaVitaService:
     ) -> None:
         self.food = food
         self.measurements = measurements
+        self.body = body
         self.days = days
         self.profile = profile
         self.reports = reports
