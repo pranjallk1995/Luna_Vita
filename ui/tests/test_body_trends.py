@@ -44,6 +44,21 @@ class BodyTrendChartTests(unittest.TestCase):
     def test_one_slot_per_day_in_window(self):
         self.assertEqual(self.html().count('class="nutrient-trend-day"'), 62)  # 31 days x 2 charts
 
+    def test_average_weight_and_body_fat_cards_follow_the_charts(self):
+        html = self.html()
+        self.assertIn("Average weight", html)
+        self.assertIn("73.75 kg", html)
+        self.assertIn("Average body fat", html)
+        self.assertIn("22.1%", html)
+        self.assertGreater(
+            html.index('class="body-trend-averages"'),
+            html.rindex('class="nutrient-trend-axis"'),
+        )
+
+    def test_average_body_fat_card_is_danger_only_above_target(self):
+        self.assertIn('class="body-average-card danger"', self.html(target=18.0))
+        self.assertNotIn('class="body-average-card danger"', self.html(target=23.0))
+
     def test_no_card_without_data(self):
         self.assertEqual(self.html(weight=[], fat=[]), "")
 

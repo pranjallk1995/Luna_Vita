@@ -110,8 +110,8 @@ class LunaStyle:
             .analysis-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
             .st-key-analysis_range_bar { margin-bottom:.4rem; }
             .st-key-analysis_range_bar .stButton>button { height:2.5rem; min-height:2.5rem; white-space:nowrap; }
-            .overview-grid { display:grid; grid-auto-rows:1fr; gap:.65rem; }
-            .body-trend-card { --card-accent:#f5f5f5; --card-rgb:245,245,245; display:flex; flex-direction:column; align-items:stretch; gap:.45rem; min-height:0; padding:.7rem .85rem .55rem; }
+            .overview-grid { display:grid; grid-auto-rows:auto; gap:.65rem; }
+            .body-trend-card { --card-accent:#f5f5f5; --card-rgb:245,245,245; display:flex; flex-direction:column; align-items:stretch; gap:.45rem; height:21rem; min-height:0; padding:.7rem .85rem .55rem; }
             .body-trend-section { display:flex; flex:1 1 0; flex-direction:column; gap:.3rem; min-height:0; }
             .body-trend-head { display:flex; align-items:baseline; gap:.6rem; min-width:0; }
             .body-trend-head strong { color:var(--text); font-size:.92rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -121,9 +121,15 @@ class LunaStyle:
             .body-trend-key.morning, .body-trend-bar.morning { background:rgba(245,245,245,.78); fill:rgba(245,245,245,.78); }
             .body-trend-key.night, .body-trend-bar.night { background:#737373; fill:#737373; }
             .body-trend-card .body-trend-plot { flex:1 1 0; height:0; min-height:1.5rem; }
+            .body-trend-averages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; margin-top:.15rem; }
+            .body-average-card { display:grid; grid-template-columns:1fr auto; align-items:center; gap:.18rem .6rem; min-width:0; padding:.55rem .65rem; border:1px solid var(--border); border-radius:.65rem; background:rgba(255,255,255,.035); }
+            .body-average-card.danger { border-color:rgba(251,113,133,.42); background:rgba(251,113,133,.12); }
+            .body-average-card.danger .nutrition-card-label,.body-average-card.danger .nutrition-card-icon,.body-average-card.danger strong { color:#fb7185; }
+            .body-average-card .nutrition-card-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+            .body-average-card strong { color:var(--text); font-size:.92rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
+            .body-average-card small { grid-column:1 / -1; color:var(--muted); font-size:.6rem; }
             .nutrient-trend-day:hover .body-trend-bar.morning { fill:#f5f5f5; }
             .nutrient-trend-day:hover .body-trend-bar.night { fill:#8a8a8a; }
-            @media (max-width:900px) { .overview-grid { grid-auto-rows:auto; } .body-trend-card { height:15rem; } }
             .analysis-suggestions.prefer { border-color:rgba(74,222,128,.28); }
             .analysis-suggestions.prefer h3 .analysis-icon { color:#4ade80; }
             .analysis-suggestions.avoid { border-color:rgba(251,113,133,.34); }

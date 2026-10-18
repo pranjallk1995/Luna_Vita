@@ -185,6 +185,30 @@ class BodyTrendChart:
             f"{cls.svg(BODY_FAT, readings, days, 0, high, target)}</div>"
         )
 
+    @staticmethod
+    def average(readings: list[Reading]) -> float | None:
+        """Arithmetic mean of the readings displayed in the current window."""
+        if not readings:
+            return None
+        return sum(reading.value for reading in readings) / len(readings)
+
+    @classmethod
+    def average_card(
+        cls, metric: Metric, readings: list[Reading], target: float | None = None
+    ) -> str:
+        average = cls.average(readings)
+        if average is None:
+            return ""
+        status = " danger" if target is not None and average > target else ""
+        return (
+            f'<div class="body-average-card{status}">'
+            f'<span class="nutrition-card-label"><span class="nutrition-card-icon">'
+            f"{metric.icon}</span>Average {metric.label.lower()}</span>"
+            f'<strong>{metric.amount(average)}</strong>'
+            f'<small>{len(readings)} reading{"s" if len(readings) != 1 else ""}</small>'
+            "</div>"
+        )
+
     @classmethod
     def html(
         cls, weight: list[Reading], fat: list[Reading], start: date, end: date, target: float
@@ -194,10 +218,15 @@ class BodyTrendChart:
             return ""
         days = cls.days(start, end)
         middle = days[len(days) // 2]
+        averages = (
+            '<div class="body-trend-averages">'
+            f"{cls.average_card(WEIGHT, weight)}{cls.average_card(BODY_FAT, fat, target)}"
+            "</div>"
+        )
         return (
             '<div class="nutrition-card body-trend-card">'
             f"{cls.weight_section(weight, days)}{cls.fat_section(fat, days, target)}"
             '<div class="nutrient-trend-axis">'
             f"<span>{cls.day_label(start)}</span><span>{cls.day_label(middle)}</span>"
-            f"<span>{cls.day_label(end)}</span></div></div>"
+            f"<span>{cls.day_label(end)}</span></div>{averages}</div>"
         )
