@@ -5,8 +5,8 @@ from datetime import date
 
 import streamlit as st
 
-from api import LunaVitaAPI
-from nutrition import NUTRIENTS, Nutrient, NutritionStatus
+from services.api import LunaVitaAPI
+from domain.nutrition import NUTRIENTS, Nutrient, NutritionStatus
 
 
 class LunaVitaView:

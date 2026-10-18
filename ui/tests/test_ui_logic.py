@@ -3,10 +3,10 @@
 import unittest
 from datetime import date
 
-from body_measurements import BodyMetrics
-from food_entries import FoodEntryPayload, FoodEntryTime
-from nutrition import MacroBreakdown, NutritionStatus
-from validation import FoodRowValidator
+from domain.body_measurements import BodyMetrics
+from domain.food_entries import FoodEntryPayload, FoodEntryTime
+from domain.nutrition import MacroBreakdown, NutritionStatus
+from domain.validation import FoodRowValidator
 
 
 class FoodLogViewTests(unittest.TestCase):

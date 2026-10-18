@@ -5,9 +5,9 @@ from typing import Any
 
 import streamlit as st
 
-from api import LunaVitaAPI
-from body_measurements import BodyMetrics
-from clock import LunaVitaClock
+from services.api import LunaVitaAPI
+from domain.body_measurements import BodyMetrics
+from domain.clock import LunaVitaClock
 from views.shared import LunaVitaView, SectionHeader
 
 

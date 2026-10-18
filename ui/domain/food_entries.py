@@ -5,7 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-from clock import LunaVitaClock
+from domain.clock import LunaVitaClock
 
 NOT_RECORDED = "Not recorded"
 

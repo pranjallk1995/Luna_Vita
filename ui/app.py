@@ -6,8 +6,8 @@ import httpx
 import streamlit as st
 from PIL import Image
 
-from api import LunaVitaAPI
-from clock import LunaVitaClock
+from services.api import LunaVitaAPI
+from domain.clock import LunaVitaClock
 from config import UIConfig
 from styles import LunaStyle
 from views.food_log_view import FoodLogView

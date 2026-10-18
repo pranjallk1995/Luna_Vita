@@ -4,7 +4,7 @@ from datetime import date
 
 import streamlit as st
 
-from nutrition import NUTRIENTS, NutritionStatus
+from domain.nutrition import NUTRIENTS, NutritionStatus
 from views.shared import LunaVitaView, NutrientCards
 
 

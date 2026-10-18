@@ -2,7 +2,7 @@
 
 import unittest
 
-from nutrition import NUTRIENTS
+from domain.nutrition import NUTRIENTS
 from views.monthly_view import DailyTrendChart
 
 CALORIES = next(n for n in NUTRIENTS if n.key == "calories")

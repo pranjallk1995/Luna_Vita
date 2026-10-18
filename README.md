@@ -256,6 +256,41 @@ Nutrition fields reject negative values, food names and quantities cannot be bla
 
 The idempotent schema in `mcp/app/database.py` is applied whenever the Luna Vita service starts. It creates a new database structure when needed and applies safe additive upgrades to existing databases.
 
+## Project structure
+
+Luna Vita, Luna Lumia, and Luna Visia share this layout:
+
+```text
+.
+├── docker-compose.yaml     # services, private network, and Compose Watch rules
+├── README.md
+├── UI_STYLE_GUIDE.md       # shared Luna visual reference
+├── docs/assets/            # README screenshots
+├── mcp/                    # FastMCP server: MCP tools plus UI-facing HTTP routes
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── app/                # main.py composition root, config, database, models,
+│   │                       # repositories, services, mcp_tools, http_routes,
+│   │                       # and the app's own domain modules
+│   ├── scripts/            # one-off maintenance scripts, when needed
+│   └── tests/              # python -m unittest discover -s tests
+└── ui/                     # Streamlit interface
+    ├── Dockerfile
+    ├── requirements.txt
+    ├── .streamlit/         # Streamlit theme and server settings
+    ├── assets/             # logos
+    ├── app.py              # entry point and page composition
+    ├── config.py           # environment-backed settings
+    ├── styles.py           # shared dark theme
+    ├── services/           # backend API client, caching, and session state
+    ├── domain/             # Streamlit-free logic and view models, when the app has any
+    ├── views/              # Streamlit rendering: tabs, sections, dialogs, shared widgets
+    └── tests/              # UI logic tests, when the app has any
+```
+
+Dependencies point one way: `views/` uses `services/` and `domain/`, and `domain/`
+imports neither Streamlit nor the API client, so it can be tested on its own.
+
 ## Development workflow
 
 Compose Watch synchronizes source changes while the foreground watcher is running:
@@ -280,7 +315,7 @@ Stopping the foreground watcher also stops automatic source synchronization.
 
 ### UI modules
 
-Pure logic modules have no Streamlit session dependency and are unit tested directly; the `views/` package only renders.
+Pure logic lives in `domain/` and is unit tested directly, backend access and caching live in `services/`, and the `views/` package only renders.
 
 - `ui/app.py` - `LunaVitaApp` composition root: styling, header, period navigation, and the daily views; plus the source-reload notice.
 - `ui/views/summary_view.py` - recommendation-aware nutrition summary cards.
@@ -289,13 +324,14 @@ Pure logic modules have no Streamlit session dependency and are unit tested dire
 - `ui/views/monthly_view.py` - renders the backend's monthly analysis: overview, item counts, top contributors, and prefer/avoid lists.
 - `ui/views/navigation.py` - Daily/Weekly/Monthly selector that keeps its selection on repeated clicks.
 - `ui/views/shared.py` - view base class, the shared section header with its "Add entry" button, and the nutrient cards used by the daily and monthly views.
-- `ui/nutrition.py` - nutrient card definitions, target status rules, and macro percentages.
-- `ui/food_entries.py` - consumed-time display, ordering, and parsing, plus food-entry payload building.
-- `ui/body_measurements.py` - tracked body metrics, Morning/Night tables, and measurement payloads.
-- `ui/validation.py` - client-side mirrors of the backend text and number rules for the editable log.
-- `ui/images.py` - food-photo normalization for uploads and table previews.
-- `ui/clock.py` - Asia/Kolkata dates and timestamps.
-- `ui/api.py` - typed HTTP client for food entries, measurements, recommendations, daily context, summaries, and reports.
+- `ui/domain/nutrition.py` - nutrient card definitions, target status rules, and macro percentages.
+- `ui/domain/food_entries.py` - consumed-time display, ordering, and parsing, plus food-entry payload building.
+- `ui/domain/body_measurements.py` - tracked body metrics, Morning/Night tables, and measurement payloads.
+- `ui/domain/body_trends.py` - body weight and body fat % per day as Morning/Night bars in one overview card.
+- `ui/domain/validation.py` - client-side mirrors of the backend text and number rules for the editable log.
+- `ui/services/images.py` - food-photo normalization for uploads and table previews.
+- `ui/domain/clock.py` - Asia/Kolkata dates and timestamps.
+- `ui/services/api.py` - typed HTTP client for food entries, measurements, recommendations, daily context, summaries, and reports.
 - `ui/config.py` - validated UI environment settings, including the Luna Vita API URL and request timeout.
 - `ui/styles.py` - shared dark visual system, responsive layout rules, and component styling.
 - `ui/assets/` - Luna Vita logo assets used by the desktop and mobile layouts.
@@ -317,6 +353,7 @@ Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call s
 - `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
 - `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
 - `mcp/app/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
+- `mcp/app/body_composition.py` - weight and body fat % series, estimating body fat when it was not recorded.
 - `mcp/app/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
 - `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
 - `mcp/app/clock.py` - Asia/Kolkata dates and timestamp localization.

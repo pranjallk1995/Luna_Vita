@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
-from clock import LunaVitaClock
+from domain.clock import LunaVitaClock
 
 PERIODS = ("Morning", "Night")
 

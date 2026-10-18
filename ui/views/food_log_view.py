@@ -7,13 +7,13 @@ import httpx
 import pandas as pd
 import streamlit as st
 
-from api import LunaVitaAPI
-from clock import LunaVitaClock
+from services.api import LunaVitaAPI
+from domain.clock import LunaVitaClock
 from config import UIConfig
-from food_entries import FoodEntryPayload, FoodEntryTime
-from images import FoodImages
-from nutrition import MacroBreakdown
-from validation import FoodRowValidator
+from domain.food_entries import FoodEntryPayload, FoodEntryTime
+from services.images import FoodImages
+from domain.nutrition import MacroBreakdown
+from domain.validation import FoodRowValidator
 from views.shared import LunaVitaView, SectionHeader
 
 

@@ -8,9 +8,9 @@ import httpx
 import pandas as pd
 import streamlit as st
 
-from api import LunaVitaAPI
-from body_trends import BodyTrendChart, Reading
-from nutrition import NUTRIENTS, Nutrient
+from services.api import LunaVitaAPI
+from domain.body_trends import BodyTrendChart, Reading
+from domain.nutrition import NUTRIENTS, Nutrient
 from views.shared import LunaVitaView, NutrientCards, SectionHeader
 
 Analysis = dict[str, Any]

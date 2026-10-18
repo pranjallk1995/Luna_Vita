@@ -3,7 +3,7 @@
 import unittest
 from datetime import date
 
-from body_trends import BodyTrendChart, Reading
+from domain.body_trends import BodyTrendChart, Reading
 
 WEIGHT = [
     {"measured_at": "2026-10-15T11:04:00+05:30", "value": 73.65, "time_label": "Morning"},
