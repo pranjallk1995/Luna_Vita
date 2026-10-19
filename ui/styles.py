@@ -111,7 +111,7 @@ class LunaStyle:
             .st-key-analysis_range_bar { margin-bottom:.4rem; }
             .st-key-analysis_range_bar .stButton>button { height:2.5rem; min-height:2.5rem; white-space:nowrap; }
             .overview-grid { display:grid; grid-auto-rows:auto; gap:.65rem; }
-            .body-trend-card { --card-accent:#f5f5f5; --card-rgb:245,245,245; display:flex; flex-direction:column; align-items:stretch; gap:.45rem; height:21rem; min-height:0; padding:.7rem .85rem .55rem; }
+            .body-trend-card { --card-accent:#f5f5f5; --card-rgb:245,245,245; display:flex; flex-direction:column; align-items:stretch; gap:.45rem; height:27.3rem; min-height:0; padding:.7rem .85rem .55rem; }
             .body-trend-section { display:flex; flex:1 1 0; flex-direction:column; gap:.3rem; min-height:0; }
             .body-trend-head { display:flex; align-items:baseline; gap:.6rem; min-width:0; }
             .body-trend-head strong { color:var(--text); font-size:.92rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
