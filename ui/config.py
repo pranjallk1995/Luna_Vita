@@ -18,6 +18,7 @@ class UIConfig:
     FOOD_IMAGE_ROW_HEIGHT: ClassVar[int] = 64
 
     api_url: str
+    allowed_emails: frozenset[str]
     timeout: float = 10.0
 
     @classmethod
@@ -26,4 +27,11 @@ class UIConfig:
         parsed = urlparse(api_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError("LUNAVITA_API_URL must be a valid HTTP(S) URL.")
-        return cls(api_url=api_url)
+        allowed_emails = frozenset(
+            email.strip().casefold()
+            for email in os.getenv("LUNAVITA_ALLOWED_EMAILS", "").split(",")
+            if email.strip()
+        )
+        if not allowed_emails:
+            raise RuntimeError("LUNAVITA_ALLOWED_EMAILS must list at least one account.")
+        return cls(api_url=api_url, allowed_emails=allowed_emails)

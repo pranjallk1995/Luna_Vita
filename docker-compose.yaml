@@ -60,7 +60,10 @@ services:
     restart: unless-stopped
     environment:
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
+      LUNAVITA_ALLOWED_EMAILS: ${LUNAVITA_ALLOWED_EMAILS:?Set LUNAVITA_ALLOWED_EMAILS to the Google accounts allowed to access Vita}
       TZ: Asia/Kolkata
+    volumes:
+      - ./ui/.streamlit/secrets.toml:/workspace/ui/.streamlit/secrets.toml:ro
     ports:
       - "127.0.0.1:18502:8501"
     develop:
@@ -73,6 +76,7 @@ services:
             - "*.py[cod]"
             - requirements.txt
             - Dockerfile
+            - .streamlit/secrets.toml
         - action: rebuild
           path: ./ui/requirements.txt
         - action: rebuild
