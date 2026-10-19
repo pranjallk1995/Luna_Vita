@@ -21,6 +21,8 @@ class LunaStyle:
             header[data-testid="stHeader"] { background:transparent; }
             #MainMenu,footer,div[data-testid="stDecoration"] { display:none; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) { align-items:center; margin-bottom:.55rem; }
+            .st-key-header_sign_out,.st-key-header_sign_out .stButton { display:flex; justify-content:flex-end; width:7rem!important; min-width:7rem!important; margin-left:auto; }
+            .st-key-header_sign_out button { width:7rem!important; min-width:7rem!important; min-height:2.625rem!important; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) .stButton > button { white-space:nowrap; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] { width:100%; margin-left:auto; }
             div[data-testid="stHorizontalBlock"]:has(.lv-header) > div:last-child div[data-testid="stDateInput"] > div { width:100%; }
@@ -228,12 +230,23 @@ class LunaStyle:
                 unsafe_allow_html=True,
             )
         with date_column:
-            return st.date_input(
+            date_control, sign_out_column = st.columns(
+                [3, 2], vertical_alignment="center", gap="small"
+            )
+            selected_day = date_control.date_input(
                 "Log date",
                 value=default_day,
                 key="header-log-date",
                 label_visibility="collapsed",
             )
+            sign_out_column.button(
+                "Sign out",
+                icon=":material/logout:",
+                key="header_sign_out",
+                on_click=st.logout,
+                width="stretch",
+            )
+            return selected_day
 
     @staticmethod
     def section(eyebrow: str, title: str, description: str) -> None:
