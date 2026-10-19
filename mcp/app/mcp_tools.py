@@ -55,7 +55,7 @@ class LunaVitaMCPTools:
             fat_g: float,
             natural_sugar_g: float,
             added_sugar_g: float,
-            image_url: str | None,
+            image_url: str | None = None,
             meal_type: str = "other",
             consumed_at: str | None = None,
             consumed_date: str | None = None,
@@ -64,15 +64,18 @@ class LunaVitaMCPTools:
         ) -> dict[str, Any]:
             """Record a food item after completing its nutrition estimate.
 
-            Food name and quantity are mandatory. When the user omits kcal, protein,
-            carbs, fat, natural sugar, added sugar, or an image, infer those values
+            Food name and quantity are mandatory. When the user omits kcal,
+            protein, carbs, fat, natural sugar, or added sugar, infer those values
             from the stated food and complete quantity before calling this tool.
-            Always search Luna Visia for an appropriate representative image before
-            calling this tool. Prefer a verified immutable image-ID URL returned by
-            Luna Visia when a suitable match exists. Only pass null when that search
-            finds no suitable image; never invent or construct a filename-based URL.
+            Always search Luna Visia for a representative image of the food first
+            and pass the public_url it returns as image_url (an immutable
+            .../api/public/images/<image-id> URL). If that search finds no suitable
+            image, omit image_url: the entry then shows the Luna Vita placeholder,
+            which asks the user to add something relevant in Luna Visia. Never
+            invent a URL or pass a filename-based URL or data URI; a supplied URL is
+            checked against Luna Visia and the entry is rejected if it is not found.
             """
-            return food.record(
+            return food.record_with_visia_image(
                 FoodEntryCreate(
                     food_name=food_name,
                     quantity=quantity,
@@ -102,7 +105,7 @@ class LunaVitaMCPTools:
             fat_g: float,
             natural_sugar_g: float,
             added_sugar_g: float,
-            image_url: str | None,
+            image_url: str | None = None,
             consumed_at: str | None = None,
             consumed_date: str | None = None,
         ) -> dict[str, Any]:
@@ -112,13 +115,16 @@ class LunaVitaMCPTools:
             LunaVita to track it, including natural statements such as "I had 4
             parathas of 40 g each right now". Food name and quantity are mandatory.
             Infer kcal, protein, carbs, fat, natural sugar, and added sugar for the
-            complete stated quantity before calling the tool. Always search Luna
-            Visia for an appropriate representative image first and prefer its
-            verified immutable image-ID URL when a suitable match exists. Only pass
-            null when that search finds no suitable image; never invent or construct
-            a filename-based URL. Use the
-            current date/time when the user says "now"; otherwise preserve the
-            stated time.
+            complete stated quantity before calling the tool.
+            Always search Luna Visia for a representative image of the food first
+            and pass the public_url it returns as image_url (an immutable
+            .../api/public/images/<image-id> URL). If that search finds no suitable
+            image, omit image_url: the entry then shows the Luna Vita placeholder,
+            which asks the user to add something relevant in Luna Visia. Never
+            invent a URL or pass a filename-based URL or data URI; a supplied URL is
+            checked against Luna Visia and the entry is rejected if it is not found.
+            Use the current date/time when the user says "now"; otherwise preserve
+            the stated time.
             """
             return food.log_consumed(
                 description,
@@ -184,12 +190,16 @@ class LunaVitaMCPTools:
             return update_result(food.update(entry_id, entry))
 
         @server.tool()
-        def set_food_image(entry_id: int, image_url: str | None = None) -> dict[str, Any]:
+        def set_food_image(
+            entry_id: int, image_url: str | None = None
+        ) -> dict[str, Any]:
             """Set, replace, or clear the optional image URL for a food entry."""
             return update_result(food.set_image(entry_id, image_url))
 
         @server.tool()
-        def remove_food(entry_id: int, expected_date: str | None = None) -> dict[str, Any]:
+        def remove_food(
+            entry_id: int, expected_date: str | None = None
+        ) -> dict[str, Any]:
             """Remove food by id, optionally requiring an expected YYYY-MM-DD date."""
             return {
                 "deleted": food.remove(entry_id, optional_date(expected_date)),
@@ -246,7 +256,11 @@ class LunaVitaMCPTools:
             "body_fat_estimate_method" explains the estimate and its accuracy.
             """
             end = date.fromisoformat(end_date) if end_date else LocalClock.today()
-            start = date.fromisoformat(start_date) if start_date else end - timedelta(days=29)
+            start = (
+                date.fromisoformat(start_date)
+                if start_date
+                else end - timedelta(days=29)
+            )
             return body.series(start, end)
 
         @server.tool()
@@ -302,7 +316,9 @@ class LunaVitaMCPTools:
         @server.tool()
         def save_day_context(day: str, context: dict) -> dict[str, Any]:
             """Save goals, reported totals, activity, supplements, and daily notes."""
-            return days.save(date.fromisoformat(day), DailyLogUpsert.model_validate(context))
+            return days.save(
+                date.fromisoformat(day), DailyLogUpsert.model_validate(context)
+            )
 
     def _register_profile_tools(self) -> None:
         server, profile = self.server, self.service.profile
@@ -387,7 +403,9 @@ class LunaVitaMCPTools:
             or "requested"). Call this before renaming foods or changing verdicts.
             """
             if start_date or end_date:
-                return analysis.analyze(optional_date(start_date), optional_date(end_date))
+                return analysis.analyze(
+                    optional_date(start_date), optional_date(end_date)
+                )
             return analysis.analyze_displayed()
 
         @server.tool()
@@ -441,7 +459,9 @@ class LunaVitaMCPTools:
             )
 
         @server.tool()
-        def set_food_verdict(food_name: str, verdict: str, reason: str) -> dict[str, Any]:
+        def set_food_verdict(
+            food_name: str, verdict: str, reason: str
+        ) -> dict[str, Any]:
             """Set a food's Food choices verdict, replacing the macro-based rating.
 
             verdict is "prefer", "avoid", or "neutral" ("neutral" removes it from
@@ -456,7 +476,10 @@ class LunaVitaMCPTools:
         @server.tool()
         def clear_food_verdict(food_name: str) -> dict[str, Any]:
             """Remove a verdict override so the food is rated by its macros again."""
-            return {"cleared": analysis.clear_verdict(food_name), "food_name": food_name}
+            return {
+                "cleared": analysis.clear_verdict(food_name),
+                "food_name": food_name,
+            }
 
         @server.tool()
         def list_food_verdicts() -> list[dict[str, Any]]:

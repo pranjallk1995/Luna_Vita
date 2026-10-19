@@ -29,24 +29,40 @@ from .repositories import (
     Row,
     VerdictRepository,
 )
+from .visia import VisiaImageCatalog
 
 
 class FoodService:
-    """Record, correct, and remove food and supplement entries."""
+    """Record, correct, and remove food and supplement entries.
+
+    Entries added by the assistant always show a Luna Visia image: the one it
+    found, or the Luna Vita placeholder when it supplied none. Entries from the
+    UI may carry an uploaded photo or none.
+    """
 
     NOTE_MAX_LENGTH = 2_000
 
-    def __init__(self, food: FoodRepository) -> None:
+    def __init__(self, food: FoodRepository, images: VisiaImageCatalog) -> None:
         self.food = food
+        self.images = images
 
     def record(self, entry: FoodEntryCreate) -> Row:
         return self.food.add(entry)
+
+    def with_visia_image(self, entry: FoodEntryCreate) -> FoodEntryCreate:
+        """Store Visia's canonical URL for the image, or the placeholder if none was given."""
+        supplied = (entry.image_url or "").strip()
+        image_url = self.images.resolve(supplied) if supplied else self.images.placeholder_url()
+        return entry.model_copy(update={"image_url": image_url})
+
+    def record_with_visia_image(self, entry: FoodEntryCreate) -> Row:
+        return self.record(self.with_visia_image(entry))
 
     def log_consumed(self, description: str, entry: FoodEntryCreate) -> Row:
         """Save an LLM-estimated entry, noting the chat message it came from."""
         note = f"AI-estimated from chat: {description.strip()}"[: self.NOTE_MAX_LENGTH]
         noted = FoodEntryCreate.model_validate({**entry.model_dump(), "notes": note})
-        saved = self.record(noted)
+        saved = self.record_with_visia_image(noted)
         return {
             "saved": True,
             "entry": saved,

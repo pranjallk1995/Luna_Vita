@@ -28,7 +28,7 @@ The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition es
 
 > I had 4 parathas of 40 g each right now.
 
-The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. A verified representative image URL or data URI can be supplied when available; otherwise the image must be left empty rather than invented.
+The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. The model searches Luna Visia for a representative image and passes its public image-ID URL (`.../api/public/images/<image-id>`). Luna Vita checks the URL against Visia's catalog before saving and stores the canonical URL Visia publishes, so filename URLs, data URIs, unknown or hidden images, and invented URLs are rejected. When the model finds no suitable image and omits the URL, the entry shows the Luna Vita placeholder, an "Add something relevant in Luna Visia" image stored in Visia itself (set with `LUNAVITA_PLACEHOLDER_IMAGE_ID`). If Luna Visia is unreachable the entry is refused rather than saved without an image. Photos uploaded through the Luna Vita UI remain optional and are not affected.
 
 Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
 
@@ -144,6 +144,7 @@ Open:
 - UI: <http://127.0.0.1:18502>
 - Service health: <http://127.0.0.1:18001/health>
 - MCP endpoint: <http://127.0.0.1:18001/mcp>
+- Favicon and icons: <http://127.0.0.1:18001/favicon.ico> and `/icons/icon-{48,96,192,512}.png`; the 48 and 96 px icons are also embedded in the MCP `initialize` server info so connector clients such as Claude can show them.
 
 The built-in development credentials work without creating a `.env` file:
 
@@ -189,8 +190,8 @@ Adminer is bound to localhost and reaches PostgreSQL only through the private Lu
 
 ### Food
 
-- `record_food` — store a completed food entry.
-- `log_consumed_food` — store food described conversationally after the active model infers missing nutrition.
+- `record_food` — store a completed food entry with a Visia-verified image URL, or the placeholder image when none is given.
+- `log_consumed_food` — store food described conversationally after the active model infers missing nutrition and finds its image in Luna Visia, falling back to the placeholder image.
 - `get_food_log` — list food entries, optionally over an inclusive date range.
 - `update_food` — replace an existing food entry.
 - `set_food_image` — set, replace, or clear an optional food image.
@@ -346,6 +347,7 @@ Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call s
 
 - `mcp/app/main.py` - `LunaVitaApplication` composition root: builds the database, repositories, and services, then registers the MCP tools and HTTP routes on one FastMCP server.
 - `mcp/app/config.py` - validated backend settings loaded from the environment.
+- `mcp/app/branding.py` - `ServerBranding`, the bundled icon set in `mcp/app/assets/` (favicon plus PNG sizes) exposed as MCP server-info icons and HTTP icon routes.
 - `mcp/app/mcp_tools.py` - conversational MCP tools, grouped by food, measurements, day context, and profile.
 - `mcp/app/http_routes.py` - UI-facing REST routes with uniform JSON error translation.
 - `mcp/app/services.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, `ReportService`, and `AnalysisService`, grouped by the `LunaVitaService` facade.
@@ -353,6 +355,7 @@ Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call s
 - `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
 - `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
 - `mcp/app/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
+- `mcp/app/visia.py` - `VisiaImageCatalog`, which verifies assistant-supplied food images against Luna Visia's catalog.
 - `mcp/app/body_composition.py` - weight and body fat % series, estimating body fat when it was not recorded.
 - `mcp/app/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
 - `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.

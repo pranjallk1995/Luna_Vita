@@ -8,8 +8,9 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response
 
+from .branding import ServerBranding
 from .errors import NotFoundError
 from .models import (
     AnalysisRange,
@@ -27,9 +28,12 @@ NO_CONTENT = 204
 class LunaVitaHTTPRoutes:
     """Translate HTTP requests into service calls and results into JSON."""
 
-    def __init__(self, server: FastMCP, service: LunaVitaService) -> None:
+    def __init__(
+        self, server: FastMCP, service: LunaVitaService, branding: ServerBranding
+    ) -> None:
         self.server = server
         self.service = service
+        self.branding = branding
         self._register()
 
     @classmethod
@@ -61,7 +65,7 @@ class LunaVitaHTTPRoutes:
     def error(cls, error: Exception) -> Response:
         if isinstance(error, ValidationError):
             return cls.response({"error": "Invalid request", "details": error.errors()}, 422)
-        if isinstance(error, NotFoundError):
+        if isinstance(error, (NotFoundError, FileNotFoundError)):
             return cls.response({"error": str(error) or "Not found"}, 404)
         if isinstance(error, (ValueError, TypeError)):
             return cls.response({"error": str(error)}, 400)
@@ -109,8 +113,33 @@ class LunaVitaHTTPRoutes:
 
         self.server.custom_route(path, methods=[method])(endpoint)
 
+    ICON_HEADERS = {
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+    }
+
+    def _register_icons(self) -> None:
+        """Favicon and PNG icons for MCP connector clients that fetch them by URL."""
+        branding = self.branding
+
+        async def favicon(request: Request):
+            return FileResponse(
+                branding.favicon_path(), media_type="image/x-icon", headers=self.ICON_HEADERS
+            )
+
+        async def icon(request: Request):
+            return FileResponse(
+                branding.icon_path(request.path_params["name"]),
+                media_type="image/png",
+                headers=self.ICON_HEADERS,
+            )
+
+        self.route("GET", "/favicon.ico", favicon)
+        self.route("GET", "/icons/{name}", icon)
+
     def _register(self) -> None:
         self.route("GET", "/health", self.health)
+        self._register_icons()
         self._register_food()
         self._register_measurements()
         self._register_days()

@@ -2,6 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
+from .branding import ServerBranding
 from .config import AppConfig
 from .database import Database
 from .http_routes import LunaVitaHTTPRoutes
@@ -24,6 +25,7 @@ from .services import (
     ProfileService,
     ReportService,
 )
+from .visia import VisiaImageCatalog
 
 
 class LunaVitaApplication:
@@ -35,19 +37,23 @@ class LunaVitaApplication:
         self.database.open()
         self.database.initialize_schema()
         self.service = self._build_service()
+        self.branding = ServerBranding()
         self.mcp = FastMCP(
             "LunaVita",
+            icons=self.branding.mcp_icons(),
             host=config.host,
             port=config.port,
             stateless_http=True,
             json_response=True,
         )
         LunaVitaMCPTools(self.mcp, self.service)
-        LunaVitaHTTPRoutes(self.mcp, self.service)
+        LunaVitaHTTPRoutes(self.mcp, self.service, self.branding)
 
     def _build_service(self) -> LunaVitaService:
         food_entries = FoodRepository(self.database)
-        food = FoodService(food_entries)
+        food = FoodService(food_entries, VisiaImageCatalog(
+            self.config.visia_api_url, self.config.placeholder_image_id
+        ))
         measurement_entries = MeasurementRepository(self.database)
         recommendations = RecommendationRepository(self.database)
         measurements = MeasurementService(measurement_entries)

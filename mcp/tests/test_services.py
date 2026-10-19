@@ -109,10 +109,26 @@ def apple() -> FoodEntryCreate:
     )
 
 
+class FakeImageCatalog:
+    """Resolve any URL ending in a known ID to its canonical Visia URL."""
+
+    CANONICAL = "https://visia.example/api/public/images/2d77a066-d097-4b1b-9682-c9eb41538b26"
+
+    PLACEHOLDER = "https://visia.example/api/public/images/b7adf6ae-30b3-4750-8381-5dc6ab393de6"
+
+    def resolve(self, image_url: str) -> str:
+        if not image_url.endswith(self.CANONICAL.rsplit("/", 1)[1]):
+            raise NotFoundError("No visible Luna Visia image has that ID.")
+        return self.CANONICAL
+
+    def placeholder_url(self) -> str:
+        return self.PLACEHOLDER
+
+
 class FoodServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repository = FakeFoodRepository()
-        self.service = FoodService(self.repository)
+        self.service = FoodService(self.repository, FakeImageCatalog())
 
     def test_record_delegates_validated_model(self) -> None:
         result = self.service.record(apple())
@@ -121,8 +137,38 @@ class FoodServiceTests(unittest.TestCase):
         self.assertEqual(self.repository.calls[0][0], "add")
         self.assertEqual(self.repository.calls[0][1].food_name, "Apple")
 
+    def test_record_does_not_require_an_image(self) -> None:
+        """The UI path may save an uploaded photo or no image at all."""
+        self.service.record(apple())
+
+        self.assertIsNone(self.repository.calls[-1][1].image_url)
+
+    def test_assistant_entries_store_the_canonical_visia_url(self) -> None:
+        entry = apple().model_copy(update={
+            "image_url": "http://luna-visia-mcp:8000/api/public/images/"
+                         "2d77a066-d097-4b1b-9682-c9eb41538b26"})
+
+        self.service.record_with_visia_image(entry)
+
+        self.assertEqual(self.repository.calls[-1][1].image_url, FakeImageCatalog.CANONICAL)
+
+    def test_assistant_entries_without_an_image_get_the_placeholder(self) -> None:
+        for image_url in (None, "", "   "):
+            with self.subTest(image_url=image_url):
+                self.service.record_with_visia_image(
+                    apple().model_copy(update={"image_url": image_url}))
+                self.assertEqual(
+                    self.repository.calls[-1][1].image_url, FakeImageCatalog.PLACEHOLDER)
+
+    def test_supplied_images_must_still_be_found_in_visia(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.record_with_visia_image(apple().model_copy(
+                update={"image_url": "https://visia.example/api/public/images/x"}))
+        self.assertEqual(self.repository.calls, [])
+
     def test_conversational_logging_preserves_estimate_and_note(self) -> None:
-        entry = apple().model_copy(update={"consumed_date": date(2026, 10, 15)})
+        entry = apple().model_copy(update={
+            "consumed_date": date(2026, 10, 15), "image_url": FakeImageCatalog.CANONICAL})
 
         result = self.service.log_consumed("I ate an apple", entry)
 
@@ -134,6 +180,12 @@ class FoodServiceTests(unittest.TestCase):
     def test_conversational_logging_validates_the_generated_note(self) -> None:
         with self.assertRaises(ValidationError):
             self.service.log_consumed("I ate an apple 🍎", apple())
+
+    def test_conversational_logging_without_image_uses_placeholder(self) -> None:
+        result = self.service.log_consumed("I ate an apple", apple())
+
+        self.assertTrue(result["saved"])
+        self.assertEqual(self.repository.calls[-1][1].image_url, FakeImageCatalog.PLACEHOLDER)
 
     def test_set_image_strips_surrounding_whitespace(self) -> None:
         result = self.service.set_image(4, "  https://example.test/apple.jpg  ")
@@ -216,7 +268,7 @@ class ReportServiceTests(unittest.TestCase):
         food = FakeFoodRepository()
         renderer = FakeRenderer()
         service = ReportService(
-            FoodService(food),
+            FoodService(food, FakeImageCatalog()),
             MeasurementService(FakeMeasurementRepository()),
             DayContextService(FakeDailyLogRepository()),
             renderer,
