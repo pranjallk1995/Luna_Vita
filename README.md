@@ -133,29 +133,32 @@ Luna Vita uses an external Docker network. Create it once if it does not already
 docker network create luna_visia_lunavisia_network
 ```
 
-Create the local environment file:
+Create a private `.env`:
 
-```powershell
-Copy-Item .env.example .env
+```dotenv
+POSTGRES_PASSWORD=replace-with-a-private-database-password
+LUNAVISIA_API_URL=http://luna-visia-mcp:8000
+LUNAVITA_PLACEHOLDER_IMAGE_ID=b7adf6ae-30b3-4750-8381-5dc6ab393de6
+LUNAVITA_ALLOWED_EMAILS=you@example.com
 ```
 
-Set `LUNAVITA_ALLOWED_EMAILS` to the comma-separated Google accounts allowed
-to use the UI. Keep `.env` private; only `.env.example` is intended for version
-control.
+Separate multiple emails with commas. Keep `LUNAVISIA_API_URL` on the shared
+Docker network. Replace the placeholder image ID only when Vita should use a
+different existing Visia image as its fallback.
 
 ### Google OAuth settings
 
-1. In Google Cloud, create an OAuth 2.0 client with application type **Web application**.
-2. Add the redirect URI used by this deployment. For the hosted app it is
-   `https://vita.lunaapps.fyi/oauth2callback`; for local access use
-   `http://localhost:18502/oauth2callback` and set the same value below.
+1. Create a Google OAuth 2.0 **Web application** client.
+2. Add `https://vita.lunaapps.fyi/oauth2callback` for the hosted app and
+   `http://localhost:18502/oauth2callback` for local access.
 3. Copy `ui/.streamlit/secrets.example.toml` to
    `ui/.streamlit/secrets.toml`.
-4. Set `redirect_uri`, a strong random `cookie_secret`, the Google `client_id`,
-   and `client_secret`. Keep Google's discovery URL unchanged.
+4. Set `redirect_uri`, `cookie_secret`, `client_id`, and `client_secret`.
+   Keep `server_metadata_url` unchanged. The redirect value must exactly match
+   the URL used to open Vita.
 
-OAuth client credentials belong only in `ui/.streamlit/secrets.toml`, which is
-ignored by Git. The `.env` allowlist is an additional authorization check after
+Keep OAuth credentials only in the gitignored secrets file. Do not reuse
+secrets. The `.env` allowlist is an additional authorization check after
 Google verifies the account.
 
 Then start Luna Vita:
