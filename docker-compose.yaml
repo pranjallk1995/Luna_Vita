@@ -27,7 +27,7 @@ services:
       DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-db:5432/lunavita
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-b7adf6ae-30b3-4750-8381-5dc6ab393de6}
-      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://vita-mcp.lunaapps.fyi}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18001}
       TZ: Asia/Kolkata
     expose:
       - "8000"

@@ -143,14 +143,13 @@ LUNAVITA_ALLOWED_EMAILS=you@example.com
 ```
 
 Separate multiple emails with commas. Keep `LUNAVISIA_API_URL` on the shared
-Docker network. Replace the placeholder image ID only when Vita should use a
+Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18001`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
 different existing Visia image as its fallback.
 
 ### Google OAuth settings
 
 1. Create a Google OAuth 2.0 **Web application** client.
-2. Add `https://vita.lunaapps.fyi/oauth2callback` for the hosted app and
-   `http://localhost:18502/oauth2callback` for local access.
+2. Add `http://localhost:18502/oauth2callback`.
 3. Copy `ui/.streamlit/secrets.example.toml` to
    `ui/.streamlit/secrets.toml`.
 4. Set `redirect_uri`, `cookie_secret`, `client_id`, and `client_secret`.

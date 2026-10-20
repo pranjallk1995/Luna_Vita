@@ -209,7 +209,7 @@ class FoodLogView(LunaVitaView):
                 pinned=True,
             ),
             "food_name": st.column_config.TextColumn(
-                "Food / supplement", required=True, width="large", pinned=True
+                "Food / supplement", required=True, width="large"
             ),
             "quantity": st.column_config.TextColumn(
                 "↪ Quantity", required=True, width="medium"
