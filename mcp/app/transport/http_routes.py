@@ -8,7 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from app.transport.branding import ServerBranding
 from app.core.errors import NotFoundError
@@ -134,6 +134,10 @@ class LunaVitaHTTPRoutes:
                 headers=self.ICON_HEADERS,
             )
 
+        async def home(request: Request):
+            return HTMLResponse(branding.home_page(), headers=self.ICON_HEADERS)
+
+        self.route("GET", "/", home)
         self.route("GET", "/favicon.ico", favicon)
         self.route("GET", "/icons/{name}", icon)
 

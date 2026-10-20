@@ -15,6 +15,8 @@ class AppConfig:
     placeholder_image_id: str = "b7adf6ae-30b3-4750-8381-5dc6ab393de6"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Public HTTPS origin of this MCP server, used for icon URLs ("" = embedded icons only).
+    mcp_public_url: str = ""
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -31,7 +33,13 @@ class AppConfig:
         ).strip()
         if not placeholder_image_id:
             raise RuntimeError("LUNAVITA_PLACEHOLDER_IMAGE_ID cannot be blank.")
+        mcp_public_url = os.getenv("MCP_PUBLIC_URL", "").strip().rstrip("/")
+        if mcp_public_url:
+            parsed_public_url = urlparse(mcp_public_url)
+            if parsed_public_url.scheme != "https" or not parsed_public_url.netloc:
+                raise RuntimeError("MCP_PUBLIC_URL must be a valid HTTPS URL.")
         return cls(
+            mcp_public_url=mcp_public_url,
             database_url=database_url,
             visia_api_url=visia_api_url,
             placeholder_image_id=placeholder_image_id,

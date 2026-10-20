@@ -37,7 +37,7 @@ class LunaVitaApplication:
         self.database.open()
         self.database.initialize_schema()
         self.service = self._build_service()
-        self.branding = ServerBranding()
+        self.branding = ServerBranding(config.mcp_public_url)
         self.mcp = FastMCP(
             "LunaVita",
             icons=self.branding.mcp_icons(),
