@@ -6,7 +6,7 @@
 ![Luna Visia network required](https://img.shields.io/badge/Luna_Visia_network-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL included](https://img.shields.io/badge/PostgreSQL-included-4169E1?logo=postgresql&logoColor=white)
 
-> **Work in progress:** Luna Vita is a local-first and desktop first nutrition and body-measurement tracker under active development.
+> **Work in progress:** Luna Vita is a local-first and desktop-first nutrition and body-measurement tracker under active development.
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using LLMs
 
