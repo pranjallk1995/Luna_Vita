@@ -204,7 +204,17 @@ class LunaStyle:
                 .st-key-mobile_weight_actions div[data-testid="stColumn"] { min-width:0!important; }
                 .st-key-mobile_weight_actions .stButton > button { white-space:nowrap!important; padding-inline:.55rem!important; }
             }
-            </style>
+                        /* mobile-sign-out-icon */
+            @media (max-width:700px) {
+                .st-key-header_sign_out,.st-key-header_sign_out .stButton { width:2.625rem!important; min-width:2.625rem!important; }
+                .st-key-header_sign_out button { width:2.625rem!important; min-width:2.625rem!important; padding:0!important; }
+                .st-key-header_sign_out button p { display:none!important; }
+                .st-key-header_sign_out button span[data-testid="stIconMaterial"] { margin:0!important; }
+                /* mobile-header-action-row */
+                div[data-testid="stHorizontalBlock"]:has(.st-key-header_sign_out):not(:has(.lv-header)) { flex-wrap:nowrap!important; align-items:center!important; width:100%!important; }
+                div[data-testid="stHorizontalBlock"]:has(.st-key-header_sign_out):not(:has(.lv-header)) > div[data-testid="stColumn"]:first-child { flex:1 1 auto!important; width:auto!important; min-width:0!important; }
+                div[data-testid="stHorizontalBlock"]:has(.st-key-header_sign_out):not(:has(.lv-header)) > div[data-testid="stColumn"]:last-child { flex:0 0 2.625rem!important; width:2.625rem!important; min-width:2.625rem!important; }
+            }</style>
             """,
         )
 
