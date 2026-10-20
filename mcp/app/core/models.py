@@ -7,7 +7,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .clock import LocalClock
+from app.core.clock import LocalClock
 
 MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 Sex = Literal["male", "female", "other"]

@@ -7,9 +7,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.errors import NotFoundError
-from app.http_routes import LunaVitaHTTPRoutes
-from app.models import (
+from app.core.errors import NotFoundError
+from app.transport.http_routes import LunaVitaHTTPRoutes
+from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
     FoodEntryCreate,
@@ -17,7 +17,7 @@ from app.models import (
     FoodVerdictUpsert,
     HealthMeasurementCreate,
 )
-from app.services import (
+from app.services.application import (
     AnalysisService,
     DayContextService,
     FoodService,

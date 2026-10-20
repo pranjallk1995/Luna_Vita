@@ -5,7 +5,7 @@ from datetime import date
 
 from reportlab.lib.styles import ParagraphStyle
 
-from app.reports import DailyReport, DailyReportRenderer
+from app.services.reports import DailyReport, DailyReportRenderer
 
 
 class DailyReportServiceTests(unittest.TestCase):

@@ -5,8 +5,8 @@ from datetime import timedelta
 
 from pydantic import ValidationError
 
-from app.clock import LocalClock
-from app.models import (
+from app.core.clock import LocalClock
+from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
     DailyRecommendationsUpsert,

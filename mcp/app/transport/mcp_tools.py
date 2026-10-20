@@ -5,8 +5,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .clock import LocalClock
-from .models import (
+from app.core.clock import LocalClock
+from app.core.models import (
     BodyFatTargetUpdate,
     AnalysisRange,
     BodyProfileUpdate,
@@ -17,8 +17,8 @@ from .models import (
     FoodVerdictUpsert,
     HealthMeasurementCreate,
 )
-from .report_tools import CurrentLogPdfTool
-from .services import LunaVitaService
+from app.transport.report_tools import CurrentLogPdfTool
+from app.services.application import LunaVitaService
 
 
 class LunaVitaMCPTools:

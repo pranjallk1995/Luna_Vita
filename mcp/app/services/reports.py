@@ -18,7 +18,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .clock import LocalClock
+from app.core.clock import LocalClock
 
 Row = dict[str, Any]
 

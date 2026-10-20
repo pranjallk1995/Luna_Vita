@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import httpx
 
-from app.errors import NotFoundError
-from app.visia import VisiaImageCatalog, VisiaUnavailableError
+from app.core.errors import NotFoundError
+from app.integrations.visia import VisiaImageCatalog, VisiaUnavailableError
 
 IMAGE_ID = "2d77a066-d097-4b1b-9682-c9eb41538b26"
 HIDDEN_ID = "11111111-2222-3333-4444-555555555555"
@@ -44,7 +44,7 @@ class VisiaImageCatalogTests(unittest.TestCase):
                     VisiaImageCatalog.image_id(bad)
 
     def test_resolve_returns_visias_canonical_url(self) -> None:
-        with patch("app.visia.httpx.get", return_value=respond()) as get:
+        with patch("app.integrations.visia.httpx.get", return_value=respond()) as get:
             resolved = self.catalog.resolve("http://luna-visia-mcp:8000/api/public/images/" + IMAGE_ID)
 
         self.assertEqual(resolved, PUBLIC + IMAGE_ID)
@@ -53,17 +53,17 @@ class VisiaImageCatalogTests(unittest.TestCase):
     def test_unknown_and_hidden_images_are_not_found(self) -> None:
         for image_id in ("99999999-9999-9999-9999-999999999999", HIDDEN_ID):
             with self.subTest(image_id=image_id):
-                with patch("app.visia.httpx.get", return_value=respond()):
+                with patch("app.integrations.visia.httpx.get", return_value=respond()):
                     with self.assertRaises(NotFoundError):
                         self.catalog.resolve(PUBLIC + image_id)
 
     def test_placeholder_resolves_through_the_catalog(self) -> None:
-        with patch("app.visia.httpx.get", return_value=respond()):
+        with patch("app.integrations.visia.httpx.get", return_value=respond()):
             self.assertEqual(self.catalog.placeholder_url(), PUBLIC + PLACEHOLDER_ID)
 
     def test_missing_placeholder_names_the_setting_to_fix(self) -> None:
         catalog = VisiaImageCatalog("http://visia/", "99999999-9999-9999-9999-999999999999")
-        with patch("app.visia.httpx.get", return_value=respond()):
+        with patch("app.integrations.visia.httpx.get", return_value=respond()):
             with self.assertRaisesRegex(NotFoundError, "LUNAVITA_PLACEHOLDER_IMAGE_ID"):
                 catalog.placeholder_url()
 
@@ -72,7 +72,7 @@ class VisiaImageCatalogTests(unittest.TestCase):
             with self.subTest(failure=type(failure).__name__):
                 side_effect = failure if isinstance(failure, Exception) else None
                 return_value = None if side_effect else failure
-                with patch("app.visia.httpx.get", side_effect=side_effect, return_value=return_value):
+                with patch("app.integrations.visia.httpx.get", side_effect=side_effect, return_value=return_value):
                     with self.assertRaises(VisiaUnavailableError):
                         self.catalog.resolve(PUBLIC + IMAGE_ID)
 

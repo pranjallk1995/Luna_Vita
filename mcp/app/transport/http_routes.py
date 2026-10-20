@@ -10,16 +10,16 @@ from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
-from .branding import ServerBranding
-from .errors import NotFoundError
-from .models import (
+from app.transport.branding import ServerBranding
+from app.core.errors import NotFoundError
+from app.core.models import (
     AnalysisRange,
     DailyLogUpsert,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
 )
-from .services import LunaVitaService
+from app.services.application import LunaVitaService
 
 Handler = Callable[[Request], Awaitable[Any]]
 NO_CONTENT = 204

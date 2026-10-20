@@ -5,8 +5,8 @@ from datetime import date
 
 from mcp.types import BlobResourceContents, EmbeddedResource
 
-from .clock import LocalClock
-from .services import ReportService
+from app.core.clock import LocalClock
+from app.services.application import ReportService
 
 
 class CurrentLogPdfTool:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from .clock import LocalClock
+from app.core.clock import LocalClock
 
 Row = dict[str, Any]
 

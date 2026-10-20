@@ -5,7 +5,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-from app.report_tools import CurrentLogPdfTool
+from app.transport.report_tools import CurrentLogPdfTool
 
 
 class FakeReportService:

@@ -281,9 +281,18 @@ Stores date-specific goals, reported totals, activity notes, supplement notes, d
 
 Nutrition fields reject negative values, food names and quantities cannot be blank, and timestamps are stored with time-zone support.
 
-The idempotent schema in `mcp/app/database.py` is applied whenever the Luna Vita service starts. It creates a new database structure when needed and applies safe additive upgrades to existing databases.
+The idempotent schema in `mcp/app/data/database.py` is applied whenever the Luna Vita service starts. It creates a new database structure when needed and applies safe additive upgrades to existing databases.
 
 ## Project structure
+
+The backend follows the same layered package layout across all three Luna apps:
+
+- `mcp/app/core/` - configuration, validation models, and domain primitives.
+- `mcp/app/data/` - database setup, repositories, and storage adapters.
+- `mcp/app/services/` - transport-independent use cases and orchestration.
+- `mcp/app/integrations/` - external services, devices, and peer-app clients.
+- `mcp/app/transport/` - FastMCP tools, HTTP routes, authentication, and branding.
+- `mcp/app/main.py` - the small composition root that wires the layers together.
 
 Luna Vita, Luna Lumia, and Luna Visia share this layout:
 
@@ -372,21 +381,21 @@ Pure logic lives in `domain/` and is unit tested directly, backend access and ca
 Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call services, services call repositories, and only `main.py` knows the concrete wiring.
 
 - `mcp/app/main.py` - `LunaVitaApplication` composition root: builds the database, repositories, and services, then registers the MCP tools and HTTP routes on one FastMCP server.
-- `mcp/app/config.py` - validated backend settings loaded from the environment.
-- `mcp/app/branding.py` - `ServerBranding`, the bundled icon set in `mcp/app/assets/` (favicon plus PNG sizes) exposed as MCP server-info icons and HTTP icon routes.
-- `mcp/app/mcp_tools.py` - conversational MCP tools, grouped by food, measurements, day context, and profile.
-- `mcp/app/http_routes.py` - UI-facing REST routes with uniform JSON error translation.
-- `mcp/app/services.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, `ReportService`, and `AnalysisService`, grouped by the `LunaVitaService` facade.
-- `mcp/app/repositories.py` - PostgreSQL persistence, one repository per table on a shared `Repository` base.
-- `mcp/app/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
-- `mcp/app/database.py` - connection-pool management and idempotent schema creation and upgrades.
-- `mcp/app/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
-- `mcp/app/visia.py` - `VisiaImageCatalog`, which verifies assistant-supplied food images against Luna Visia's catalog.
-- `mcp/app/body_composition.py` - weight and body fat % series, estimating body fat when it was not recorded.
-- `mcp/app/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
-- `mcp/app/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
-- `mcp/app/clock.py` - Asia/Kolkata dates and timestamp localization.
-- `mcp/app/errors.py` - domain errors that the HTTP routes map to status codes.
+- `mcp/app/core/config.py` - validated backend settings loaded from the environment.
+- `mcp/app/transport/branding.py` - `ServerBranding`, the bundled icon set in `mcp/app/assets/` (favicon plus PNG sizes) exposed as MCP server-info icons and HTTP icon routes.
+- `mcp/app/transport/mcp_tools.py` - conversational MCP tools, grouped by food, measurements, day context, and profile.
+- `mcp/app/transport/http_routes.py` - UI-facing REST routes with uniform JSON error translation.
+- `mcp/app/services/application.py` - transport-independent use cases: `FoodService`, `MeasurementService`, `DayContextService`, `ProfileService`, `ReportService`, and `AnalysisService`, grouped by the `LunaVitaService` facade.
+- `mcp/app/data/repositories.py` - PostgreSQL persistence, one repository per table on a shared `Repository` base.
+- `mcp/app/core/models.py` - validated food, measurement, recommendation, body-profile, and daily-context request models.
+- `mcp/app/data/database.py` - connection-pool management and idempotent schema creation and upgrades.
+- `mcp/app/services/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
+- `mcp/app/integrations/visia.py` - `VisiaImageCatalog`, which verifies assistant-supplied food images against Luna Visia's catalog.
+- `mcp/app/services/body_composition.py` - weight and body fat % series, estimating body fat when it was not recorded.
+- `mcp/app/services/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
+- `mcp/app/transport/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.
+- `mcp/app/core/clock.py` - Asia/Kolkata dates and timestamp localization.
+- `mcp/app/core/errors.py` - domain errors that the HTTP routes map to status codes.
 - `mcp/tests/` - unit tests for schemas, models, services, HTTP error mapping, report formatting, and MCP report delivery.
 - `mcp/requirements.txt` - Python dependencies used by the MCP/API container.
 - `mcp/Dockerfile` - builds the MCP/API container image.

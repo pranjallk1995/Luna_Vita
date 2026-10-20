@@ -5,7 +5,7 @@ from datetime import date
 
 import json
 
-from app.analysis import FoodAnalysis, FoodGroup, FoodName, MacroQuality, PeriodWindow
+from app.services.analysis import FoodAnalysis, FoodGroup, FoodName, MacroQuality, PeriodWindow
 
 
 def entry(name, day="2026-10-15", calories=100, protein=0, carbs=0, fat=0, added=0):

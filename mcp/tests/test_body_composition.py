@@ -4,9 +4,9 @@ import unittest
 
 from datetime import date
 
-from app.body_composition import BodyComposition
-from app.errors import NotFoundError
-from app.services import BodyCompositionService
+from app.services.body_composition import BodyComposition
+from app.core.errors import NotFoundError
+from app.services.application import BodyCompositionService
 
 
 def row(metric, value, at="2026-10-18T08:46:00+05:30", label="morning"):

@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .errors import NotFoundError
+from app.core.errors import NotFoundError
 
 
 class VisiaUnavailableError(RuntimeError):

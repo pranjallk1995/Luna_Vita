@@ -2,12 +2,12 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from .branding import ServerBranding
-from .config import AppConfig
-from .database import Database
-from .http_routes import LunaVitaHTTPRoutes
-from .mcp_tools import LunaVitaMCPTools
-from .repositories import (
+from app.transport.branding import ServerBranding
+from app.core.config import AppConfig
+from app.data.database import Database
+from app.transport.http_routes import LunaVitaHTTPRoutes
+from app.transport.mcp_tools import LunaVitaMCPTools
+from app.data.repositories import (
     AnalysisRangeRepository,
     DailyLogRepository,
     FoodRepository,
@@ -15,7 +15,7 @@ from .repositories import (
     RecommendationRepository,
     VerdictRepository,
 )
-from .services import (
+from app.services.application import (
     AnalysisService,
     BodyCompositionService,
     DayContextService,
@@ -25,7 +25,7 @@ from .services import (
     ProfileService,
     ReportService,
 )
-from .visia import VisiaImageCatalog
+from app.integrations.visia import VisiaImageCatalog
 
 
 class LunaVitaApplication:

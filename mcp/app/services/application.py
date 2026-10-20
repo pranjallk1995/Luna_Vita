@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from .analysis import FoodAnalysis, FoodName, PeriodWindow
-from .body_composition import BodyComposition
-from .clock import LocalClock
-from .errors import NotFoundError
-from .models import (
+from app.services.analysis import FoodAnalysis, FoodName, PeriodWindow
+from app.services.body_composition import BodyComposition
+from app.core.clock import LocalClock
+from app.core.errors import NotFoundError
+from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
     DailyLogUpsert,
@@ -18,8 +18,8 @@ from .models import (
     FoodVerdictUpsert,
     HealthMeasurementCreate,
 )
-from .reports import DailyReport, DailyReportRenderer
-from .repositories import (
+from app.services.reports import DailyReport, DailyReportRenderer
+from app.data.repositories import (
     MAX_PAGE_SIZE,
     AnalysisRangeRepository,
     DailyLogRepository,
@@ -29,7 +29,7 @@ from .repositories import (
     Row,
     VerdictRepository,
 )
-from .visia import VisiaImageCatalog
+from app.integrations.visia import VisiaImageCatalog
 
 
 class FoodService:
