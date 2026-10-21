@@ -5,13 +5,13 @@ from html import escape
 from typing import Any
 
 import httpx
-import pandas as pd
 import streamlit as st
 
 from services.api import LunaVitaAPI
+from services.images import FoodImages
 from domain.body_trends import BodyTrendChart, Reading
 from domain.clock import LunaVitaClock
-from domain.nutrition import NUTRIENTS, Nutrient
+from domain.nutrition import NUTRIENTS, MacroBreakdown, Nutrient
 from domain.workouts import WorkoutCalendar
 from views.shared import LunaVitaView, NutrientCards, SectionHeader
 
@@ -104,6 +104,67 @@ class DailyTrendChart:
         )
 
 
+class FoodGallery:
+    """A verdict-tinted tile per food with its photo, times had, and macro chips."""
+
+    # (total field, chip label); the sugar chip shows added sugar.
+    CHIPS = (
+        ("protein_g", "Protein"),
+        ("carbs_g", "Carbs"),
+        ("fat_g", "Fat"),
+        ("added_sugar_g", "Sugar"),
+    )
+    MACROS = {macro.field: macro for macro in MacroBreakdown.MACROS}
+
+    @staticmethod
+    def verdict_label(food: dict[str, Any]) -> str:
+        verdict = food["verdict"]
+        label = VERDICT_LABELS[verdict["kind"]]
+        if verdict["source"] == "override":
+            return f"{label} ({OVERRIDE_LABEL.lower()})" if label else OVERRIDE_LABEL
+        return label
+
+    @classmethod
+    def chips_html(cls, totals: dict[str, float]) -> str:
+        return "".join(
+            f'<span class="food-chip" style="--chip:{cls.MACROS[field].color}" '
+            f'title="{cls.MACROS[field].label}: {totals[field]:,.1f} g">'
+            f"<i></i>{label}<b>{totals[field]:,.0f} g</b></span>"
+            for field, label in cls.CHIPS
+        )
+
+    @classmethod
+    def tile_html(cls, food: dict[str, Any]) -> str:
+        name = escape(food["name"])
+        totals = food["totals"]
+        source = FoodImages.preview(food.get("image_url") or "")
+        media = (
+            f'<img src="{escape(source)}" alt="{name}" loading="lazy">'
+            if source
+            else '<span class="food-tile-empty">restaurant</span>'
+        )
+        days = f'{food["days"]} day{"s" if food["days"] != 1 else ""}'
+        verdict = cls.verdict_label(food)
+        pill = f'<span class="food-tile-verdict">{escape(verdict)}</span>' if verdict else ""
+        tip = (
+            f'{food["name"]}: {food["count"]}× over {days}, {totals["calories"]:,.0f} kcal, '
+            f'{food["protein_share"]:.0%} of calories from protein'
+        )
+        return (
+            f'<figure class="food-tile {food["verdict"]["kind"]}" title="{escape(tip)}">'
+            f'<div class="food-tile-media">{media}'
+            f'<span class="food-tile-count">{food["count"]}×</span>{pill}</div>'
+            f"<figcaption><strong>{name}</strong>"
+            f'<span class="food-tile-meta">{days} · {totals["calories"]:,.0f} kcal</span>'
+            f'<div class="food-chips">{cls.chips_html(totals)}</div></figcaption>'
+            "</figure>"
+        )
+
+    @classmethod
+    def html(cls, foods: list[dict[str, Any]]) -> str:
+        return f'<div class="food-gallery">{"".join(cls.tile_html(food) for food in foods)}</div>'
+
+
 class MonthlyView(LunaVitaView):
     """Render the backend's analysis of the saved range or the selected month."""
 
@@ -126,14 +187,6 @@ class MonthlyView(LunaVitaView):
     @staticmethod
     def amount(value: float, unit: str) -> str:
         return f"{value:,.0f} {unit}" if unit == "kcal" else f"{value:,.1f} {unit}"
-
-    @staticmethod
-    def verdict_label(food: dict[str, Any]) -> str:
-        verdict = food["verdict"]
-        label = VERDICT_LABELS[verdict["kind"]]
-        if verdict["source"] == "override":
-            return f"{label} ({OVERRIDE_LABEL.lower()})" if label else OVERRIDE_LABEL
-        return label
 
     def render_overview(self, analysis: Analysis) -> None:
         window = analysis["window"]
@@ -166,56 +219,12 @@ class MonthlyView(LunaVitaView):
             unsafe_allow_html=True,
         )
 
-    @classmethod
-    def item_frame(cls, analysis: Analysis) -> pd.DataFrame:
-        return pd.DataFrame(
-            [
-                {
-                    "Food": food["name"],
-                    "Times had": food["count"],
-                    "Days": food["days"],
-                    "kcal": round(food["totals"]["calories"]),
-                    "Protein": food["totals"]["protein_g"],
-                    "Carbs": food["totals"]["carbs_g"],
-                    "Fat": food["totals"]["fat_g"],
-                    "Added sugar": food["totals"]["added_sugar_g"],
-                    "Protein %": round(food["protein_share"] * 100),
-                    "Verdict": cls.verdict_label(food),
-                }
-                for food in analysis["foods"]
-            ]
-        )
-
     def render_item_counts(self, analysis: Analysis) -> None:
         SectionHeader.heading(
             "What you had",
-            f"How many times each food was logged {self.span}, most frequent first.",
+            f"Each food logged {self.span}, most frequent first, with its total macros.",
         )
-        grams = st.column_config.NumberColumn(format="%.1f g", width="small")
-        st.dataframe(
-            self.item_frame(analysis),
-            hide_index=True,
-            width="stretch",
-            column_config={
-                "Food": st.column_config.TextColumn(width="medium"),
-                "Times had": st.column_config.ProgressColumn(
-                    format="%d×",
-                    width="small",
-                    min_value=0,
-                    max_value=max(food["count"] for food in analysis["foods"]),
-                ),
-                "Protein": grams,
-                "Carbs": grams,
-                "Fat": grams,
-                "Added sugar": st.column_config.NumberColumn(format="%.1f g", width=104),
-                "Protein %": st.column_config.NumberColumn(
-                    format="%d%%", width="small", help="Share of the food's calories from protein"
-                ),
-                "Days": st.column_config.NumberColumn(width="small"),
-                "kcal": st.column_config.NumberColumn(width="small"),
-                "Verdict": st.column_config.TextColumn(width="small"),
-            },
-        )
+        st.markdown(FoodGallery.html(analysis["foods"]), unsafe_allow_html=True)
 
     def contributor_panel_html(
         self, analysis: Analysis, field: str, label: str, unit: str, icon: str

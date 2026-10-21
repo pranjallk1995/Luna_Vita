@@ -184,6 +184,26 @@ class LunaStyle:
             .stButton > button:hover,.stDownloadButton > button:hover,div[data-testid="stFormSubmitButton"] > button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; transform:translateY(-1px); }
             button[kind="primary"] { border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.16)!important; }
             div[data-testid="stAlert"] { border-radius:.85rem; border-color:var(--border); }
+            .food-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr)); gap:.7rem; max-height:40rem; margin:0 0 .9rem; padding:.75rem; overflow-y:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
+            .food-tile { --tile-rgb:245,245,245; min-width:0; margin:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:linear-gradient(180deg,rgba(var(--tile-rgb),.07),rgba(var(--tile-rgb),.02)),var(--control); transition:border-color 140ms ease,transform 140ms ease,box-shadow 140ms ease; }
+            .food-tile:hover { border-color:var(--strong); transform:translateY(-1px); }
+            .food-tile.prefer { --tile-rgb:74,222,128; border-color:rgba(74,222,128,.34); }
+            .food-tile.avoid { --tile-rgb:251,113,133; border-color:rgba(251,113,133,.38); }
+            .food-tile.prefer:hover,.food-tile.avoid:hover { border-color:rgba(var(--tile-rgb),.6); box-shadow:0 0 18px rgba(var(--tile-rgb),.12); }
+            .food-tile-media { position:relative; aspect-ratio:3 / 2; background:#111111; }
+            .food-tile-media img { display:block; width:100%; height:100%; object-fit:cover; }
+            .food-tile-empty { display:grid; place-items:center; height:100%; color:var(--muted); font-family:"Material Symbols Rounded","Material Symbols Outlined"; font-size:1.8rem; }
+            .food-tile-count,.food-tile-verdict { position:absolute; top:.45rem; padding:.1rem .48rem; border-radius:999px; background:rgba(17,17,17,.8); font-size:.68rem; font-weight:700; }
+            .food-tile-count { left:.45rem; color:var(--text); font-variant-numeric:tabular-nums; }
+            .food-tile-verdict { right:.45rem; color:rgb(var(--tile-rgb)); border:1px solid rgba(var(--tile-rgb),.45); font-weight:600; }
+            .food-tile figcaption { display:grid; gap:.15rem; padding:.55rem .6rem .6rem; }
+            .food-tile figcaption strong { overflow:hidden; color:var(--text); font-size:.8rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+            .food-tile-meta { color:var(--muted); font-size:.66rem; white-space:nowrap; }
+            .food-chips { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.3rem; margin-top:.4rem; }
+            .food-chip { display:flex; align-items:center; gap:.3rem; min-width:0; padding:.22rem .4rem; border:1px solid color-mix(in srgb,var(--chip) 38%,transparent); border-radius:7px; background:color-mix(in srgb,var(--chip) 12%,transparent); color:#d4d4d4; font-size:.64rem; white-space:nowrap; }
+            .food-chip i { flex:0 0 auto; width:.42rem; height:.42rem; border-radius:50%; background:var(--chip); }
+            .food-chip b { margin-left:auto; color:var(--chip); font-weight:700; font-variant-numeric:tabular-nums; }
+            @media (max-width:520px) { .food-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; padding:.55rem; } .food-chips { grid-template-columns:1fr; } }
             .st-key-workout_status { width:100%; }
             .st-key-workout_status div[data-testid="stButtonGroup"] { display:flex; gap:.4rem; width:100%; margin:0 0 1.15rem; padding:.5rem; }
             .st-key-workout_status div[data-testid="stButtonGroup"] button { flex:1 1 0; min-height:2.9rem!important; margin-inline:.16rem!important; padding:.65rem 1.25rem!important; border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; }

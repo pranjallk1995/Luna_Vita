@@ -116,6 +116,19 @@ class FoodAnalysisTests(unittest.TestCase):
         self.assertEqual([f.name for f, _ in self.analysis.prefer()], ["Whey protein"])
         self.assertEqual([f.name for f, _ in self.analysis.avoid()], ["Chai"])
 
+    def test_gallery_image_is_the_latest_entry_image(self) -> None:
+        visia = "https://visia.example/api/public/images/"
+        rows = [
+            {**entry("Paratha"), "image_url": f"{visia}aaa"},
+            {**entry("Paratha"), "image_url": f"{visia}placeholder"},
+            entry("Paratha"),
+            entry("Whey protein"),
+        ]
+        analysis = FoodAnalysis(rows, PeriodWindow.month_of(date(2026, 10, 17)))
+
+        images = {food["name"]: food["image_url"] for food in analysis.to_dict()["foods"]}
+        self.assertEqual(images, {"Paratha": f"{visia}placeholder", "Whey protein": None})
+
     def test_override_replaces_rule_verdict_but_keeps_score(self) -> None:
         overrides = {"paratha": {"verdict": "prefer", "reason": "Homemade with little ghee"}}
         analysis = FoodAnalysis(

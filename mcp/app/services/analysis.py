@@ -64,9 +64,12 @@ class FoodGroup:
     totals: dict[str, float] = field(
         default_factory=lambda: dict.fromkeys(NUTRIENT_FIELDS, 0.0)
     )
+    images: list[str] = field(default_factory=list)
 
     def add(self, row: dict[str, Any]) -> None:
         self.names[str(row["food_name"]).strip()] += 1
+        if row.get("image_url"):
+            self.images.append(str(row["image_url"]))
         self.count += 1
         self.days.add(str(row.get("consumed_date") or ""))
         for nutrient in NUTRIENT_FIELDS:
@@ -76,6 +79,11 @@ class FoodGroup:
     def name(self) -> str:
         """The spelling used most often."""
         return self.names.most_common(1)[0][0]
+
+    @property
+    def image(self) -> str | None:
+        """The image of the latest entry that has one."""
+        return self.images[-1] if self.images else None
 
     @property
     def calories(self) -> float:
@@ -278,6 +286,7 @@ class FoodAnalysis:
             "name": food.name,
             "key": food.key,
             "spellings": dict(food.names),
+            "image_url": food.image,
             "count": food.count,
             "days": len(food.days),
             "totals": food.totals,
