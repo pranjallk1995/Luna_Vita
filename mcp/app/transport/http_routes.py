@@ -18,6 +18,8 @@ from app.core.models import (
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
+    WorkoutBatch,
+    WorkoutRecord,
 )
 from app.services.application import LunaVitaService
 
@@ -147,6 +149,7 @@ class LunaVitaHTTPRoutes:
         self._register_food()
         self._register_measurements()
         self._register_days()
+        self._register_workouts()
 
     async def health(self, request: Request) -> dict:
         return {"status": "ok", "service": "luna-vita"}
@@ -261,3 +264,34 @@ class LunaVitaHTTPRoutes:
         self.route("GET", "/api/days/{day}", read_day)
         self.route("PUT", "/api/days/{day}", save_day)
         self.route("GET", "/api/reports/daily/{day}", daily_report)
+
+    def _register_workouts(self) -> None:
+        workouts = self.service.workouts
+
+        async def read(request: Request):
+            return workouts.list(
+                date.fromisoformat(request.query_params.get("start", "")),
+                date.fromisoformat(request.query_params.get("end", "")),
+            )
+
+        async def record(request: Request):
+            entry = await self.payload(request, WorkoutRecord)
+            return workouts.record(self.path_day(request), entry)
+
+        async def delete(request: Request):
+            self.found(workouts.remove(self.path_day(request)), "Workout record not found")
+
+        async def record_batch(request: Request):
+            return workouts.record_many(await self.payload(request, WorkoutBatch))
+
+        async def summary(request: Request):
+            return workouts.summary(
+                date.fromisoformat(request.query_params.get("start", "")),
+                date.fromisoformat(request.query_params.get("end", "")),
+            )
+
+        self.route("GET", "/api/workouts", read)
+        self.route("GET", "/api/workouts/summary", summary)
+        self.route("POST", "/api/workouts/batch", record_batch, 201)
+        self.route("PUT", "/api/workouts/{day}", record)
+        self.route("DELETE", "/api/workouts/{day}", delete, NO_CONTENT)

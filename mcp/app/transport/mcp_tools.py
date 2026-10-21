@@ -16,6 +16,8 @@ from app.core.models import (
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    WorkoutBatch,
+    WorkoutRecord,
 )
 from app.transport.report_tools import CurrentLogPdfTool
 from app.services.application import LunaVitaService
@@ -32,6 +34,7 @@ class LunaVitaMCPTools:
         self._register_day_tools()
         self._register_profile_tools()
         self._register_analysis_tools()
+        self._register_workout_tools()
 
     @staticmethod
     def optional_date(value: str | None) -> date | None:
@@ -485,3 +488,71 @@ class LunaVitaMCPTools:
         def list_food_verdicts() -> list[dict[str, Any]]:
             """List every verdict override with its food name, verdict, and reason."""
             return analysis.list_verdicts()
+
+    def _register_workout_tools(self) -> None:
+        server, tracker = self.server, self.service.workouts
+
+        @server.tool()
+        def record_workout(
+            done: bool, day: str | None = None, notes: str | None = None
+        ) -> dict[str, Any]:
+            """Record whether the user worked out on a YYYY-MM-DD day (default today).
+
+            done is true when the workout was done and false when it was skipped.
+            Recording a day again replaces its earlier record. The UI shows each
+            record as a marker on the workout calendar. Resolve relative days in
+            the Asia/Kolkata timezone.
+            """
+            workout_day = date.fromisoformat(day) if day else LocalClock.today()
+            return tracker.record(workout_day, WorkoutRecord(done=done, notes=notes))
+
+        @server.tool()
+        def record_workouts(workouts: list[dict]) -> list[dict[str, Any]]:
+            """Record several days' workouts at once, e.g. backfilling a week.
+
+            Each item is {"day": "YYYY-MM-DD", "done": true|false, "notes": optional}.
+            Every day may appear once; existing records for those days are
+            replaced. All days save together or none do.
+            """
+            return tracker.record_many(WorkoutBatch(workouts=workouts))
+
+        @server.tool()
+        def get_workout_summary(
+            start_date: str | None = None, end_date: str | None = None
+        ) -> dict[str, Any]:
+            """Summarise workouts between two YYYY-MM-DD dates (inclusive; defaults to the last 30 days).
+
+            Returns done, skipped, and unrecorded day counts, done_rate (done
+            share of recorded days, null when nothing is recorded),
+            current_streak (consecutive done days ending at end_date; an
+            unrecorded end_date does not break it), longest_streak, and every
+            record in the range.
+            """
+            end = date.fromisoformat(end_date) if end_date else LocalClock.today()
+            start = (
+                date.fromisoformat(start_date)
+                if start_date
+                else end - timedelta(days=29)
+            )
+            return tracker.summary(start, end)
+
+        @server.tool()
+        def get_workouts(
+            start_date: str | None = None, end_date: str | None = None
+        ) -> list[dict[str, Any]]:
+            """List workout records between two YYYY-MM-DD dates (inclusive; defaults to the last 30 days).
+
+            Days without a record are omitted; they are neither done nor skipped.
+            """
+            end = date.fromisoformat(end_date) if end_date else LocalClock.today()
+            start = (
+                date.fromisoformat(start_date)
+                if start_date
+                else end - timedelta(days=29)
+            )
+            return tracker.list(start, end)
+
+        @server.tool()
+        def remove_workout(day: str) -> dict[str, Any]:
+            """Remove a YYYY-MM-DD day's workout record so it shows as unrecorded."""
+            return {"deleted": tracker.remove(date.fromisoformat(day)), "day": day}

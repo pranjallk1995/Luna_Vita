@@ -16,6 +16,7 @@ from views.measurements_view import MeasurementsView
 from views.navigation import PeriodNavigation
 from views.monthly_view import MonthlyView
 from views.summary_view import SummaryView
+from views.workout_view import WorkoutView
 
 
 class SourceReloadMonitor:
@@ -46,7 +47,7 @@ class LunaVitaApp:
     """Compose and render the Luna Vita nutrition tracker."""
 
     PERIOD_VIEWS = {
-        "daily": (SummaryView, FoodLogView, MeasurementsView),
+        "daily": (SummaryView, FoodLogView, WorkoutView, MeasurementsView),
         "monthly": (MonthlyView,),
     }
 

@@ -84,6 +84,13 @@ CREATE TABLE IF NOT EXISTS health_measurements (
 CREATE INDEX IF NOT EXISTS health_measurements_metric_time_idx
     ON health_measurements (metric, measured_at DESC);
 
+CREATE TABLE IF NOT EXISTS workouts (
+    workout_date DATE PRIMARY KEY,
+    done BOOLEAN NOT NULL,
+    notes TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS food_verdicts (
     food_key TEXT PRIMARY KEY CHECK (length(trim(food_key)) > 0),
     food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),

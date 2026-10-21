@@ -14,6 +14,7 @@ from app.data.repositories import (
     MeasurementRepository,
     RecommendationRepository,
     VerdictRepository,
+    WorkoutRepository,
 )
 from app.services.application import (
     AnalysisService,
@@ -24,6 +25,7 @@ from app.services.application import (
     MeasurementService,
     ProfileService,
     ReportService,
+    WorkoutService,
 )
 from app.integrations.visia import VisiaImageCatalog
 
@@ -70,6 +72,7 @@ class LunaVitaApplication:
                 VerdictRepository(self.database),
                 AnalysisRangeRepository(self.database),
             ),
+            workouts=WorkoutService(WorkoutRepository(self.database)),
         )
 
     def run(self) -> None:

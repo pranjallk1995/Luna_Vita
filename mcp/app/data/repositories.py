@@ -299,6 +299,43 @@ class DailyLogRepository(Repository):
         )
 
 
+class WorkoutRepository(Repository):
+    """One done/not-done workout record per calendar day."""
+
+    UPSERT_SQL = """
+        INSERT INTO workouts (workout_date, done, notes)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (workout_date) DO UPDATE SET
+            done=EXCLUDED.done,
+            notes=EXCLUDED.notes,
+            updated_at=NOW()
+        RETURNING *
+        """
+
+    def upsert(self, day: date, done: bool, notes: str | None) -> Row:
+        return self.fetch_one(self.UPSERT_SQL, (day, done, notes))
+
+    def upsert_many(self, records: list[tuple[date, bool, str | None]]) -> list[Row]:
+        """Save every day in one transaction so a batch saves atomically."""
+        with self.database.cursor() as cursor:
+            results = []
+            for record in records:
+                cursor.execute(self.UPSERT_SQL, record)
+                results.append(self.serialize(cursor.fetchone()))
+            return results
+
+    def list_between(self, start: date, end: date) -> list[Row]:
+        return self.fetch_all(
+            "SELECT * FROM workouts WHERE workout_date BETWEEN %s AND %s ORDER BY workout_date",
+            (start, end),
+        )
+
+    def delete(self, day: date) -> bool:
+        return self.affects_row(
+            "DELETE FROM workouts WHERE workout_date=%s RETURNING workout_date", (day,)
+        )
+
+
 class VerdictRepository(Repository):
     """Explicit prefer/avoid/neutral ratings keyed by normalized food name."""
 

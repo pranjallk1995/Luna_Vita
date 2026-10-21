@@ -10,7 +10,9 @@ import streamlit as st
 
 from services.api import LunaVitaAPI
 from domain.body_trends import BodyTrendChart, Reading
+from domain.clock import LunaVitaClock
 from domain.nutrition import NUTRIENTS, Nutrient
+from domain.workouts import WorkoutCalendar
 from views.shared import LunaVitaView, NutrientCards, SectionHeader
 
 Analysis = dict[str, Any]
@@ -310,6 +312,18 @@ class MonthlyView(LunaVitaView):
             float(data["body_fat_target_percent"]),
         )
 
+    def render_workouts(self, window: dict[str, Any], day: date) -> None:
+        """Done / skipped markers for the window's months, under the body card."""
+        start, end = WorkoutCalendar.span(
+            date.fromisoformat(window["start"]), date.fromisoformat(window["end"]), day
+        )
+        st.markdown(
+            WorkoutCalendar.html(
+                self.api.workouts(start, end), start, end, day, LunaVitaClock.today()
+            ),
+            unsafe_allow_html=True,
+        )
+
     @staticmethod
     def range_error(error: httpx.HTTPError) -> str:
         """The backend's validation message, e.g. for a range longer than a year."""
@@ -376,9 +390,11 @@ class MonthlyView(LunaVitaView):
         if not analysis["foods"]:
             SectionHeader.heading(self.title, analysis["window"]["label"])
             st.markdown(self.body_card_html(analysis["window"]), unsafe_allow_html=True)
+            self.render_workouts(analysis["window"], day)
             st.info(f"No food entries {self.span} yet.")
             return
         self.render_overview(analysis)
+        self.render_workouts(analysis["window"], day)
         self.render_item_counts(analysis)
         self.render_contributors(analysis)
         self.render_suggestions(analysis)

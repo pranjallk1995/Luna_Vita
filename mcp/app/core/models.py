@@ -106,6 +106,37 @@ class HealthMeasurementBatchCreate(BaseModel):
     measurements: list[HealthMeasurementCreate] = Field(min_length=1, max_length=20)
 
 
+class WorkoutRecord(BaseModel):
+    """Whether the day's workout was done, with an optional note."""
+
+    done: bool
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("notes")
+    @classmethod
+    def clean_notes(cls, value: str | None) -> str | None:
+        return SafeText.clean(value) or None
+
+
+class WorkoutDay(WorkoutRecord):
+    """One day's workout record inside a batch."""
+
+    day: date
+
+
+class WorkoutBatch(BaseModel):
+    """Several days' workout records saved together; a day may appear once."""
+
+    workouts: list[WorkoutDay] = Field(min_length=1, max_length=366)
+
+    @model_validator(mode="after")
+    def unique_days(self) -> "WorkoutBatch":
+        days = [workout.day for workout in self.workouts]
+        if len(days) != len(set(days)):
+            raise ValueError("Each day can appear only once in a workout batch.")
+        return self
+
+
 class DailyRecommendationsUpsert(BaseModel):
     calories_kcal: int = Field(gt=0, le=10_000)
     protein_g: float = Field(gt=0, le=1_000)

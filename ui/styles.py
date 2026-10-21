@@ -184,6 +184,34 @@ class LunaStyle:
             .stButton > button:hover,.stDownloadButton > button:hover,div[data-testid="stFormSubmitButton"] > button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; transform:translateY(-1px); }
             button[kind="primary"] { border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.16)!important; }
             div[data-testid="stAlert"] { border-radius:.85rem; border-color:var(--border); }
+            .st-key-workout_status { width:100%; }
+            .st-key-workout_status div[data-testid="stButtonGroup"] { display:flex; gap:.4rem; width:100%; margin:0 0 1.15rem; padding:.5rem; }
+            .st-key-workout_status div[data-testid="stButtonGroup"] button { flex:1 1 0; min-height:2.9rem!important; margin-inline:.16rem!important; padding:.65rem 1.25rem!important; border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; }
+            .st-key-workout_status div[data-testid="stButtonGroup"] button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; }
+            .st-key-workout_status div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[kind="segmented_controlActive"],[data-testid="stBaseButton-segmented_controlActive"]) { border-color:var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; }
+            .workout-calendar { width:100%; margin:.65rem 0 .4rem; padding:.85rem .9rem .9rem; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
+            .workout-calendar-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; margin-bottom:.7rem; }
+            .workout-calendar-head strong { color:var(--text); font-size:.92rem; }
+            .workout-legend { display:flex; gap:.8rem; color:var(--muted); font-size:.68rem; white-space:nowrap; }
+            .workout-legend span { display:inline-flex; align-items:center; gap:.3rem; }
+            .workout-key { display:inline-block; width:.55rem; height:.55rem; border-radius:50%; }
+            .workout-key.done { background:#4ade80; }
+            .workout-key.skipped { background:#fb7185; }
+            .workout-months { display:grid; grid-template-columns:repeat(auto-fit,minmax(20rem,1fr)); gap:1rem 1.2rem; }
+            .workout-month-label { margin-bottom:.4rem; color:var(--muted); font-size:.72rem; }
+            .workout-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.3rem; }
+            .workout-weekday { padding-bottom:.15rem; color:var(--muted); font-size:.64rem; text-align:center; }
+            .workout-day { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.12rem; height:3.1rem; min-width:0; border:1px solid transparent; border-radius:9px; background:var(--control); color:var(--muted); font-size:.74rem; font-variant-numeric:tabular-nums; }
+            .workout-day.outside { background:transparent; }
+            .workout-day.today .workout-date { color:var(--text); font-weight:700; }
+            .workout-day.selected { border-color:var(--strong); }
+            .workout-day.done { border-color:rgba(74,222,128,.28); background:rgba(74,222,128,.09); }
+            .workout-day.skipped { border-color:rgba(251,113,133,.30); background:rgba(251,113,133,.08); }
+            .workout-day.selected.done,.workout-day.selected.skipped { box-shadow:0 0 0 1px var(--strong); }
+            .workout-marker { font-family:"Material Symbols Rounded","Material Symbols Outlined"; font-size:.95rem; font-weight:600; line-height:1; }
+            .workout-day.done .workout-marker { color:#4ade80; }
+            .workout-day.skipped .workout-marker { color:#fb7185; }
+            @media (max-width:520px) { .workout-calendar { padding:.7rem .6rem; } .workout-months { grid-template-columns:1fr; } .workout-grid { gap:.22rem; } .workout-day { height:2.6rem; font-size:.68rem; } .workout-marker { font-size:.82rem; } }
             .st-key-mobile_weight_actions { display:none; }
             @media (max-width:700px) {
                 .block-container { padding:.85rem .8rem 2rem; }

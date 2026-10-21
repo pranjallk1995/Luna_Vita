@@ -16,6 +16,8 @@ from app.core.models import (
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    WorkoutBatch,
+    WorkoutRecord,
 )
 from app.services.application import (
     AnalysisService,
@@ -24,6 +26,7 @@ from app.services.application import (
     MeasurementService,
     ProfileService,
     ReportService,
+    WorkoutService,
 )
 
 
@@ -491,3 +494,91 @@ class HTTPErrorMappingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeWorkoutRepository(CallRecorder):
+    def __init__(self, rows: list[dict] | None = None) -> None:
+        super().__init__()
+        self.rows = rows or []
+
+    def upsert_many(self, records: list[tuple]) -> list[dict]:
+        self.calls.append(("upsert_many", records))
+        return [{"workout_date": day.isoformat(), "done": done} for day, done, _ in records]
+
+    def upsert(self, day: date, done: bool, notes: str | None) -> dict:
+        self.calls.append(("upsert", (day, done, notes)))
+        return {"workout_date": day.isoformat(), "done": done, "notes": notes}
+
+    def list_between(self, start: date, end: date) -> list[dict]:
+        self.calls.append(("list_between", (start, end)))
+        return self.rows
+
+    def delete(self, day: date) -> bool:
+        self.calls.append(("delete", day))
+        return False
+
+
+class WorkoutServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.repository = FakeWorkoutRepository()
+        self.service = WorkoutService(self.repository)
+
+    def test_record_stores_the_day_and_status(self) -> None:
+        saved = self.service.record(date(2026, 10, 21), WorkoutRecord(done=True, notes="  "))
+
+        self.assertEqual(self.repository.calls, [("upsert", (date(2026, 10, 21), True, None))])
+        self.assertTrue(saved["done"])
+
+    def test_list_rejects_a_reversed_range(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.list(date(2026, 10, 21), date(2026, 10, 1))
+
+    def test_remove_reports_a_missing_record(self) -> None:
+        self.assertFalse(self.service.remove(date(2026, 10, 21)))
+
+    def test_notes_reject_emojis(self) -> None:
+        with self.assertRaises(ValidationError):
+            WorkoutRecord(done=False, notes="Rest day 😴")
+
+    def test_batch_saves_every_day_together(self) -> None:
+        batch = WorkoutBatch(workouts=[
+            {"day": "2026-10-15", "done": False},
+            {"day": "2026-10-16", "done": True, "notes": "Legs"},
+        ])
+
+        self.service.record_many(batch)
+
+        self.assertEqual(self.repository.calls, [("upsert_many", [
+            (date(2026, 10, 15), False, None), (date(2026, 10, 16), True, "Legs"),
+        ])])
+
+    def test_batch_rejects_a_repeated_day(self) -> None:
+        with self.assertRaises(ValidationError):
+            WorkoutBatch(workouts=[
+                {"day": "2026-10-15", "done": False}, {"day": "2026-10-15", "done": True},
+            ])
+
+    def test_summary_counts_and_streaks(self) -> None:
+        pattern = [False, True, False, True, True, True]  # 15-20 Oct; 21 Oct unrecorded
+        rows = [
+            {"workout_date": f"2026-10-{15 + offset}", "done": done}
+            for offset, done in enumerate(pattern)
+        ]
+        service = WorkoutService(FakeWorkoutRepository(rows))
+
+        summary = service.summary(date(2026, 10, 15), date(2026, 10, 21))
+
+        self.assertEqual((summary["done"], summary["skipped"], summary["unrecorded"]), (4, 2, 1))
+        self.assertEqual(summary["done_rate"], 0.667)
+        self.assertEqual((summary["current_streak"], summary["longest_streak"]), (3, 3))
+
+    def test_a_skipped_end_day_resets_the_current_streak(self) -> None:
+        rows = [
+            {"workout_date": "2026-10-20", "done": True},
+            {"workout_date": "2026-10-21", "done": False},
+        ]
+        summary = WorkoutService(FakeWorkoutRepository(rows)).summary(
+            date(2026, 10, 20), date(2026, 10, 21)
+        )
+
+        self.assertEqual((summary["current_streak"], summary["longest_streak"]), (0, 1))

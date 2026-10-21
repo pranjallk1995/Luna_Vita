@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from app.services.analysis import FoodAnalysis, FoodName, PeriodWindow
 from app.services.body_composition import BodyComposition
@@ -17,6 +17,8 @@ from app.core.models import (
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    WorkoutBatch,
+    WorkoutRecord,
 )
 from app.services.reports import DailyReport, DailyReportRenderer
 from app.data.repositories import (
@@ -28,6 +30,7 @@ from app.data.repositories import (
     RecommendationRepository,
     Row,
     VerdictRepository,
+    WorkoutRepository,
 )
 from app.integrations.visia import VisiaImageCatalog
 
@@ -162,6 +165,65 @@ class DayContextService:
 
     def save(self, day: date, entry: DailyLogUpsert) -> Row:
         return self.daily_logs.upsert(day, entry)
+
+
+class WorkoutService:
+    """Record whether each day's workout was done and list them for a calendar."""
+
+    def __init__(self, workouts: WorkoutRepository) -> None:
+        self.workouts = workouts
+
+    def record(self, day: date, entry: WorkoutRecord) -> Row:
+        return self.workouts.upsert(day, entry.done, entry.notes)
+
+    def record_many(self, batch: WorkoutBatch) -> list[Row]:
+        return self.workouts.upsert_many(
+            [(workout.day, workout.done, workout.notes) for workout in batch.workouts]
+        )
+
+    def list(self, start: date, end: date) -> list[Row]:
+        if end < start:
+            raise ValueError("end must be on or after start")
+        return self.workouts.list_between(start, end)
+
+    @staticmethod
+    def streaks(done_by_day: dict[date, bool], start: date, end: date) -> tuple[int, int]:
+        """The current and longest runs of consecutive done days.
+
+        The current run counts back from ``end``; an unrecorded ``end`` (today,
+        not logged yet) does not break it. Skipped or unrecorded days do.
+        """
+        days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+        longest = run = 0
+        for day in days:
+            run = run + 1 if done_by_day.get(day) else 0
+            longest = max(longest, run)
+        current, day = 0, end if end in done_by_day else end - timedelta(days=1)
+        while day >= start and done_by_day.get(day):
+            current, day = current + 1, day - timedelta(days=1)
+        return current, longest
+
+    def summary(self, start: date, end: date) -> Row:
+        """Counts, done rate, and streaks for the inclusive range."""
+        records = self.list(start, end)
+        done_by_day = {date.fromisoformat(row["workout_date"]): row["done"] for row in records}
+        done = sum(done_by_day.values())
+        current, longest = self.streaks(done_by_day, start, end)
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1,
+            "done": done,
+            "skipped": len(records) - done,
+            "unrecorded": (end - start).days + 1 - len(records),
+            "done_rate": round(done / len(records), 3) if records else None,
+            "current_streak": current,
+            "longest_streak": longest,
+            "records": records,
+        }
+
+    def remove(self, day: date) -> bool:
+        return self.workouts.delete(day)
 
 
 class ProfileService:
@@ -358,6 +420,7 @@ class LunaVitaService:
         profile: ProfileService,
         reports: ReportService,
         analysis: AnalysisService,
+        workouts: WorkoutService,
     ) -> None:
         self.food = food
         self.measurements = measurements
@@ -366,3 +429,4 @@ class LunaVitaService:
         self.profile = profile
         self.reports = reports
         self.analysis = analysis
+        self.workouts = workouts

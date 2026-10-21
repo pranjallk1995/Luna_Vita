@@ -89,5 +89,19 @@ class LunaVitaAPI:
     def delete_measurement(self, entry_id: int) -> None:
         self.request("DELETE", f"/api/measurements/{entry_id}")
 
+    def workouts(self, start: date, end: date) -> list[dict[str, Any]]:
+        """Done/skipped workout records for the inclusive range; unrecorded days are absent."""
+        return self.request(
+            "GET",
+            "/api/workouts",
+            params={"start": start.isoformat(), "end": end.isoformat()},
+        )
+
+    def record_workout(self, day: date, done: bool) -> None:
+        self.request("PUT", f"/api/workouts/{day.isoformat()}", json={"done": done})
+
+    def delete_workout(self, day: date) -> None:
+        self.request("DELETE", f"/api/workouts/{day.isoformat()}")
+
     def report(self, day: date) -> bytes:
         return self.send("GET", f"/api/reports/daily/{day.isoformat()}").content
