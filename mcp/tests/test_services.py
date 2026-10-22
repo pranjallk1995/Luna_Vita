@@ -12,6 +12,8 @@ from app.transport.http_routes import LunaVitaHTTPRoutes
 from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
+    ExerciseBatch,
+    ExerciseEntry,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
@@ -503,11 +505,16 @@ class FakeWorkoutRepository(CallRecorder):
 
     def upsert_many(self, records: list[tuple]) -> list[dict]:
         self.calls.append(("upsert_many", records))
-        return [{"workout_date": day.isoformat(), "done": done} for day, done, _ in records]
+        return [{"workout_date": day.isoformat(), "done": done} for day, done, *_ in records]
 
-    def upsert(self, day: date, done: bool, notes: str | None) -> dict:
-        self.calls.append(("upsert", (day, done, notes)))
-        return {"workout_date": day.isoformat(), "done": done, "notes": notes}
+    def upsert(self, day: date, done: bool, notes: str | None, types: list[str]) -> dict:
+        self.calls.append(("upsert", (day, done, notes, types)))
+        row = {"workout_date": day.isoformat(), "done": done, "notes": notes, "types": types}
+        self.rows = [r for r in self.rows if r["workout_date"] != row["workout_date"]] + [row]
+        return row
+
+    def get(self, day: date) -> dict | None:
+        return next((r for r in self.rows if r["workout_date"] == day.isoformat()), None)
 
     def list_between(self, start: date, end: date) -> list[dict]:
         self.calls.append(("list_between", (start, end)))
@@ -518,16 +525,59 @@ class FakeWorkoutRepository(CallRecorder):
         return False
 
 
+class FakeExerciseRepository(CallRecorder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: dict[int, dict] = {}
+
+    def add_many(self, entries: list[ExerciseEntry]) -> list[dict]:
+        self.calls.append(("add_many", entries))
+        for entry in entries:
+            entry_id = len(self.rows) + 1
+            self.rows[entry_id] = {"id": entry_id, **entry.model_dump()}
+        return list(self.rows.values())[-len(entries):]
+
+    def list_between(self, start: date, end: date) -> list[dict]:
+        return [row for row in self.rows.values() if start <= row["day"] <= end]
+
+    def update(self, entry_id: int, entry: ExerciseEntry) -> dict | None:
+        if entry_id not in self.rows:
+            return None
+        self.rows[entry_id] = {"id": entry_id, **entry.model_dump()}
+        return self.rows[entry_id]
+
+    def delete(self, entry_id: int) -> bool:
+        return self.rows.pop(entry_id, None) is not None
+
+
 class WorkoutServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repository = FakeWorkoutRepository()
-        self.service = WorkoutService(self.repository)
+        self.service = WorkoutService(self.repository, FakeExerciseRepository())
 
     def test_record_stores_the_day_and_status(self) -> None:
         saved = self.service.record(date(2026, 10, 21), WorkoutRecord(done=True, notes="  "))
 
-        self.assertEqual(self.repository.calls, [("upsert", (date(2026, 10, 21), True, None))])
+        self.assertEqual(
+            self.repository.calls, [("upsert", (date(2026, 10, 21), True, None, []))]
+        )
         self.assertTrue(saved["done"])
+
+    def test_record_stores_deduplicated_workout_types(self) -> None:
+        entry = WorkoutRecord(done=True, types=["back", "biceps", "back"])
+
+        self.service.record(date(2026, 10, 21), entry)
+
+        self.assertEqual(
+            self.repository.calls,
+            [("upsert", (date(2026, 10, 21), True, None, ["back", "biceps"]))],
+        )
+
+    def test_workout_types_reject_unknown_values_and_skipped_days(self) -> None:
+        with self.assertRaises(ValidationError):
+            WorkoutRecord(done=True, types=["wings"])
+        with self.assertRaises(ValidationError):
+            WorkoutRecord(done=False, types=["legs"])
 
     def test_list_rejects_a_reversed_range(self) -> None:
         with self.assertRaises(ValueError):
@@ -543,13 +593,13 @@ class WorkoutServiceTests(unittest.TestCase):
     def test_batch_saves_every_day_together(self) -> None:
         batch = WorkoutBatch(workouts=[
             {"day": "2026-10-15", "done": False},
-            {"day": "2026-10-16", "done": True, "notes": "Legs"},
+            {"day": "2026-10-16", "done": True, "notes": "Heavy", "types": ["legs"]},
         ])
 
         self.service.record_many(batch)
 
         self.assertEqual(self.repository.calls, [("upsert_many", [
-            (date(2026, 10, 15), False, None), (date(2026, 10, 16), True, "Legs"),
+            (date(2026, 10, 15), False, None, []), (date(2026, 10, 16), True, "Heavy", ["legs"]),
         ])])
 
     def test_batch_rejects_a_repeated_day(self) -> None:
@@ -564,7 +614,7 @@ class WorkoutServiceTests(unittest.TestCase):
             {"workout_date": f"2026-10-{15 + offset}", "done": done}
             for offset, done in enumerate(pattern)
         ]
-        service = WorkoutService(FakeWorkoutRepository(rows))
+        service = WorkoutService(FakeWorkoutRepository(rows), FakeExerciseRepository())
 
         summary = service.summary(date(2026, 10, 15), date(2026, 10, 21))
 
@@ -572,13 +622,76 @@ class WorkoutServiceTests(unittest.TestCase):
         self.assertEqual(summary["done_rate"], 0.667)
         self.assertEqual((summary["current_streak"], summary["longest_streak"]), (3, 3))
 
+    def test_summary_counts_done_days_per_type(self) -> None:
+        rows = [
+            {"workout_date": "2026-10-19", "done": True, "types": ["back", "biceps"]},
+            {"workout_date": "2026-10-20", "done": True, "types": ["legs", "back"]},
+            {"workout_date": "2026-10-21", "done": False, "types": []},
+        ]
+        summary = WorkoutService(FakeWorkoutRepository(rows), FakeExerciseRepository()).summary(
+            date(2026, 10, 19), date(2026, 10, 21)
+        )
+
+        self.assertEqual(summary["type_counts"], {"back": 2, "biceps": 1, "legs": 1})
+
     def test_a_skipped_end_day_resets_the_current_streak(self) -> None:
         rows = [
             {"workout_date": "2026-10-20", "done": True},
             {"workout_date": "2026-10-21", "done": False},
         ]
-        summary = WorkoutService(FakeWorkoutRepository(rows)).summary(
+        summary = WorkoutService(FakeWorkoutRepository(rows), FakeExerciseRepository()).summary(
             date(2026, 10, 20), date(2026, 10, 21)
         )
 
         self.assertEqual((summary["current_streak"], summary["longest_streak"]), (0, 1))
+
+
+class ExerciseLogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.workouts = FakeWorkoutRepository()
+        self.exercises = FakeExerciseRepository()
+        self.service = WorkoutService(self.workouts, self.exercises)
+
+    def test_logging_exercises_marks_the_day_done_with_their_types(self) -> None:
+        self.service.record(date(2026, 10, 21), WorkoutRecord(done=True, notes="Pull day", types=["back"]))
+
+        result = self.service.add_exercises(ExerciseBatch(exercises=[
+            {"day": "2026-10-21", "exercise": "Barbell row", "type": "back", "sets": 4, "reps": 8},
+            {"day": "2026-10-21", "exercise": "Hammer curl", "type": "biceps", "weight_kg": 12.5},
+            {"day": "2026-10-21", "exercise": "Stretching"},
+        ]))
+
+        self.assertEqual(len(result["exercises"]), 3)
+        [day] = result["workouts"]
+        self.assertEqual((day["done"], day["notes"], day["types"]), (True, "Pull day", ["back", "biceps"]))
+
+    def test_logging_on_a_skipped_day_turns_it_done(self) -> None:
+        self.service.record(date(2026, 10, 21), WorkoutRecord(done=False))
+
+        self.service.add_exercises(ExerciseBatch(exercises=[
+            {"day": "2026-10-21", "exercise": "Run", "type": "cardio", "duration_min": 30},
+        ]))
+
+        self.assertEqual(self.workouts.get(date(2026, 10, 21))["types"], ["cardio"])
+
+    def test_update_and_remove_report_missing_entries(self) -> None:
+        entry = ExerciseEntry(day=date(2026, 10, 21), exercise="Squat", type="legs")
+        self.assertIsNone(self.service.update_exercise(99, entry))
+        self.assertFalse(self.service.remove_exercise(99))
+        self.assertEqual(self.workouts.calls, [])
+
+    def test_update_adds_the_new_type_to_the_day(self) -> None:
+        [row] = self.service.add_exercises(ExerciseBatch(exercises=[
+            {"day": "2026-10-21", "exercise": "Squat"},
+        ]))["exercises"]
+
+        self.service.update_exercise(
+            row["id"], ExerciseEntry(day=date(2026, 10, 21), exercise="Squat", type="legs")
+        )
+
+        self.assertEqual(self.workouts.get(date(2026, 10, 21))["types"], ["legs"])
+
+    def test_exercise_entries_are_validated(self) -> None:
+        for bad in ({"exercise": "  "}, {"exercise": "Squat", "sets": 0}, {"exercise": "Run", "type": "yoga"}):
+            with self.assertRaises(ValidationError):
+                ExerciseEntry(day=date(2026, 10, 21), **bad)

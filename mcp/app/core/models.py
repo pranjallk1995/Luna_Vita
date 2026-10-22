@@ -12,6 +12,9 @@ from app.core.clock import LocalClock
 MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 Sex = Literal["male", "female", "other"]
 VerdictKind = Literal["prefer", "avoid", "neutral"]
+WorkoutType = Literal[
+    "legs", "back", "chest", "shoulders", "biceps", "triceps", "core", "cardio", "full_body"
+]
 
 
 class SafeText:
@@ -107,15 +110,27 @@ class HealthMeasurementBatchCreate(BaseModel):
 
 
 class WorkoutRecord(BaseModel):
-    """Whether the day's workout was done, with an optional note."""
+    """Whether the day's workout was done, what it trained, and an optional note."""
 
     done: bool
     notes: str | None = Field(default=None, max_length=2_000)
+    types: list[WorkoutType] = Field(default_factory=list, max_length=9)
 
     @field_validator("notes")
     @classmethod
     def clean_notes(cls, value: str | None) -> str | None:
         return SafeText.clean(value) or None
+
+    @field_validator("types")
+    @classmethod
+    def unique_types(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
+    @model_validator(mode="after")
+    def types_need_a_done_workout(self) -> "WorkoutRecord":
+        if self.types and not self.done:
+            raise ValueError("Workout types can only be recorded for a done workout.")
+        return self
 
 
 class WorkoutDay(WorkoutRecord):
@@ -135,6 +150,35 @@ class WorkoutBatch(BaseModel):
         if len(days) != len(set(days)):
             raise ValueError("Each day can appear only once in a workout batch.")
         return self
+
+
+class ExerciseEntry(BaseModel):
+    """One exercise done on a day: what, which type, and its sets, load, or duration."""
+
+    day: date
+    exercise: str = Field(min_length=1, max_length=120)
+    type: WorkoutType | None = None
+    sets: int | None = Field(default=None, ge=1, le=100)
+    reps: int | None = Field(default=None, ge=1, le=1_000)
+    weight_kg: float | None = Field(default=None, ge=0, le=1_000)
+    duration_min: float | None = Field(default=None, gt=0, le=1_440)
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("exercise")
+    @classmethod
+    def require_exercise_name(cls, value: str) -> str:
+        return SafeText.clean(value, required=True)
+
+    @field_validator("notes")
+    @classmethod
+    def clean_notes(cls, value: str | None) -> str | None:
+        return SafeText.clean(value) or None
+
+
+class ExerciseBatch(BaseModel):
+    """Several exercises saved together, e.g. a whole session."""
+
+    exercises: list[ExerciseEntry] = Field(min_length=1, max_length=50)
 
 
 class DailyRecommendationsUpsert(BaseModel):

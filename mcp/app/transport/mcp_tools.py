@@ -12,12 +12,15 @@ from app.core.models import (
     BodyProfileUpdate,
     DailyLogUpsert,
     DailyRecommendationsUpsert,
+    ExerciseBatch,
+    ExerciseEntry,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
     WorkoutBatch,
     WorkoutRecord,
+    WorkoutType,
 )
 from app.transport.report_tools import CurrentLogPdfTool
 from app.services.application import LunaVitaService
@@ -491,26 +494,36 @@ class LunaVitaMCPTools:
 
     def _register_workout_tools(self) -> None:
         server, tracker = self.server, self.service.workouts
+        update_result = self.update_result
 
         @server.tool()
         def record_workout(
-            done: bool, day: str | None = None, notes: str | None = None
+            done: bool,
+            day: str | None = None,
+            notes: str | None = None,
+            types: list[WorkoutType] | None = None,
         ) -> dict[str, Any]:
             """Record whether the user worked out on a YYYY-MM-DD day (default today).
 
             done is true when the workout was done and false when it was skipped.
-            Recording a day again replaces its earlier record. The UI shows each
-            record as a marker on the workout calendar. Resolve relative days in
-            the Asia/Kolkata timezone.
+            types lists what a done workout trained, any of legs, back, chest,
+            shoulders, biceps, triceps, core, cardio, full_body (e.g. ["back",
+            "biceps"]); a skipped day has none. Recording a day again replaces
+            its earlier record, types and notes included. The UI shows each
+            record as a marker on the workout calendar, with an icon per type.
+            Resolve relative days in the Asia/Kolkata timezone.
             """
             workout_day = date.fromisoformat(day) if day else LocalClock.today()
-            return tracker.record(workout_day, WorkoutRecord(done=done, notes=notes))
+            return tracker.record(
+                workout_day, WorkoutRecord(done=done, notes=notes, types=types or [])
+            )
 
         @server.tool()
         def record_workouts(workouts: list[dict]) -> list[dict[str, Any]]:
             """Record several days' workouts at once, e.g. backfilling a week.
 
-            Each item is {"day": "YYYY-MM-DD", "done": true|false, "notes": optional}.
+            Each item is {"day": "YYYY-MM-DD", "done": true|false, "notes": optional,
+            "types": optional list of workout types as in record_workout}.
             Every day may appear once; existing records for those days are
             replaced. All days save together or none do.
             """
@@ -525,8 +538,9 @@ class LunaVitaMCPTools:
             Returns done, skipped, and unrecorded day counts, done_rate (done
             share of recorded days, null when nothing is recorded),
             current_streak (consecutive done days ending at end_date; an
-            unrecorded end_date does not break it), longest_streak, and every
-            record in the range.
+            unrecorded end_date does not break it), longest_streak, type_counts
+            (done days per workout type, most trained first), and every record
+            in the range.
             """
             end = date.fromisoformat(end_date) if end_date else LocalClock.today()
             start = (
@@ -554,5 +568,51 @@ class LunaVitaMCPTools:
 
         @server.tool()
         def remove_workout(day: str) -> dict[str, Any]:
-            """Remove a YYYY-MM-DD day's workout record so it shows as unrecorded."""
+            """Remove a YYYY-MM-DD day's workout record so it shows as unrecorded.
+
+            Exercises logged on that day are kept; remove them with remove_workout_exercise.
+            """
             return {"deleted": tracker.remove(date.fromisoformat(day)), "day": day}
+
+        @server.tool()
+        def add_workout_exercises(exercises: list[dict]) -> dict[str, Any]:
+            """Log the exercises of a workout session, up to 50 at once.
+
+            Each item is {"day": "YYYY-MM-DD", "exercise": "Barbell squat",
+            "type": optional workout type as in record_workout, "sets": optional
+            int, "reps": optional int (per set), "weight_kg": optional number,
+            "duration_min": optional number (for cardio), "notes": optional}.
+            Logging an exercise marks its day done and adds its type to the
+            day's workout types, keeping existing types and notes. All
+            exercises save together or none do. Returns the stored exercises
+            with their ids and the updated workout days.
+            """
+            return tracker.add_exercises(ExerciseBatch(exercises=exercises))
+
+        @server.tool()
+        def get_workout_exercises(
+            start_date: str | None = None, end_date: str | None = None
+        ) -> list[dict[str, Any]]:
+            """List logged exercises between two YYYY-MM-DD dates (inclusive; defaults to today).
+
+            Each has its id, workout_date, exercise, type, sets, reps,
+            weight_kg, duration_min, and notes, ordered by day then entry.
+            """
+            end = date.fromisoformat(end_date) if end_date else LocalClock.today()
+            start = date.fromisoformat(start_date) if start_date else end
+            return tracker.list_exercises(start, end)
+
+        @server.tool()
+        def update_workout_exercise(entry_id: int, exercise: dict) -> dict[str, Any]:
+            """Replace one logged exercise, found by its id from get_workout_exercises.
+
+            exercise has the same fields as an add_workout_exercises item and
+            replaces every field; omitted optional fields are cleared. The
+            day is marked done with the exercise's type added.
+            """
+            return update_result(tracker.update_exercise(entry_id, ExerciseEntry(**exercise)))
+
+        @server.tool()
+        def remove_workout_exercise(entry_id: int) -> dict[str, Any]:
+            """Delete one logged exercise by its id; the day's done status and types are unchanged."""
+            return {"deleted": tracker.remove_exercise(entry_id), "entry_id": entry_id}

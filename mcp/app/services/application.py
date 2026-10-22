@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date, timedelta
 
 from app.services.analysis import FoodAnalysis, FoodName, PeriodWindow
@@ -13,6 +14,8 @@ from app.core.models import (
     BodyProfileUpdate,
     DailyLogUpsert,
     DailyRecommendationsUpsert,
+    ExerciseBatch,
+    ExerciseEntry,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
@@ -22,10 +25,11 @@ from app.core.models import (
 )
 from app.services.reports import DailyReport, DailyReportRenderer
 from app.data.repositories import (
-    MAX_PAGE_SIZE,
     AnalysisRangeRepository,
     DailyLogRepository,
+    ExerciseRepository,
     FoodRepository,
+    MAX_PAGE_SIZE,
     MeasurementRepository,
     RecommendationRepository,
     Row,
@@ -168,17 +172,21 @@ class DayContextService:
 
 
 class WorkoutService:
-    """Record whether each day's workout was done and list them for a calendar."""
+    """Record whether each day's workout was done, what it trained, and list them for a calendar."""
 
-    def __init__(self, workouts: WorkoutRepository) -> None:
+    def __init__(self, workouts: WorkoutRepository, exercises: ExerciseRepository) -> None:
         self.workouts = workouts
+        self.exercises = exercises
 
     def record(self, day: date, entry: WorkoutRecord) -> Row:
-        return self.workouts.upsert(day, entry.done, entry.notes)
+        return self.workouts.upsert(day, entry.done, entry.notes, entry.types)
 
     def record_many(self, batch: WorkoutBatch) -> list[Row]:
         return self.workouts.upsert_many(
-            [(workout.day, workout.done, workout.notes) for workout in batch.workouts]
+            [
+                (workout.day, workout.done, workout.notes, workout.types)
+                for workout in batch.workouts
+            ]
         )
 
     def list(self, start: date, end: date) -> list[Row]:
@@ -204,11 +212,14 @@ class WorkoutService:
         return current, longest
 
     def summary(self, start: date, end: date) -> Row:
-        """Counts, done rate, and streaks for the inclusive range."""
+        """Counts, done rate, streaks, and days per workout type for the inclusive range."""
         records = self.list(start, end)
         done_by_day = {date.fromisoformat(row["workout_date"]): row["done"] for row in records}
         done = sum(done_by_day.values())
         current, longest = self.streaks(done_by_day, start, end)
+        type_counts = Counter(
+            kind for row in records if row["done"] for kind in row.get("types") or []
+        )
         return {
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -219,11 +230,45 @@ class WorkoutService:
             "done_rate": round(done / len(records), 3) if records else None,
             "current_streak": current,
             "longest_streak": longest,
+            "type_counts": dict(type_counts.most_common()),
             "records": records,
         }
 
     def remove(self, day: date) -> bool:
         return self.workouts.delete(day)
+
+    def mark_done(self, day: date, types: list[str | None]) -> Row:
+        """Mark a day done because exercises were logged, adding their types.
+
+        The day's existing types and notes are kept; a skipped day becomes done.
+        """
+        current = self.workouts.get(day)
+        kept = list(current.get("types") or []) if current and current["done"] else []
+        merged = list(dict.fromkeys([*kept, *(kind for kind in types if kind)]))
+        return self.workouts.upsert(day, True, current["notes"] if current else None, merged)
+
+    def add_exercises(self, batch: ExerciseBatch) -> Row:
+        """Log exercises and mark each of their days done with the types trained."""
+        rows = self.exercises.add_many(batch.exercises)
+        types_by_day: dict[date, list[str | None]] = {}
+        for entry in batch.exercises:
+            types_by_day.setdefault(entry.day, []).append(entry.type)
+        days = [self.mark_done(day, types) for day, types in sorted(types_by_day.items())]
+        return {"exercises": rows, "workouts": days}
+
+    def list_exercises(self, start: date, end: date) -> list[Row]:
+        if end < start:
+            raise ValueError("end must be on or after start")
+        return self.exercises.list_between(start, end)
+
+    def update_exercise(self, entry_id: int, entry: ExerciseEntry) -> Row | None:
+        row = self.exercises.update(entry_id, entry)
+        if row is not None:
+            self.mark_done(entry.day, [entry.type])
+        return row
+
+    def remove_exercise(self, entry_id: int) -> bool:
+        return self.exercises.delete(entry_id)
 
 
 class ProfileService:

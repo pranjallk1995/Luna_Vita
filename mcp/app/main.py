@@ -10,6 +10,7 @@ from app.transport.mcp_tools import LunaVitaMCPTools
 from app.data.repositories import (
     AnalysisRangeRepository,
     DailyLogRepository,
+    ExerciseRepository,
     FoodRepository,
     MeasurementRepository,
     RecommendationRepository,
@@ -72,7 +73,9 @@ class LunaVitaApplication:
                 VerdictRepository(self.database),
                 AnalysisRangeRepository(self.database),
             ),
-            workouts=WorkoutService(WorkoutRepository(self.database)),
+            workouts=WorkoutService(
+                WorkoutRepository(self.database), ExerciseRepository(self.database)
+            ),
         )
 
     def run(self) -> None:

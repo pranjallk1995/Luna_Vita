@@ -209,6 +209,10 @@ class LunaStyle:
             .st-key-workout_status div[data-testid="stButtonGroup"] button { flex:1 1 0; min-height:2.9rem!important; margin-inline:.16rem!important; padding:.65rem 1.25rem!important; border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; }
             .st-key-workout_status div[data-testid="stButtonGroup"] button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; }
             .st-key-workout_status div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[kind="segmented_controlActive"],[data-testid="stBaseButton-segmented_controlActive"]) { border-color:var(--strong)!important; background:var(--control-hover)!important; color:var(--text)!important; }
+            .st-key-workout_types div[data-testid="stButtonGroup"] { display:flex; flex-wrap:wrap; gap:.4rem; margin:-.6rem 0 1.15rem; }
+            .st-key-workout_types div[data-testid="stButtonGroup"] button { border:1px solid transparent!important; background:var(--control)!important; color:var(--muted)!important; }
+            .st-key-workout_types div[data-testid="stButtonGroup"] button:hover { border-color:var(--strong)!important; background:var(--control-hover)!important; }
+            .st-key-workout_types div[data-testid="stButtonGroup"] button:is([aria-pressed="true"],[aria-checked="true"],[kind="pillsActive"],[data-testid="stBaseButton-pillsActive"]) { border-color:rgba(74,222,128,.45)!important; background:rgba(74,222,128,.10)!important; color:var(--text)!important; }
             .workout-calendar { width:100%; margin:.65rem 0 .4rem; padding:.85rem .9rem .9rem; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
             .workout-calendar-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; margin-bottom:.7rem; }
             .workout-calendar-head strong { color:var(--text); font-size:.92rem; }
@@ -231,7 +235,10 @@ class LunaStyle:
             .workout-marker { font-family:"Material Symbols Rounded","Material Symbols Outlined"; font-size:.95rem; font-weight:600; line-height:1; }
             .workout-day.done .workout-marker { color:#4ade80; }
             .workout-day.skipped .workout-marker { color:#fb7185; }
-            @media (max-width:520px) { .workout-calendar { padding:.7rem .6rem; } .workout-months { grid-template-columns:1fr; } .workout-grid { gap:.22rem; } .workout-day { height:2.6rem; font-size:.68rem; } .workout-marker { font-size:.82rem; } }
+            .workout-types { display:inline-flex; align-items:center; gap:.08rem; color:#4ade80; line-height:1; }
+            .workout-type-icon { width:.95rem; height:.95rem; flex:none; }
+            .workout-type-more { font-size:.6rem; font-weight:600; }
+            @media (max-width:520px) { .workout-calendar { padding:.7rem .6rem; } .workout-months { grid-template-columns:1fr; } .workout-grid { gap:.22rem; } .workout-day { height:2.6rem; font-size:.68rem; } .workout-marker { font-size:.82rem; } .workout-type-icon { width:.72rem; height:.72rem; } .workout-types { gap:0; } }
             .st-key-mobile_weight_actions { display:none; }
             @media (max-width:700px) {
                 .block-container { padding:.85rem .8rem 2rem; }

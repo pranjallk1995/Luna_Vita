@@ -90,6 +90,24 @@ CREATE TABLE IF NOT EXISTS workouts (
     notes TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE workouts ADD COLUMN IF NOT EXISTS types TEXT[] NOT NULL DEFAULT '{}';
+
+CREATE TABLE IF NOT EXISTS workout_exercises (
+    id BIGSERIAL PRIMARY KEY,
+    workout_date DATE NOT NULL,
+    exercise TEXT NOT NULL CHECK (length(trim(exercise)) > 0),
+    type TEXT,
+    sets INTEGER CHECK (sets > 0),
+    reps INTEGER CHECK (reps > 0),
+    weight_kg NUMERIC(6,2) CHECK (weight_kg >= 0),
+    duration_min NUMERIC(6,1) CHECK (duration_min > 0),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS workout_exercises_date_idx
+    ON workout_exercises (workout_date, id);
 
 CREATE TABLE IF NOT EXISTS food_verdicts (
     food_key TEXT PRIMARY KEY CHECK (length(trim(food_key)) > 0),

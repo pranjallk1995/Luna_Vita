@@ -11,6 +11,7 @@ from app.data.database import Database
 from app.core.models import (
     DailyLogUpsert,
     DailyRecommendationsUpsert,
+    ExerciseEntry,
     FoodEntryCreate,
     HealthMeasurementCreate,
 )
@@ -300,22 +301,23 @@ class DailyLogRepository(Repository):
 
 
 class WorkoutRepository(Repository):
-    """One done/not-done workout record per calendar day."""
+    """One done/not-done workout record per calendar day, with the types trained."""
 
     UPSERT_SQL = """
-        INSERT INTO workouts (workout_date, done, notes)
-        VALUES (%s, %s, %s)
+        INSERT INTO workouts (workout_date, done, notes, types)
+        VALUES (%s, %s, %s, %s)
         ON CONFLICT (workout_date) DO UPDATE SET
             done=EXCLUDED.done,
             notes=EXCLUDED.notes,
+            types=EXCLUDED.types,
             updated_at=NOW()
         RETURNING *
         """
 
-    def upsert(self, day: date, done: bool, notes: str | None) -> Row:
-        return self.fetch_one(self.UPSERT_SQL, (day, done, notes))
+    def upsert(self, day: date, done: bool, notes: str | None, types: list[str]) -> Row:
+        return self.fetch_one(self.UPSERT_SQL, (day, done, notes, types))
 
-    def upsert_many(self, records: list[tuple[date, bool, str | None]]) -> list[Row]:
+    def upsert_many(self, records: list[tuple[date, bool, str | None, list[str]]]) -> list[Row]:
         """Save every day in one transaction so a batch saves atomically."""
         with self.database.cursor() as cursor:
             results = []
@@ -323,6 +325,9 @@ class WorkoutRepository(Repository):
                 cursor.execute(self.UPSERT_SQL, record)
                 results.append(self.serialize(cursor.fetchone()))
             return results
+
+    def get(self, day: date) -> Row | None:
+        return self.fetch_one("SELECT * FROM workouts WHERE workout_date=%s", (day,))
 
     def list_between(self, start: date, end: date) -> list[Row]:
         return self.fetch_all(
@@ -333,6 +338,57 @@ class WorkoutRepository(Repository):
     def delete(self, day: date) -> bool:
         return self.affects_row(
             "DELETE FROM workouts WHERE workout_date=%s RETURNING workout_date", (day,)
+        )
+
+
+class ExerciseRepository(Repository):
+    """Individual exercises logged under a workout day."""
+
+    FIELDS = ("exercise", "type", "sets", "reps", "weight_kg", "duration_min", "notes")
+
+    @classmethod
+    def entry_values(cls, entry: ExerciseEntry) -> tuple:
+        return (entry.day, *(getattr(entry, field) for field in cls.FIELDS))
+
+    def add_many(self, entries: list[ExerciseEntry]) -> list[Row]:
+        """Insert every exercise in one transaction so a session saves atomically."""
+        with self.database.cursor() as cursor:
+            results = []
+            for entry in entries:
+                cursor.execute(
+                    f"""
+                    INSERT INTO workout_exercises (workout_date, {", ".join(self.FIELDS)})
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
+                    """,
+                    self.entry_values(entry),
+                )
+                results.append(self.serialize(cursor.fetchone()))
+            return results
+
+    def list_between(self, start: date, end: date) -> list[Row]:
+        return self.fetch_all(
+            """
+            SELECT * FROM workout_exercises
+            WHERE workout_date BETWEEN %s AND %s
+            ORDER BY workout_date, id
+            """,
+            (start, end),
+        )
+
+    def update(self, entry_id: int, entry: ExerciseEntry) -> Row | None:
+        updates = ", ".join(f"{field}=%s" for field in self.FIELDS)
+        return self.fetch_one(
+            f"""
+            UPDATE workout_exercises SET workout_date=%s, {updates}, updated_at=NOW()
+            WHERE id=%s RETURNING *
+            """,
+            (*self.entry_values(entry), entry_id),
+        )
+
+    def delete(self, entry_id: int) -> bool:
+        return self.affects_row(
+            "DELETE FROM workout_exercises WHERE id=%s RETURNING id", (entry_id,)
         )
 
 

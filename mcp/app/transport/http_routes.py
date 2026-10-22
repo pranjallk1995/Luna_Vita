@@ -15,6 +15,8 @@ from app.core.errors import NotFoundError
 from app.core.models import (
     AnalysisRange,
     DailyLogUpsert,
+    ExerciseBatch,
+    ExerciseEntry,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
@@ -290,6 +292,28 @@ class LunaVitaHTTPRoutes:
                 date.fromisoformat(request.query_params.get("end", "")),
             )
 
+        async def read_exercises(request: Request):
+            return workouts.list_exercises(
+                date.fromisoformat(request.query_params.get("start", "")),
+                date.fromisoformat(request.query_params.get("end", "")),
+            )
+
+        async def add_exercises(request: Request):
+            return workouts.add_exercises(await self.payload(request, ExerciseBatch))
+
+        async def replace_exercise(request: Request):
+            entry = await self.payload(request, ExerciseEntry)
+            return self.found(
+                workouts.update_exercise(self.path_id(request), entry), "Exercise not found"
+            )
+
+        async def delete_exercise(request: Request):
+            self.found(workouts.remove_exercise(self.path_id(request)), "Exercise not found")
+
+        self.route("GET", "/api/workouts/exercises", read_exercises)
+        self.route("POST", "/api/workouts/exercises", add_exercises, 201)
+        self.route("PUT", "/api/workouts/exercises/{entry_id}", replace_exercise)
+        self.route("DELETE", "/api/workouts/exercises/{entry_id}", delete_exercise, NO_CONTENT)
         self.route("GET", "/api/workouts", read)
         self.route("GET", "/api/workouts/summary", summary)
         self.route("POST", "/api/workouts/batch", record_batch, 201)

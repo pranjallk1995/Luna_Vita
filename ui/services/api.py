@@ -97,11 +97,36 @@ class LunaVitaAPI:
             params={"start": start.isoformat(), "end": end.isoformat()},
         )
 
-    def record_workout(self, day: date, done: bool) -> None:
-        self.request("PUT", f"/api/workouts/{day.isoformat()}", json={"done": done})
+    def record_workout(
+        self, day: date, done: bool, notes: str | None = None, types: list[str] | None = None
+    ) -> None:
+        """Replace the day's record; ``types`` is what a done workout trained."""
+        self.request(
+            "PUT",
+            f"/api/workouts/{day.isoformat()}",
+            json={"done": done, "notes": notes, "types": types or []},
+        )
 
     def delete_workout(self, day: date) -> None:
         self.request("DELETE", f"/api/workouts/{day.isoformat()}")
+
+    def exercises(self, start: date, end: date) -> list[dict[str, Any]]:
+        """Exercises logged on the inclusive range, ordered by day then entry."""
+        return self.request(
+            "GET",
+            "/api/workouts/exercises",
+            params={"start": start.isoformat(), "end": end.isoformat()},
+        )
+
+    def add_exercises(self, payloads: list[dict[str, Any]]) -> None:
+        """Log exercises; the backend marks their days done with the types trained."""
+        self.request("POST", "/api/workouts/exercises", json={"exercises": payloads})
+
+    def update_exercise(self, entry_id: int, payload: dict[str, Any]) -> None:
+        self.request("PUT", f"/api/workouts/exercises/{entry_id}", json=payload)
+
+    def delete_exercise(self, entry_id: int) -> None:
+        self.request("DELETE", f"/api/workouts/exercises/{entry_id}")
 
     def report(self, day: date) -> bytes:
         return self.send("GET", f"/api/reports/daily/{day.isoformat()}").content
