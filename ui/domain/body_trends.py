@@ -70,6 +70,8 @@ class BodyTrendChart:
     BAR_WIDTH = 3.6
     BAR_GAP = 0.8
     WEIGHT_STEP = 1.0  # weight bars rise from a whole-kg floor below the lowest reading
+    FAT_FLOOR = 15.0  # body fat bars rise from 15%, or a lower 3% step when a reading dips below
+    FAT_STEP = 3.0
 
     @staticmethod
     def day_label(day: date) -> str:
@@ -92,6 +94,13 @@ class BodyTrendChart:
         values = [reading.value for reading in readings]
         floor = math.floor(min(values) - 0.5)
         return floor, max(math.ceil(max(values) + 0.5), floor + cls.WEIGHT_STEP)
+
+    @classmethod
+    def fat_range(cls, readings: list[Reading], target: float) -> tuple[float, float]:
+        lowest = min(target, *(reading.value for reading in readings))
+        highest = max(target, *(reading.value for reading in readings))
+        floor = min(cls.FAT_FLOOR, math.floor((lowest - 1) / cls.FAT_STEP) * cls.FAT_STEP)
+        return floor, highest + max(1.0, (highest - floor) * 0.1)
 
     @classmethod
     def svg(
@@ -174,15 +183,16 @@ class BodyTrendChart:
     def fat_section(cls, readings: list[Reading], days: list[date], target: float) -> str:
         if not readings:
             return ""
-        high = max([target, *(reading.value for reading in readings)]) * 1.08
+        low, high = cls.fat_range(readings, target)
         head = cls.head_html(
             BODY_FAT,
             readings[-1],
-            f'<i class="nutrient-trend-key"></i>Target {BODY_FAT.amount(target)}',
+            f'<i class="nutrient-trend-key"></i>Target {BODY_FAT.amount(target)}'
+            f"<span>Bars from {low:.0f}%</span>",
         )
         return (
             f'<div class="body-trend-section">{head}'
-            f"{cls.svg(BODY_FAT, readings, days, 0, high, target)}</div>"
+            f"{cls.svg(BODY_FAT, readings, days, low, high, target)}</div>"
         )
 
     @staticmethod

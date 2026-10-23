@@ -35,6 +35,13 @@ class BodyTrendChartTests(unittest.TestCase):
         self.assertEqual(BodyTrendChart.weight_range(Reading.parse(WEIGHT)), (72, 75))
         self.assertIn("Bars from 72 kg", self.html())
 
+    def test_fat_bars_rise_from_15_percent_or_lower_when_needed(self):
+        self.assertEqual(BodyTrendChart.fat_range(Reading.parse(FAT), 18.0)[0], 15)
+        self.assertIn("Bars from 15%", self.html())
+        lean = [{**FAT[0], "value": 13.4}]
+        self.assertEqual(BodyTrendChart.fat_range(Reading.parse(lean), 18.0)[0], 12)
+        self.assertEqual(BodyTrendChart.fat_range(Reading.parse(FAT), 14.5)[0], 12)
+
     def test_fat_target_line_and_estimate_marking(self):
         html = self.html(target=18.0)
         self.assertIn("Target 18.0%", html)
