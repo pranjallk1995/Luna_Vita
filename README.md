@@ -5,6 +5,7 @@
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Luna Sentia network required](https://img.shields.io/badge/Luna_Sentia_network-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL included](https://img.shields.io/badge/PostgreSQL-included-4169E1?logo=postgresql&logoColor=white)
+![Status: usable](https://img.shields.io/badge/Status-usable-2EA043)
 
 > **Work in progress:** Luna Vita is a local-first and desktop-first nutrition and body-measurement tracker under active development.
 
