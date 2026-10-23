@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, timedelta
 
-from app.services.analysis import FoodAnalysis, FoodName, PeriodWindow
+from app.services.analysis import FoodAnalysis, FoodCatalog, FoodName, PeriodWindow
 from app.services.body_composition import BodyComposition
 from app.core.clock import LocalClock
 from app.core.errors import NotFoundError
@@ -16,6 +16,7 @@ from app.core.models import (
     DailyRecommendationsUpsert,
     ExerciseBatch,
     ExerciseEntry,
+    FoodAliasUpsert,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
@@ -28,6 +29,7 @@ from app.data.repositories import (
     AnalysisRangeRepository,
     DailyLogRepository,
     ExerciseRepository,
+    FoodAliasRepository,
     FoodRepository,
     MAX_PAGE_SIZE,
     MeasurementRepository,
@@ -39,22 +41,35 @@ from app.data.repositories import (
 from app.integrations.visia import VisiaImageCatalog
 
 
+def food_catalog(food: FoodRepository, aliases: FoodAliasRepository) -> FoodCatalog:
+    """Stored aliases plus every name already used, for resolving canonical names."""
+    return FoodCatalog(aliases.mapping(), food.name_counts())
+
+
 class FoodService:
     """Record, correct, and remove food and supplement entries.
 
     Entries added by the assistant always show a Luna Visia image: the one it
     found, or the Luna Vita placeholder when it supplied none. Entries from the
-    UI may carry an uploaded photo or none.
+    UI may carry an uploaded photo or none. New entries are saved under the
+    food's canonical name, so spelling variants never become separate foods.
     """
 
     NOTE_MAX_LENGTH = 2_000
 
-    def __init__(self, food: FoodRepository, images: VisiaImageCatalog) -> None:
+    def __init__(
+        self, food: FoodRepository, images: VisiaImageCatalog, aliases: FoodAliasRepository
+    ) -> None:
         self.food = food
         self.images = images
+        self.aliases = aliases
+
+    def with_canonical_name(self, entry: FoodEntryCreate) -> FoodEntryCreate:
+        name = food_catalog(self.food, self.aliases).canonical(entry.food_name)
+        return entry.model_copy(update={"food_name": name})
 
     def record(self, entry: FoodEntryCreate) -> Row:
-        return self.food.add(entry)
+        return self.food.add(self.with_canonical_name(entry))
 
     def with_visia_image(self, entry: FoodEntryCreate) -> FoodEntryCreate:
         """Store Visia's canonical URL for the image, or the placeholder if none was given."""
@@ -70,12 +85,17 @@ class FoodService:
         note = f"AI-estimated from chat: {description.strip()}"[: self.NOTE_MAX_LENGTH]
         noted = FoodEntryCreate.model_validate({**entry.model_dump(), "notes": note})
         saved = self.record_with_visia_image(noted)
+        renamed = (
+            f" Saved as '{saved['food_name']}', the name already used for this food."
+            if saved["food_name"] != entry.food_name
+            else ""
+        )
         return {
             "saved": True,
             "entry": saved,
             "message": (
                 "Estimated nutrition was saved to LunaVita. "
-                "Values remain editable."
+                f"Values remain editable.{renamed}"
             ),
         }
 
@@ -326,9 +346,11 @@ class AnalysisService:
     """Analyse food over a period and let callers correct names and verdicts.
 
     Counts, macro totals, and rule-based verdicts are derived from the stored
-    food entries, so renaming entries updates all of them. Verdict overrides
-    are stored per normalized food name and survive across periods. A saved
-    range, when present, replaces the calendar month on the Monthly tab.
+    food entries, so renaming entries updates all of them. Aliases merge other
+    spellings into one canonical food; a rename over all dates records one.
+    Verdict overrides are stored per canonical food key and survive across
+    periods. A saved range, when present, replaces the calendar month on the
+    Monthly tab.
     """
 
     def __init__(
@@ -336,10 +358,15 @@ class AnalysisService:
         food: FoodRepository,
         verdicts: VerdictRepository,
         ranges: AnalysisRangeRepository,
+        aliases: FoodAliasRepository,
     ) -> None:
         self.food = food
         self.verdicts = verdicts
         self.ranges = ranges
+        self.aliases = aliases
+
+    def catalog(self) -> FoodCatalog:
+        return food_catalog(self.food, self.aliases)
 
     @staticmethod
     def window(start: date | None, end: date | None) -> PeriodWindow:
@@ -355,7 +382,8 @@ class AnalysisService:
 
     def analyze_window(self, window: PeriodWindow, source: str) -> Row:
         rows = self.food.list_between(window.start, window.end)
-        return {**FoodAnalysis(rows, window, self.overrides()).to_dict(), "range_source": source}
+        analysis = FoodAnalysis(rows, window, self.overrides(), self.catalog())
+        return {**analysis.to_dict(), "range_source": source}
 
     def analyze(self, start: date | None = None, end: date | None = None) -> Row:
         """Analyse an explicitly requested range or month."""
@@ -391,10 +419,12 @@ class AnalysisService:
         return {"reset": self.ranges.delete(), **self.range_status()}
 
     def matching_entries(self, name: str, start: date | None, end: date | None) -> list[Row]:
-        key = FoodName.key(name)
+        """Entries of the food ``name`` resolves to, under any of its spellings."""
+        catalog = self.catalog()
+        key = catalog.key(name)
         return [
             row for row in self.food.list_between(start, end)
-            if FoodName.key(row["food_name"]) == key
+            if catalog.key(row["food_name"]) == key
         ]
 
     def food_summary(self, name: str, start: date | None, end: date | None) -> Row | None:
@@ -404,20 +434,26 @@ class AnalysisService:
             return None
         days = sorted(date.fromisoformat(row["consumed_date"]) for row in rows)
         window = PeriodWindow(start or days[0], end or days[-1])
-        analysis = FoodAnalysis(rows, window, self.overrides())
+        analysis = FoodAnalysis(rows, window, self.overrides(), self.catalog())
         return analysis.food_dict(analysis.foods[0])
 
     def move_verdict(self, old_key: str, new_name: str) -> str | None:
         """Carry an override to the new name once no entry uses the old one."""
-        new_key = FoodName.key(new_name)
         old = self.verdicts.get(old_key)
-        if old_key == new_key or old is None:
-            return None
-        if any(FoodName.key(name) == old_key for name in self.food.names()):
+        catalog = self.catalog()
+        if old is not None and any(catalog.key(name) == old_key for name in self.food.names()):
             return (
                 f"'{old['food_name']}' keeps its {old['verdict']} verdict because "
                 "other entries still use that name."
             )
+        return self.merge_verdict(old_key, new_name)
+
+    def merge_verdict(self, old_key: str, new_name: str) -> str | None:
+        """Move an override from ``old_key`` to ``new_name`` unless it already has one."""
+        new_key = FoodName.key(new_name)
+        old = self.verdicts.get(old_key)
+        if old_key == new_key or old is None:
+            return None
         if self.verdicts.get(new_key) is not None:
             self.verdicts.delete(old_key)
             return f"Dropped the old {old['verdict']} verdict; '{new_name}' already has one."
@@ -426,29 +462,80 @@ class AnalysisService:
         return f"Moved the {old['verdict']} verdict to '{new_name}'."
 
     def rename(self, change: FoodRename) -> Row:
+        """Rename matching entries; over all dates, also alias the old name to the new."""
+        old_key = self.catalog().key(change.current_name)
         entries = self.matching_entries(change.current_name, change.start_date, change.end_date)
         if not entries:
             raise NotFoundError(f"No food entries match '{change.current_name}'.")
         previous_names = sorted({row["food_name"] for row in entries})
         renamed = self.food.rename([row["id"] for row in entries], change.new_name)
+        verdict_note = self.move_verdict(old_key, change.new_name)
+        everywhere = change.start_date is None and change.end_date is None
+        if everywhere and old_key != FoodName.key(change.new_name):
+            self.remember_alias(old_key, change.new_name)
         return {
             "renamed": renamed,
             "from": previous_names,
             "to": change.new_name,
-            "verdict_note": self.move_verdict(FoodName.key(change.current_name), change.new_name),
+            "alias_recorded": everywhere and old_key != FoodName.key(change.new_name),
+            "verdict_note": verdict_note,
             "food": self.food_summary(change.new_name, change.start_date, change.end_date),
         }
+
+    def remember_alias(self, alias_key: str, canonical_name: str) -> None:
+        """Point ``alias_key`` and every alias that led to it at ``canonical_name``."""
+        canonical_key = FoodName.key(canonical_name)
+        for key, name in self.aliases.mapping().items():
+            if key == canonical_key:
+                self.aliases.delete(key)
+            elif FoodName.key(name) == alias_key:
+                self.aliases.upsert(key, canonical_name)
+        self.aliases.upsert(alias_key, canonical_name)
+
+    def list_food_names(self, query: str | None = None) -> list[Row]:
+        """Canonical foods with entry counts and aliases, optionally filtered by text."""
+        names = self.catalog().names()
+        if not query or not FoodName.key(query):
+            return names
+        needle = FoodName.key(query)
+        return [
+            food for food in names
+            if needle in FoodName.key(food["name"])
+            or any(needle in FoodName.key(alias) for alias in food["aliases"])
+        ]
+
+    def set_alias(self, entry: FoodAliasUpsert) -> Row:
+        """Merge ``alias`` into ``canonical_name`` for future logs and the analysis.
+
+        Naming a food that is currently an alias of ``alias`` swaps the two.
+        """
+        alias_key = FoodName.key(entry.alias)
+        canonical = self.catalog().canonical(entry.canonical_name)
+        if FoodName.key(canonical) == alias_key:
+            if FoodName.key(entry.canonical_name) == alias_key:
+                raise ValueError("alias and canonical_name are already the same food.")
+            canonical = entry.canonical_name
+        self.remember_alias(alias_key, canonical)
+        return {
+            "alias": alias_key,
+            "canonical_name": canonical,
+            "verdict_note": self.merge_verdict(alias_key, canonical),
+        }
+
+    def remove_alias(self, alias: str) -> bool:
+        if not self.aliases.delete(FoodName.key(alias)):
+            raise NotFoundError(f"'{alias}' is not an alias of another food.")
+        return True
 
     def list_verdicts(self) -> list[Row]:
         return self.verdicts.list()
 
     def set_verdict(self, entry: FoodVerdictUpsert) -> Row:
-        return self.verdicts.upsert(
-            FoodName.key(entry.food_name), entry.food_name, entry.verdict, entry.reason
-        )
+        name = self.catalog().canonical(entry.food_name)
+        return self.verdicts.upsert(FoodName.key(name), name, entry.verdict, entry.reason)
 
     def clear_verdict(self, food_name: str) -> bool:
-        if not self.verdicts.delete(FoodName.key(food_name)):
+        if not self.verdicts.delete(self.catalog().key(food_name)):
             raise NotFoundError(f"'{food_name}' has no verdict override.")
         return True
 

@@ -53,6 +53,54 @@ class FoodName:
         return " ".join(words)
 
 
+class FoodCatalog:
+    """Resolve any spelling of a food to its one canonical name.
+
+    ``aliases`` maps a ``FoodName.key`` to the canonical name it was merged
+    into (by a rename or an explicit alias). Otherwise a spelling resolves to
+    the name already used most often for the same key, so "parathas" logs as
+    the existing "Paratha".
+    """
+
+    def __init__(self, aliases: dict[str, str], name_counts: dict[str, int]) -> None:
+        self.aliases = aliases
+        self.spellings: dict[str, Counter] = defaultdict(Counter)
+        for name, count in name_counts.items():
+            self.spellings[FoodName.key(name)][name.strip()] += count
+
+    def canonical(self, name: str) -> str:
+        key = FoodName.key(name)
+        if key in self.aliases:
+            return self.aliases[key]
+        spellings = self.spellings.get(key)
+        if not spellings:
+            return name.strip()
+        return min(spellings.items(), key=lambda item: (-item[1], item[0]))[0]
+
+    def key(self, name: str) -> str:
+        return FoodName.key(self.canonical(name))
+
+    def names(self) -> list[dict[str, Any]]:
+        """Every canonical food with its entry count and the spellings merged into it."""
+        foods: dict[str, dict[str, Any]] = {}
+        for spellings in self.spellings.values():
+            for spelling, count in spellings.items():
+                name = self.canonical(spelling)
+                food = foods.setdefault(
+                    FoodName.key(name), {"name": name, "entries": 0, "aliases": set()}
+                )
+                food["entries"] += count
+                if spelling != name:
+                    food["aliases"].add(spelling)
+        for alias_key, name in self.aliases.items():
+            food = foods.setdefault(FoodName.key(name), {"name": name, "entries": 0, "aliases": set()})
+            food["aliases"].add(alias_key)
+        return sorted(
+            ({**food, "aliases": sorted(food["aliases"])} for food in foods.values()),
+            key=lambda food: (-food["entries"], food["name"].lower()),
+        )
+
+
 @dataclass
 class FoodGroup:
     """Every entry of one food over the period, with summed nutrition."""
@@ -66,8 +114,9 @@ class FoodGroup:
     )
     images: list[str] = field(default_factory=list)
 
-    def add(self, row: dict[str, Any]) -> None:
-        self.names[str(row["food_name"]).strip()] += 1
+    def add(self, row: dict[str, Any], name: str | None = None) -> None:
+        """Count the entry under ``name``, its canonical spelling, if given."""
+        self.names[name or str(row["food_name"]).strip()] += 1
         if row.get("image_url"):
             self.images.append(str(row["image_url"]))
         self.count += 1
@@ -200,6 +249,7 @@ class FoodAnalysis:
 
     ``overrides`` maps a ``FoodName.key`` to a stored verdict row; an override
     replaces the rule-based verdict for that food but keeps its macro score.
+    ``catalog`` merges aliased spellings into their canonical food.
     """
 
     TOP_CONTRIBUTORS = 3
@@ -210,13 +260,16 @@ class FoodAnalysis:
         rows: list[dict[str, Any]],
         window: PeriodWindow,
         overrides: dict[str, dict[str, Any]] | None = None,
+        catalog: FoodCatalog | None = None,
     ) -> None:
         self.window = window
+        catalog = catalog or FoodCatalog({}, {})
         groups: dict[str, FoodGroup] = defaultdict(lambda: FoodGroup(key=""))
         for row in rows:
-            key = FoodName.key(str(row["food_name"]))
+            name = catalog.canonical(str(row["food_name"]))
+            key = FoodName.key(name)
             groups[key].key = key
-            groups[key].add(row)
+            groups[key].add(row, name)
         self.foods = sorted(
             groups.values(), key=lambda food: (-food.count, -food.calories, food.name.lower())
         )

@@ -163,6 +163,13 @@ class FoodRepository(Repository):
     def names(self) -> list[str]:
         return [row["food_name"] for row in self.fetch_all("SELECT DISTINCT food_name FROM food_entries")]
 
+    def name_counts(self) -> dict[str, int]:
+        """How many entries use each exact food name."""
+        rows = self.fetch_all(
+            "SELECT food_name, COUNT(*) AS entries FROM food_entries GROUP BY food_name"
+        )
+        return {row["food_name"]: row["entries"] for row in rows}
+
     def rename(self, entry_ids: list[int], food_name: str) -> int:
         """Rename the given entries in one transaction; return how many changed."""
         with self.database.cursor() as cursor:
@@ -419,6 +426,32 @@ class VerdictRepository(Repository):
     def delete(self, food_key: str) -> bool:
         return self.affects_row(
             "DELETE FROM food_verdicts WHERE food_key=%s RETURNING food_key", (food_key,)
+        )
+
+
+class FoodAliasRepository(Repository):
+    """Normalized food names that resolve to another, canonical food name."""
+
+    def mapping(self) -> dict[str, str]:
+        rows = self.fetch_all("SELECT alias_key, canonical_name FROM food_aliases")
+        return {row["alias_key"]: row["canonical_name"] for row in rows}
+
+    def upsert(self, alias_key: str, canonical_name: str) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO food_aliases (alias_key, canonical_name)
+            VALUES (%s, %s)
+            ON CONFLICT (alias_key) DO UPDATE SET
+                canonical_name=EXCLUDED.canonical_name,
+                updated_at=NOW()
+            RETURNING *
+            """,
+            (alias_key, canonical_name),
+        )
+
+    def delete(self, alias_key: str) -> bool:
+        return self.affects_row(
+            "DELETE FROM food_aliases WHERE alias_key=%s RETURNING alias_key", (alias_key,)
         )
 
 

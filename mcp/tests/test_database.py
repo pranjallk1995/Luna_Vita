@@ -15,6 +15,7 @@ class DatabaseSchemaTests(unittest.TestCase):
             "health_measurements",
             "daily_recommendations",
             "food_verdicts",
+            "food_aliases",
             "analysis_range",
         ):
             with self.subTest(table=table):

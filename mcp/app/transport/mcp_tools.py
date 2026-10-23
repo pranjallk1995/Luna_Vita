@@ -14,6 +14,7 @@ from app.core.models import (
     DailyRecommendationsUpsert,
     ExerciseBatch,
     ExerciseEntry,
+    FoodAliasUpsert,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
@@ -73,6 +74,12 @@ class LunaVitaMCPTools:
             Food name and quantity are mandatory. When the user omits kcal,
             protein, carbs, fat, natural sugar, or added sugar, infer those values
             from the stated food and complete quantity before calling this tool.
+            Name the food the way it has been logged before: call list_food_names
+            first and reuse an existing name for the same food (e.g. "Paratha",
+            not "parathas" or "Aloo paratha (homemade)"); put brand, preparation,
+            or size details in quantity or notes instead. The saved name is
+            normalized against earlier entries and food aliases anyway, and the
+            returned entry shows the name actually stored.
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
@@ -122,6 +129,12 @@ class LunaVitaMCPTools:
             parathas of 40 g each right now". Food name and quantity are mandatory.
             Infer kcal, protein, carbs, fat, natural sugar, and added sugar for the
             complete stated quantity before calling the tool.
+            Name the food the way it has been logged before: call list_food_names
+            first and reuse an existing name for the same food (e.g. "Paratha",
+            not "parathas" or "Aloo paratha (homemade)"); put brand, preparation,
+            or size details in quantity or notes instead. The saved name is
+            normalized against earlier entries and food aliases anyway, and the
+            returned entry shows the name actually stored.
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
@@ -176,7 +189,11 @@ class LunaVitaMCPTools:
             time_label: str | None = None,
             notes: str | None = None,
         ) -> dict[str, Any]:
-            """Update an existing food entry by its id."""
+            """Update an existing food entry by its id.
+
+            To change what a food is called across entries, use rename_food rather
+            than updating entries one by one.
+            """
             entry = FoodEntryCreate(
                 food_name=food_name,
                 quantity=quantity,
@@ -450,10 +467,13 @@ class LunaVitaMCPTools:
             Matching ignores case, punctuation, spacing, and a trailing plural "s",
             so "parathas" also matches "Paratha". Use this to fix a misspelling or
             to merge duplicates (for example rename "ON Gold Standard Whey" to
-            "Whey protein"). Counts, macro totals, top contributors, and rule-based
-            verdicts are derived from the entries, so they update automatically.
-            A verdict override moves to the new name once no entry uses the old
-            one. Returns the number renamed and the merged food's new summary.
+            "Whey protein"). Entries already aliased to current_name are renamed
+            too. Counts, macro totals, top contributors, and rule-based verdicts
+            are derived from the entries, so they update automatically. A verdict
+            override moves to the new name once no entry uses the old one. Without
+            dates the old name also becomes an alias of the new one, so later logs
+            under the old name are saved as the new name (alias_recorded). Returns
+            the number renamed and the merged food's new summary.
             """
             return analysis.rename(
                 FoodRename(
@@ -465,6 +485,39 @@ class LunaVitaMCPTools:
             )
 
         @server.tool()
+        def list_food_names(query: str | None = None) -> list[dict[str, Any]]:
+            """List the canonical food names already in use, most logged first.
+
+            Each item has the name, its entry count, and the aliases (other
+            spellings or merged names) that resolve to it. query filters by a
+            case-insensitive substring of the name or an alias. Call this before
+            logging food so a food keeps one consistent name, and to spot
+            near-duplicates (e.g. "Chicken breast" vs "Grilled chicken") worth
+            merging with rename_food or set_food_alias.
+            """
+            return analysis.list_food_names(query)
+
+        @server.tool()
+        def set_food_alias(alias: str, canonical_name: str) -> dict[str, Any]:
+            """Make another name for a food resolve to its canonical name.
+
+            Future entries logged as alias are saved as canonical_name, and the
+            Monthly Tracking analysis counts existing alias entries under
+            canonical_name without changing them (use rename_food to rewrite
+            them). Matching ignores case, punctuation, and a trailing plural "s".
+            Aliases that pointed at alias move to canonical_name, and alias's
+            verdict override moves too unless canonical_name already has one.
+            """
+            return analysis.set_alias(
+                FoodAliasUpsert(alias=alias, canonical_name=canonical_name)
+            )
+
+        @server.tool()
+        def remove_food_alias(alias: str) -> dict[str, Any]:
+            """Stop alias resolving to another food, so it shows as its own food again."""
+            return {"removed": analysis.remove_alias(alias), "alias": alias}
+
+        @server.tool()
         def set_food_verdict(
             food_name: str, verdict: str, reason: str
         ) -> dict[str, Any]:
@@ -473,7 +526,8 @@ class LunaVitaMCPTools:
             verdict is "prefer", "avoid", or "neutral" ("neutral" removes it from
             both lists). reason is the short explanation shown in the UI, for
             example "Homemade, so far less oil than the macros suggest". The
-            override applies to every period and to all spellings of the name.
+            override applies to every period and to all spellings and aliases of
+            the name.
             """
             return analysis.set_verdict(
                 FoodVerdictUpsert(food_name=food_name, verdict=verdict, reason=reason)

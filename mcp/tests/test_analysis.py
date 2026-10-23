@@ -5,7 +5,14 @@ from datetime import date
 
 import json
 
-from app.services.analysis import FoodAnalysis, FoodGroup, FoodName, MacroQuality, PeriodWindow
+from app.services.analysis import (
+    FoodAnalysis,
+    FoodCatalog,
+    FoodGroup,
+    FoodName,
+    MacroQuality,
+    PeriodWindow,
+)
 
 
 def entry(name, day="2026-10-15", calories=100, protein=0, carbs=0, fat=0, added=0):
@@ -49,6 +56,38 @@ class FoodNameTests(unittest.TestCase):
         self.assertEqual(FoodName.key("Hummus"), "hummus")
         self.assertEqual(FoodName.key("Mixed grass"), "mixed grass")
         self.assertEqual(FoodName.key("Max Protein Chips"), "max protein chip")
+
+
+class FoodCatalogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.catalog = FoodCatalog(
+            {"on gold standard whey": "Whey protein"},
+            {"Paratha": 5, "parathas": 1, "Whey protein": 3, "ON Gold Standard Whey": 2},
+        )
+
+    def test_spellings_resolve_to_the_most_used_existing_name(self) -> None:
+        self.assertEqual(self.catalog.canonical("PARATHAS "), "Paratha")
+        self.assertEqual(self.catalog.canonical("  Dosa "), "Dosa")
+
+    def test_aliases_win_over_history(self) -> None:
+        self.assertEqual(self.catalog.canonical("on gold standard whey"), "Whey protein")
+        self.assertEqual(self.catalog.key("ON Gold Standard Whey"), "whey protein")
+
+    def test_names_merge_spellings_and_aliases(self) -> None:
+        names = self.catalog.names()
+        self.assertEqual([food["name"] for food in names], ["Paratha", "Whey protein"])
+        self.assertEqual(names[0]["aliases"], ["parathas"])
+        self.assertEqual(names[1]["entries"], 5)
+        self.assertEqual(
+            names[1]["aliases"], ["ON Gold Standard Whey", "on gold standard whey"]
+        )
+
+    def test_analysis_groups_aliased_entries_under_the_canonical_name(self) -> None:
+        rows = [entry("Whey protein", protein=24), entry("ON Gold Standard Whey", protein=24)]
+        analysis = FoodAnalysis(rows, PeriodWindow.month_of(date(2026, 10, 17)), catalog=self.catalog)
+        self.assertEqual(len(analysis.foods), 1)
+        self.assertEqual(analysis.foods[0].name, "Whey protein")
+        self.assertEqual(analysis.foods[0].count, 2)
 
 
 class MacroQualityTests(unittest.TestCase):

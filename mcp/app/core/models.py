@@ -263,6 +263,18 @@ class FoodRename(BaseModel):
         return self
 
 
+class FoodAliasUpsert(BaseModel):
+    """Make another spelling of a food resolve to its canonical name."""
+
+    alias: str = Field(min_length=1, max_length=200)
+    canonical_name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("alias", "canonical_name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        return SafeText.clean(value, required=True)
+
+
 class FoodVerdictUpsert(BaseModel):
     """An explicit prefer/avoid/neutral rating that replaces the macro rule."""
 

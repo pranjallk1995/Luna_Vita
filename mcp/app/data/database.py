@@ -117,6 +117,12 @@ CREATE TABLE IF NOT EXISTS food_verdicts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS food_aliases (
+    alias_key TEXT PRIMARY KEY CHECK (length(trim(alias_key)) > 0),
+    canonical_name TEXT NOT NULL CHECK (length(trim(canonical_name)) > 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS analysis_range (
     range_id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (range_id = 1),
     start_date DATE NOT NULL,

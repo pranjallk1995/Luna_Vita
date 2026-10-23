@@ -14,6 +14,7 @@ from app.core.models import (
     BodyProfileUpdate,
     ExerciseBatch,
     ExerciseEntry,
+    FoodAliasUpsert,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
@@ -40,6 +41,13 @@ class CallRecorder:
 
 
 class FakeFoodRepository(CallRecorder):
+    def __init__(self, name_counts: dict[str, int] | None = None) -> None:
+        super().__init__()
+        self.counts = name_counts or {}
+
+    def name_counts(self) -> dict[str, int]:
+        return self.counts
+
     def add(self, entry: FoodEntryCreate) -> dict[str, Any]:
         self.calls.append(("add", entry))
         return {"id": 7, **entry.model_dump()}
@@ -114,6 +122,21 @@ def apple() -> FoodEntryCreate:
     )
 
 
+class FakeAliases:
+    def __init__(self, rows: dict[str, str] | None = None) -> None:
+        self.rows = rows or {}
+
+    def mapping(self) -> dict[str, str]:
+        return dict(self.rows)
+
+    def upsert(self, alias_key: str, canonical_name: str) -> dict:
+        self.rows[alias_key] = canonical_name
+        return {"alias_key": alias_key, "canonical_name": canonical_name}
+
+    def delete(self, alias_key: str) -> bool:
+        return self.rows.pop(alias_key, None) is not None
+
+
 class FakeImageCatalog:
     """Resolve any URL ending in a known ID to its canonical Visia URL."""
 
@@ -133,7 +156,7 @@ class FakeImageCatalog:
 class FoodServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repository = FakeFoodRepository()
-        self.service = FoodService(self.repository, FakeImageCatalog())
+        self.service = FoodService(self.repository, FakeImageCatalog(), FakeAliases())
 
     def test_record_delegates_validated_model(self) -> None:
         result = self.service.record(apple())
@@ -204,6 +227,21 @@ class FoodServiceTests(unittest.TestCase):
     def test_set_image_converts_blank_value_to_none(self) -> None:
         self.assertIsNone(self.service.set_image(4, "   ")["image_url"])
 
+    def test_new_entries_reuse_the_existing_name_or_alias(self) -> None:
+        repository = FakeFoodRepository({"Paratha": 4, "Whey protein": 2})
+        service = FoodService(
+            repository, FakeImageCatalog(), FakeAliases({"on whey": "Whey protein"})
+        )
+
+        service.record(apple().model_copy(update={"food_name": "parathas"}))
+        result = service.log_consumed(
+            "Had a scoop of ON whey", apple().model_copy(update={"food_name": "ON whey"})
+        )
+
+        self.assertEqual(repository.calls[0][1].food_name, "Paratha")
+        self.assertEqual(repository.calls[1][1].food_name, "Whey protein")
+        self.assertIn("Saved as 'Whey protein'", result["message"])
+
     def test_remove_passes_expected_date_guard(self) -> None:
         expected_day = date(2026, 10, 15)
 
@@ -273,7 +311,7 @@ class ReportServiceTests(unittest.TestCase):
         food = FakeFoodRepository()
         renderer = FakeRenderer()
         service = ReportService(
-            FoodService(food, FakeImageCatalog()),
+            FoodService(food, FakeImageCatalog(), FakeAliases()),
             MeasurementService(FakeMeasurementRepository()),
             DayContextService(FakeDailyLogRepository()),
             renderer,
@@ -307,6 +345,12 @@ class FakeAnalysisFood:
 
     def names(self) -> list[str]:
         return sorted({row["food_name"] for row in self.rows})
+
+    def name_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for row in self.rows:
+            counts[row["food_name"]] = counts.get(row["food_name"], 0) + 1
+        return counts
 
     def rename(self, entry_ids: list[int], food_name: str) -> int:
         changed = [row for row in self.rows if row["id"] in entry_ids]
@@ -368,7 +412,8 @@ class AnalysisFixture(unittest.TestCase):
         ])
         self.verdicts = FakeVerdicts()
         self.ranges = FakeRanges()
-        self.service = AnalysisService(self.food, self.verdicts, self.ranges)
+        self.aliases = FakeAliases()
+        self.service = AnalysisService(self.food, self.verdicts, self.ranges, self.aliases)
 
 
 class AnalysisServiceTests(AnalysisFixture):
@@ -429,6 +474,58 @@ class AnalysisServiceTests(AnalysisFixture):
             self.service.clear_verdict("Paratha")
 
 
+class FoodAliasTests(AnalysisFixture):
+    def test_full_rename_records_an_alias_but_a_ranged_one_does_not(self) -> None:
+        ranged = self.service.rename(FoodRename(
+            current_name="ON Gold Standard Whey", new_name="Whey protein",
+            start_date=date(2026, 10, 1), end_date=date(2026, 10, 31)))
+        self.assertFalse(ranged["alias_recorded"])
+        self.assertEqual(self.aliases.rows, {})
+
+        full = self.service.rename(FoodRename(
+            current_name="ON Gold Standard Whey", new_name="Whey protein"))
+        self.assertTrue(full["alias_recorded"])
+        self.assertEqual(self.aliases.rows, {"on gold standard whey": "Whey protein"})
+
+    def test_alias_merges_existing_entries_in_the_analysis(self) -> None:
+        self.service.set_alias(FoodAliasUpsert(
+            alias="ON Gold Standard Whey", canonical_name="whey protein"))
+
+        foods = self.service.analyze(date(2026, 9, 1), date(2026, 10, 31))["foods"]
+        whey = [food for food in foods if food["key"] == "whey protein"]
+        self.assertEqual(len(foods), 2)
+        self.assertEqual(whey[0]["name"], "Whey protein")
+        self.assertEqual(whey[0]["count"], 3)
+
+    def test_alias_chains_collapse_and_can_be_swapped(self) -> None:
+        self.service.set_alias(FoodAliasUpsert(alias="Whey", canonical_name="Whey protein"))
+        self.service.set_alias(FoodAliasUpsert(alias="Whey protein", canonical_name="ON Whey"))
+        self.assertEqual(self.aliases.rows, {"whey": "ON Whey", "whey protein": "ON Whey"})
+
+        self.service.set_alias(FoodAliasUpsert(alias="ON Whey", canonical_name="Whey protein"))
+        self.assertEqual(
+            self.aliases.rows, {"whey": "Whey protein", "on whey": "Whey protein"}
+        )
+        with self.assertRaises(ValueError):
+            self.service.set_alias(FoodAliasUpsert(alias="Paratha", canonical_name="parathas"))
+
+    def test_alias_carries_the_verdict_and_list_shows_merged_names(self) -> None:
+        self.service.set_verdict(FoodVerdictUpsert(
+            food_name="ON Gold Standard Whey", verdict="prefer", reason="Clean protein"))
+
+        result = self.service.set_alias(FoodAliasUpsert(
+            alias="ON Gold Standard Whey", canonical_name="Whey protein"))
+
+        self.assertEqual(result["verdict_note"], "Moved the prefer verdict to 'Whey protein'.")
+        names = self.service.list_food_names("gold standard")
+        self.assertEqual([food["name"] for food in names], ["Whey protein"])
+        self.assertEqual(names[0]["entries"], 3)
+
+    def test_removing_an_unknown_alias_is_not_found(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.remove_alias("Pizza")
+
+
 class AnalysisRangeTests(AnalysisFixture):
     def test_displayed_analysis_defaults_to_month_of_day(self) -> None:
         result = self.service.analyze_displayed(date(2026, 10, 17))
@@ -446,7 +543,7 @@ class AnalysisRangeTests(AnalysisFixture):
         result = self.service.analyze_displayed(date(2026, 10, 17))
         self.assertEqual(result["range_source"], "saved")
         self.assertEqual({f["name"] for f in result["foods"]},
-                         {"Whey protein", "ON gold standard whey"})
+                         {"Whey protein", "ON Gold Standard Whey"})
 
         reset = self.service.reset_range()
         self.assertTrue(reset["reset"])
