@@ -5,6 +5,8 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
+from difflib import SequenceMatcher
+from itertools import combinations
 from typing import Any
 
 NUTRIENT_FIELDS = (
@@ -80,6 +82,28 @@ class FoodCatalog:
     def key(self, name: str) -> str:
         return FoodName.key(self.canonical(name))
 
+    def resolve(self, name: str) -> dict[str, Any]:
+        """The name an entry logged as ``name`` would be saved under, and why."""
+        key = FoodName.key(name)
+        canonical = self.canonical(name)
+        if key in self.aliases:
+            source = "alias"
+        elif key in self.spellings:
+            source = "existing"
+        else:
+            source = "new"
+        known = next(
+            (food for food in self.names() if FoodName.key(food["name"]) == FoodName.key(canonical)),
+            None,
+        )
+        return {
+            "name": name.strip(),
+            "canonical_name": canonical,
+            "source": source,
+            "entries": known["entries"] if known else 0,
+            "aliases": known["aliases"] if known else [],
+        }
+
     def names(self) -> list[dict[str, Any]]:
         """Every canonical food with its entry count and the spellings merged into it."""
         foods: dict[str, dict[str, Any]] = {}
@@ -99,6 +123,46 @@ class FoodCatalog:
             ({**food, "aliases": sorted(food["aliases"])} for food in foods.values()),
             key=lambda food: (-food["entries"], food["name"].lower()),
         )
+
+
+class DuplicateFinder:
+    """Pairs of canonical foods whose names suggest they are the same food."""
+
+    MIN_SIMILARITY = 0.8  # spelling similarity that flags a likely typo
+
+    @classmethod
+    def pair(cls, first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any] | None:
+        first_key, second_key = FoodName.key(first["name"]), FoodName.key(second["name"])
+        similarity = SequenceMatcher(None, first_key, second_key).ratio()
+        first_words, second_words = set(first_key.split()), set(second_key.split())
+        if similarity >= cls.MIN_SIMILARITY:
+            reason = "similar spelling"
+        elif first_words <= second_words or second_words <= first_words:
+            reason = "one name contains the other"
+            similarity = max(
+                similarity,
+                len(first_words & second_words) / len(first_words | second_words),
+            )
+        else:
+            return None
+        keep, merge = sorted(
+            (first, second), key=lambda food: (-food["entries"], food["name"].lower())
+        )
+        return {
+            "keep": keep["name"],
+            "merge": merge["name"],
+            "similarity": round(similarity, 2),
+            "reason": reason,
+            "entries": {keep["name"]: keep["entries"], merge["name"]: merge["entries"]},
+        }
+
+    @classmethod
+    def suggest(cls, foods: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+        """Likely duplicates, most similar first; ``keep`` is the more logged name."""
+        pairs = (cls.pair(first, second) for first, second in combinations(foods, 2))
+        found = [pair for pair in pairs if pair is not None]
+        found.sort(key=lambda pair: (-pair["similarity"], pair["keep"].lower()))
+        return found[:limit]
 
 
 @dataclass

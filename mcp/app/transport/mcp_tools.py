@@ -488,14 +488,39 @@ class LunaVitaMCPTools:
         def list_food_names(query: str | None = None) -> list[dict[str, Any]]:
             """List the canonical food names already in use, most logged first.
 
-            Each item has the name, its entry count, and the aliases (other
-            spellings or merged names) that resolve to it. query filters by a
-            case-insensitive substring of the name or an alias. Call this before
-            logging food so a food keeps one consistent name, and to spot
-            near-duplicates (e.g. "Chicken breast" vs "Grilled chicken") worth
-            merging with rename_food or set_food_alias.
+            This is the canonical-food registry. Each item has the name, its entry
+            count, and the aliases (other spellings or merged names) that resolve
+            to it. query filters by a case-insensitive substring of the name or an
+            alias. Call this before logging food so a food keeps one consistent
+            name; use suggest_duplicate_foods to find near-duplicates to merge.
             """
             return analysis.list_food_names(query)
+
+        @server.tool()
+        def resolve_food_name(name: str) -> dict[str, Any]:
+            """Show the canonical name a food logged as name would be saved under.
+
+            source is "alias" (a registered alias), "existing" (a spelling variant
+            of a food already logged), or "new" (no match; saved as given). Also
+            returns the canonical food's entry count and aliases. Use it when
+            unsure whether a food was logged before; it changes nothing.
+            """
+            return analysis.resolve_food_name(name)
+
+        @server.tool()
+        def suggest_duplicate_foods(limit: int = 20) -> list[dict[str, Any]]:
+            """Suggest canonical foods that look like duplicates of each other.
+
+            Each pair names the food to keep (the more logged one), the one to
+            merge, a 0-1 similarity, and the reason: "similar spelling" (likely a
+            typo, e.g. "Chiken breast") or "one name contains the other" (e.g.
+            "Whey" and "Whey protein", which may also be genuinely different
+            foods such as "Paratha" and "Aloo paratha"). Nothing is merged: confirm
+            with the user, then call rename_food(merge, keep) to rewrite the
+            entries and register the alias, or set_food_alias to merge without
+            rewriting them.
+            """
+            return analysis.suggest_duplicates(limit)
 
         @server.tool()
         def set_food_alias(alias: str, canonical_name: str) -> dict[str, Any]:

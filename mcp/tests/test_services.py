@@ -521,6 +521,22 @@ class FoodAliasTests(AnalysisFixture):
         self.assertEqual([food["name"] for food in names], ["Whey protein"])
         self.assertEqual(names[0]["entries"], 3)
 
+    def test_resolve_and_duplicate_suggestions_follow_registered_aliases(self) -> None:
+        self.food.rows.append(food_row(5, "Whey"))
+        self.assertEqual(self.service.resolve_food_name("on gold standard whey")["source"], "existing")
+        self.assertEqual(
+            [(p["keep"], p["merge"]) for p in self.service.suggest_duplicates()],
+            [("Whey", "Whey protein"), ("ON Gold Standard Whey", "Whey")],
+        )
+        with self.assertRaises(ValueError):
+            self.service.resolve_food_name("!!")
+
+        self.service.rename(FoodRename(current_name="Whey", new_name="Whey protein"))
+
+        resolved = self.service.resolve_food_name("whey")
+        self.assertEqual((resolved["canonical_name"], resolved["source"]), ("Whey protein", "alias"))
+        self.assertEqual(self.service.suggest_duplicates(), [])
+
     def test_removing_an_unknown_alias_is_not_found(self) -> None:
         with self.assertRaises(NotFoundError):
             self.service.remove_alias("Pizza")

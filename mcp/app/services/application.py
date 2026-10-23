@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, timedelta
 
-from app.services.analysis import FoodAnalysis, FoodCatalog, FoodName, PeriodWindow
+from app.services.analysis import (
+    DuplicateFinder,
+    FoodAnalysis,
+    FoodCatalog,
+    FoodName,
+    PeriodWindow,
+)
 from app.services.body_composition import BodyComposition
 from app.core.clock import LocalClock
 from app.core.errors import NotFoundError
@@ -503,6 +509,14 @@ class AnalysisService:
             if needle in FoodName.key(food["name"])
             or any(needle in FoodName.key(alias) for alias in food["aliases"])
         ]
+
+    def resolve_food_name(self, name: str) -> Row:
+        if not FoodName.key(name):
+            raise ValueError("name must contain letters or digits.")
+        return self.catalog().resolve(name)
+
+    def suggest_duplicates(self, limit: int = 20) -> list[Row]:
+        return DuplicateFinder.suggest(self.catalog().names(), min(max(limit, 1), 100))
 
     def set_alias(self, entry: FoodAliasUpsert) -> Row:
         """Merge ``alias`` into ``canonical_name`` for future logs and the analysis.

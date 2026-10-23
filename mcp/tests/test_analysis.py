@@ -6,6 +6,7 @@ from datetime import date
 import json
 
 from app.services.analysis import (
+    DuplicateFinder,
     FoodAnalysis,
     FoodCatalog,
     FoodGroup,
@@ -82,12 +83,49 @@ class FoodCatalogTests(unittest.TestCase):
             names[1]["aliases"], ["ON Gold Standard Whey", "on gold standard whey"]
         )
 
+    def test_resolve_reports_where_the_canonical_name_came_from(self) -> None:
+        alias = self.catalog.resolve("ON gold standard whey")
+        self.assertEqual((alias["canonical_name"], alias["source"], alias["entries"]),
+                         ("Whey protein", "alias", 5))
+        self.assertEqual(self.catalog.resolve("parathas")["source"], "existing")
+        self.assertEqual(self.catalog.resolve(" Dosa ")["canonical_name"], "Dosa")
+        self.assertEqual(self.catalog.resolve("Dosa")["source"], "new")
+
     def test_analysis_groups_aliased_entries_under_the_canonical_name(self) -> None:
         rows = [entry("Whey protein", protein=24), entry("ON Gold Standard Whey", protein=24)]
         analysis = FoodAnalysis(rows, PeriodWindow.month_of(date(2026, 10, 17)), catalog=self.catalog)
         self.assertEqual(len(analysis.foods), 1)
         self.assertEqual(analysis.foods[0].name, "Whey protein")
         self.assertEqual(analysis.foods[0].count, 2)
+
+
+class DuplicateFinderTests(unittest.TestCase):
+    @staticmethod
+    def food(name, entries):
+        return {"name": name, "entries": entries, "aliases": []}
+
+    def test_typos_and_contained_names_are_suggested_most_similar_first(self) -> None:
+        foods = [
+            self.food("Chicken breast", 6),
+            self.food("Chiken breast", 1),
+            self.food("Whey protein", 4),
+            self.food("Whey", 2),
+            self.food("Banana", 3),
+        ]
+
+        pairs = DuplicateFinder.suggest(foods, limit=10)
+
+        self.assertEqual([(p["keep"], p["merge"], p["reason"]) for p in pairs], [
+            ("Chicken breast", "Chiken breast", "similar spelling"),
+            ("Whey protein", "Whey", "one name contains the other"),
+        ])
+        self.assertEqual(pairs[1]["entries"], {"Whey protein": 4, "Whey": 2})
+
+    def test_unrelated_foods_and_the_limit_are_respected(self) -> None:
+        foods = [self.food("Banana", 1), self.food("Paneer", 1), self.food("Rice", 1)]
+        self.assertEqual(DuplicateFinder.suggest(foods, limit=10), [])
+        pairs = [self.food("Egg", 1), self.food("Eggs boiled", 1), self.food("Egg curry", 1)]
+        self.assertEqual(len(DuplicateFinder.suggest(pairs, limit=1)), 1)
 
 
 class MacroQualityTests(unittest.TestCase):
