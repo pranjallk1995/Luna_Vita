@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      lunavita_network:
+      sentia_network:
         aliases:
           - luna-vita-db
     healthcheck:
@@ -43,7 +43,7 @@ services:
         - action: rebuild
           path: ./mcp/Dockerfile
     networks:
-      lunavita_network:
+      sentia_network:
         aliases:
           - luna-vita-mcp
     depends_on:
@@ -83,7 +83,7 @@ services:
         - action: rebuild
           path: ./ui/Dockerfile
     networks:
-      lunavita_network:
+      sentia_network:
         aliases:
           - luna-vita-ui
     depends_on:
@@ -94,6 +94,6 @@ volumes:
   postgres_data:
 
 networks:
-  lunavita_network:
+  sentia_network:
     external: true
-    name: luna_visia_lunavisia_network
+    name: luna_sentia_network

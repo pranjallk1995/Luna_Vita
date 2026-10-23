@@ -3,22 +3,22 @@
 ![Docker required](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)
 ![Docker Compose v2](https://img.shields.io/badge/Docker_Compose-v2-2496ED?logo=docker&logoColor=white)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![Luna Visia network required](https://img.shields.io/badge/Luna_Visia_network-required-6C5CE7?logo=docker&logoColor=white)
+![Luna Sentia network required](https://img.shields.io/badge/Luna_Sentia_network-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL included](https://img.shields.io/badge/PostgreSQL-included-4169E1?logo=postgresql&logoColor=white)
 
 > **Work in progress:** Luna Vita is a local-first and desktop-first nutrition and body-measurement tracker under active development.
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using LLMs
 
-Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the same private Docker network while keeping its service names, host ports, database, and volumes separate.
+Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and PostgreSQL persistence. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the shared private Docker network created by [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) while keeping its service names, host ports, database, and volumes separate.
 
-> **Required Docker network:** Luna Vita expects the external `luna_visia_lunavisia_network` network to exist before it starts. Luna Visia normally creates this network. If you are running Luna Vita without Luna Visia, create the network manually by following the [Start](#start) instructions below.
+> **Required Docker network:** Luna Vita expects the external `luna_sentia_network` network to exist before it starts. [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) creates it; start Sentia first as described under [Start](#start). Food-image matching also needs Luna Visia running on the same network.
 
 <p align="center">
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
 </p>
 
-[Luna Visia](https://github.com/pranjallk1995/Luna_Visia) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share one private Docker network, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
+[Luna Visia](https://github.com/pranjallk1995/Luna_Visia) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share the private `luna_sentia_network`, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
 
 <p align="center">
   <img src="docs/assets/luna-vita-luna-visia.png" alt="Luna Visia food-image workflow working alongside the Luna Vita nutrition dashboard" width="1200">
@@ -115,7 +115,7 @@ All user-facing energy values are labeled in kcal.
 | UI | Streamlit | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
 | HTTP and MCP | FastMCP custom routes + tools | UI endpoints and conversational tools on one server |
 | Database | PostgreSQL 17 | Food, health measurements, recommendations, and daily context |
-| Network | `luna_visia_lunavisia_network` | Shared private network with Luna Visia |
+| Network | `luna_sentia_network` (external) | Shared private network created by Luna Sentia and joined by every Luna app |
 
 The services use unique network aliases:
 
@@ -123,15 +123,20 @@ The services use unique network aliases:
 - `luna-vita-mcp`
 - `luna-vita-ui`
 
-This avoids collisions with Luna Visia services such as `postgres` or `mcp`.
+This avoids collisions with other Luna apps' services such as `postgres` or `mcp` on the shared network.
 
 ## Start
 
-Luna Vita uses an external Docker network. Create it once if it does not already exist:
+Start [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) first. It creates the shared external
+`luna_sentia_network` that every Luna app joins:
 
-```powershell
-docker network create luna_visia_lunavisia_network
+```sh
+cd ../Luna_Sentia && docker compose up -d
 ```
+
+To start Sentia and every Luna app together, with or without Compose Watch, use
+`../luna.sh start [--watch]`; see the
+[Sentia README](https://github.com/pranjallk1995/Luna_Sentia#start-everything).
 
 Create a private `.env`:
 
@@ -204,15 +209,15 @@ A task that was already open before a new tool was added may need to be reloaded
 
 ## Database UI
 
-Adminer is available at <http://127.0.0.1:19080> after starting the stack. Use:
+Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#database-ui) at
+<http://127.0.0.1:19080>. It reaches every Luna database over the shared private
+`luna_sentia_network`; the database port itself remains unavailable from the host. Use:
 
 - System: `PostgreSQL`
-- Server: `postgres`
+- Server: `luna-vita-db`
 - Username: `lunavita`
 - Password: your `POSTGRES_PASSWORD`, or `lunavita-dev` when unset
 - Database: `lunavita`
-
-Adminer is bound to localhost and reaches PostgreSQL only through the private Luna Visia network. The database port itself remains unavailable from the host.
 
 ## MCP tools
 
@@ -300,7 +305,7 @@ Luna Vita, Luna Lumia, and Luna Visia share this layout:
 
 ```text
 .
-├── docker-compose.yaml     # services, private network, and Compose Watch rules
+├── docker-compose.yaml     # services, shared-network membership, and Compose Watch rules
 ├── README.md
 ├── UI_STYLE_GUIDE.md       # shared Luna visual reference
 ├── docs/assets/            # README screenshots
