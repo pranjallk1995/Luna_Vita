@@ -164,7 +164,7 @@ different existing Visia image as its fallback.
 
 Vita signs people in through Luna Sentia's single sign-on: one Google sign-in at
 Sentia opens every Luna app, and **Sign out** in any app signs out of all of them.
-Vita needs no Google client or `secrets.toml` of its own. Set in `.env`:
+Vita needs no Google client of its own. Set in `.env`:
 
 - `LUNA_SSO_URL`: Sentia's public sign-on address (`SENTIA_AUTH_PUBLIC_URL` in
   Sentia's `.env`), for example `https://auth.lunaapps.fyi`.

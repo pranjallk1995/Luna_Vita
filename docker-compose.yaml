@@ -54,7 +54,6 @@ services:
             - "*.py[cod]"
             - requirements.txt
             - Dockerfile
-            - .streamlit/secrets.toml
         - action: rebuild
           path: ./ui/requirements.txt
         - action: rebuild
