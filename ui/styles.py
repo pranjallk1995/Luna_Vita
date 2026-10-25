@@ -6,6 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from sso import LunaSingleSignOn
+
 
 class LunaStyle:
     """Luna Visia-inspired presentation layer."""
@@ -308,7 +310,7 @@ class LunaStyle:
                 "Sign out",
                 icon=":material/logout:",
                 key="header_sign_out",
-                on_click=st.logout,
+                on_click=LunaSingleSignOn.sign_out,
                 width="stretch",
             )
             return selected_day

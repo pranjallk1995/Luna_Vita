@@ -160,19 +160,21 @@ Separate multiple emails with commas. Keep `LUNAVISIA_API_URL` on the shared
 Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18001`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
 different existing Visia image as its fallback.
 
-### Google OAuth settings
+### Sign-in
 
-1. Create a Google OAuth 2.0 **Web application** client.
-2. Add `http://localhost:18502/oauth2callback`.
-3. Copy `ui/.streamlit/secrets.example.toml` to
-   `ui/.streamlit/secrets.toml`.
-4. Set `redirect_uri`, `cookie_secret`, `client_id`, and `client_secret`.
-   Keep `server_metadata_url` unchanged. The redirect value must exactly match
-   the URL used to open Vita.
+Vita signs people in through Luna Sentia's single sign-on: one Google sign-in at
+Sentia opens every Luna app, and **Sign out** in any app signs out of all of them.
+Vita needs no Google client or `secrets.toml` of its own. Set in `.env`:
 
-Keep OAuth credentials only in the gitignored secrets file. Do not reuse
-secrets. The `.env` allowlist is an additional authorization check after
-Google verifies the account.
+- `LUNA_SSO_URL`: Sentia's public sign-on address (`SENTIA_AUTH_PUBLIC_URL` in
+  Sentia's `.env`), for example `https://auth.lunaapps.fyi`.
+- `LUNA_SSO_INTERNAL_URL`: `http://luna-sentia-auth:8000`, where Vita checks
+  sessions over `luna_sentia_network`.
+- `LUNAVITA_ALLOWED_EMAILS`: the accounts allowed into Vita, checked
+  after Sentia confirms who is signed in.
+
+Sentia's auth service must be healthy before Vita can sign anyone in; see
+[Single sign-on](https://github.com/pranjallk1995/Luna_Sentia#single-sign-on) for its setup.
 
 Then start Luna Vita:
 
@@ -369,6 +371,7 @@ Stopping the foreground watcher also stops automatic source synchronization.
 
 Pure logic lives in `domain/` and is unit tested directly, backend access and caching live in `services/`, and the `views/` package only renders.
 
+- `ui/sso.py` - single sign-on through Luna Sentia: reads the shared `luna_sso` cookie, checks it with Sentia, and applies the allowlist.
 - `ui/app.py` - `LunaVitaApp` composition root: styling, header, period navigation, and the daily views; plus the source-reload notice.
 - `ui/views/summary_view.py` - recommendation-aware nutrition summary cards.
 - `ui/views/food_log_view.py` - editable food log, add-entry dialog, save/PDF actions, and macro donut chart.

@@ -6,7 +6,7 @@ import httpx
 import streamlit as st
 from PIL import Image
 
-from auth import OIDCAuthentication
+from sso import LunaSingleSignOn
 from services.api import LunaVitaAPI
 from domain.clock import LunaVitaClock
 from config import UIConfig
@@ -57,7 +57,7 @@ class LunaVitaApp:
 
     def render(self) -> None:
         LunaStyle.apply()
-        OIDCAuthentication(self.config.allowed_emails).require_login("Luna Vita", "Private nutrition and health tracking")
+        LunaSingleSignOn(self.config.allowed_emails).require_login("Luna Vita", "Private AI-managed nutrition tracking")
         SourceReloadMonitor.notify()
         selected_day = LunaStyle.header(LunaVitaClock.today(), UIConfig.LOGO_PATH)
         period = PeriodNavigation.render()
