@@ -214,7 +214,7 @@ class MonthlyView(LunaVitaView):
         # One grid so the body card matches the height of a macro card + chart stack.
         st.markdown(
             '<div class="analysis-caption">Daily average across logged days, '
-            "with each day below</div>"
+            "not counting today, with each day below</div>"
             f'<div class="overview-grid">{NutrientCards.html(values, targets, charts)}{body_card}</div>',
             unsafe_allow_html=True,
         )

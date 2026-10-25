@@ -9,6 +9,8 @@ from difflib import SequenceMatcher
 from itertools import combinations
 from typing import Any
 
+from app.core.clock import LocalClock
+
 NUTRIENT_FIELDS = (
     "calories",
     "protein_g",
@@ -325,8 +327,10 @@ class FoodAnalysis:
         window: PeriodWindow,
         overrides: dict[str, dict[str, Any]] | None = None,
         catalog: FoodCatalog | None = None,
+        today: date | None = None,
     ) -> None:
         self.window = window
+        self.today = (today or LocalClock.today()).isoformat()
         catalog = catalog or FoodCatalog({}, {})
         groups: dict[str, FoodGroup] = defaultdict(lambda: FoodGroup(key=""))
         for row in rows:
@@ -363,9 +367,13 @@ class FoodAnalysis:
         return Verdict(override["verdict"], override["reason"], computed.score, "override")
 
     def daily_averages(self) -> dict[str, float]:
-        """Average intake per logged day, so unlogged days don't dilute it."""
-        days = max(self.days_logged, 1)
-        return {nutrient: total / days for nutrient, total in self.totals.items()}
+        """Average intake per logged day, so unlogged days don't dilute it.
+
+        Today is still being logged, so it is left out unless it is the only logged day.
+        """
+        days = [totals for day, totals in self.by_day.items() if day != self.today] or list(self.by_day.values())
+        count = max(len(days), 1)
+        return {nutrient: sum(day[nutrient] for day in days) / count for nutrient in NUTRIENT_FIELDS}
 
     def top_contributors(self, nutrient: str) -> list[Contributor]:
         total = self.totals[nutrient]

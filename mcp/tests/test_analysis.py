@@ -182,6 +182,22 @@ class FoodAnalysisTests(unittest.TestCase):
         self.assertEqual(self.analysis.days_logged, 2)
         self.assertAlmostEqual(self.analysis.daily_averages()["calories"], 405)
 
+    def test_daily_averages_leave_out_today(self) -> None:
+        rows = [
+            entry("Paratha", "2026-10-14", calories=300),
+            entry("Paratha", "2026-10-15", calories=500),
+            entry("Chai", "2026-10-16", calories=90),
+        ]
+        window = PeriodWindow.month_of(date(2026, 10, 16))
+        analysis = FoodAnalysis(rows, window, today=date(2026, 10, 16))
+        self.assertAlmostEqual(analysis.daily_averages()["calories"], 400)
+        self.assertEqual(analysis.days_logged, 3)
+
+    def test_daily_averages_use_today_when_it_is_the_only_logged_day(self) -> None:
+        rows = [entry("Chai", "2026-10-16", calories=90)]
+        analysis = FoodAnalysis(rows, PeriodWindow.month_of(date(2026, 10, 16)), today=date(2026, 10, 16))
+        self.assertAlmostEqual(analysis.daily_averages()["calories"], 90)
+
     def test_top_contributors_report_share_of_week(self) -> None:
         top_protein = self.analysis.top_contributors("protein_g")
 
