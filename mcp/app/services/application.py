@@ -12,6 +12,7 @@ from app.services.analysis import (
     FoodName,
     PeriodWindow,
 )
+from app.services.averages import RunningAverages
 from app.services.body_composition import BodyComposition
 from app.core.clock import LocalClock
 from app.core.errors import NotFoundError
@@ -567,6 +568,7 @@ class LunaVitaService:
         reports: ReportService,
         analysis: AnalysisService,
         workouts: WorkoutService,
+        averages: RunningAverages,
     ) -> None:
         self.food = food
         self.measurements = measurements
@@ -576,3 +578,4 @@ class LunaVitaService:
         self.reports = reports
         self.analysis = analysis
         self.workouts = workouts
+        self.averages = averages

@@ -39,6 +39,7 @@ class LunaVitaMCPTools:
         self._register_profile_tools()
         self._register_analysis_tools()
         self._register_workout_tools()
+        self._register_average_tools()
 
     @staticmethod
     def optional_date(value: str | None) -> date | None:
@@ -570,6 +571,43 @@ class LunaVitaMCPTools:
         def list_food_verdicts() -> list[dict[str, Any]]:
             """List every verdict override with its food name, verdict, and reason."""
             return analysis.list_verdicts()
+
+    def _register_average_tools(self) -> None:
+        server, averages, optional_date = self.server, self.service.averages, self.optional_date
+
+        @server.tool()
+        def get_running_averages(
+            windows: list[int] | None = None, end_date: str | None = None
+        ) -> dict[str, Any]:
+            """Get running averages of daily macros, weight, and body fat % in one call.
+
+            For each window length in days (default 7, 14, and 30) ending on
+            end_date (YYYY-MM-DD, default today in Asia/Kolkata), returns:
+            macros (calories, protein_g, carbs_g, fat_g, natural_sugar_g,
+            added_sugar_g) averaged per logged day, with the daily target,
+            percent_of_target, and logged_days; weight_kg and body_fat_percent
+            with their average, measured_days, first and latest values; and for
+            every value the change from the same-length window just before it.
+            Today is left out of macro averages while it is still being logged.
+            Use this for questions like "how am I trending this week?".
+            """
+            return averages.summary(windows or [7, 14, 30], optional_date(end_date))
+
+        @server.tool()
+        def get_running_average_series(
+            window_days: int = 7, start_date: str | None = None, end_date: str | None = None
+        ) -> dict[str, Any]:
+            """Get the trailing running average for every day in a date range.
+
+            Each day carries the average of the window_days days ending on it
+            (default 7) for every macro, weight_kg, and body_fat_percent, plus how
+            many days were logged in that window. Dates are YYYY-MM-DD; end_date
+            defaults to today and start_date to 29 days before end_date (at most
+            366 days). Use this to chart or describe how the smoothed trend moved.
+            """
+            end = optional_date(end_date) or LocalClock.today()
+            start = optional_date(start_date) or end - timedelta(days=29)
+            return averages.series(window_days, start, end)
 
     def _register_workout_tools(self) -> None:
         server, tracker = self.server, self.service.workouts

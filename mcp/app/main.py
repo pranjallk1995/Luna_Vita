@@ -29,6 +29,7 @@ from app.services.application import (
     ReportService,
     WorkoutService,
 )
+from app.services.averages import RunningAverages
 from app.integrations.visia import VisiaImageCatalog
 
 
@@ -79,6 +80,7 @@ class LunaVitaApplication:
             workouts=WorkoutService(
                 WorkoutRepository(self.database), ExerciseRepository(self.database)
             ),
+            averages=RunningAverages(food_entries, measurement_entries, recommendations),
         )
 
     def run(self) -> None:
