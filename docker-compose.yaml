@@ -1,30 +1,10 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: lunavita
-      POSTGRES_USER: lunavita
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lunavita-dev}
-      TZ: Asia/Kolkata
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      sentia_network:
-        aliases:
-          - luna-vita-db
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lunavita} -d ${POSTGRES_DB:-lunavita}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   mcp:
     build: ./mcp
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-vita-db:5432/lunavita
+      DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-sentia-db:5432/lunavita
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-b7adf6ae-30b3-4750-8381-5dc6ab393de6}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18001}
@@ -46,9 +26,6 @@ services:
       sentia_network:
         aliases:
           - luna-vita-mcp
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
       interval: 10s
@@ -89,9 +66,6 @@ services:
     depends_on:
       mcp:
         condition: service_healthy
-
-volumes:
-  postgres_data:
 
 networks:
   sentia_network:
