@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from config import UIConfig
 from domain.clock import LunaVitaClock
 
 NOT_RECORDED = "Not recorded"
@@ -22,7 +23,7 @@ class FoodEntryTime:
         try:
             timestamp = datetime.fromisoformat(timestamp_text)
             if timestamp.tzinfo is not None:
-                timestamp = timestamp.astimezone(LunaVitaClock.LOCAL_TIMEZONE)
+                timestamp = timestamp.astimezone(UIConfig.LOCAL_TIMEZONE)
             clock_time = timestamp.time().replace(tzinfo=None)
         except ValueError:
             return (1, time.max, entry_id)

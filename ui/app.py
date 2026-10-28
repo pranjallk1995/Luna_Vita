@@ -57,7 +57,7 @@ class LunaVitaApp:
 
     def render(self) -> None:
         LunaStyle.apply()
-        LunaSingleSignOn(self.config.allowed_emails).require_login("Luna Vita", "Private AI-managed nutrition tracking")
+        LunaSingleSignOn(self.config.allowed_emails, self.config.sso).require_login("Luna Vita", "Private AI-managed nutrition tracking")
         SourceReloadMonitor.notify()
         selected_day = LunaStyle.header(LunaVitaClock.today(), UIConfig.LOGO_PATH)
         period = PeriodNavigation.render()

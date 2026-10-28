@@ -38,7 +38,6 @@ from app.data.repositories import (
     ExerciseRepository,
     FoodAliasRepository,
     FoodRepository,
-    MAX_PAGE_SIZE,
     MeasurementRepository,
     RecommendationRepository,
     Row,
@@ -46,6 +45,7 @@ from app.data.repositories import (
     WorkoutRepository,
 )
 from app.integrations.visia import VisiaImageCatalog
+from app.core.config import AppConfig
 
 
 def food_catalog(food: FoodRepository, aliases: FoodAliasRepository) -> FoodCatalog:
@@ -339,7 +339,7 @@ class ReportService:
     def collect(self, day: date) -> DailyReport:
         return DailyReport(
             day=day,
-            food_entries=self.food.list(day, day, MAX_PAGE_SIZE),
+            food_entries=self.food.list(day, day, AppConfig.MAX_PAGE_SIZE),
             totals=self.food.totals(day),
             context=self.days.get(day),
             measurements=self.measurements.for_day(day),

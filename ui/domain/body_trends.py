@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
-from domain.clock import LunaVitaClock
+from config import UIConfig
 
 PERIODS = ("Morning", "Night")
 
@@ -27,7 +27,7 @@ class Reading:
         """Readings from the backend's ``/api/body-composition`` series."""
         return [
             cls(
-                at=datetime.fromisoformat(item["measured_at"]).astimezone(LunaVitaClock.LOCAL_TIMEZONE),
+                at=datetime.fromisoformat(item["measured_at"]).astimezone(UIConfig.LOCAL_TIMEZONE),
                 value=float(item["value"]),
                 label=item.get("time_label") or "",
                 estimated=bool(item.get("estimated")),

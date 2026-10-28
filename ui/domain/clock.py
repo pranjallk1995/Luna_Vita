@@ -1,17 +1,16 @@
 """Timezone-aware dates and timestamps for the UI."""
 
 from datetime import date, datetime, time
-from zoneinfo import ZoneInfo
+
+from config import UIConfig
 
 
 class LunaVitaClock:
     """Resolve dates and timestamps in the Asia/Kolkata calendar day."""
 
-    LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
-
     @classmethod
     def now(cls) -> datetime:
-        return datetime.now(cls.LOCAL_TIMEZONE)
+        return datetime.now(UIConfig.LOCAL_TIMEZONE)
 
     @classmethod
     def today(cls) -> date:
@@ -24,4 +23,4 @@ class LunaVitaClock:
 
     @classmethod
     def combine(cls, day: date, clock_time: time) -> datetime:
-        return datetime.combine(day, clock_time, tzinfo=cls.LOCAL_TIMEZONE)
+        return datetime.combine(day, clock_time, tzinfo=UIConfig.LOCAL_TIMEZONE)

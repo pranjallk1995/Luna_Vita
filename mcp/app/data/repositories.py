@@ -16,8 +16,9 @@ from app.core.models import (
     HealthMeasurementCreate,
 )
 
+from app.core.config import AppConfig
+
 Row = dict[str, Any]
-MAX_PAGE_SIZE = 500
 
 
 class Repository:
@@ -44,7 +45,7 @@ class Repository:
 
     @staticmethod
     def page_size(limit: int) -> int:
-        return min(max(limit, 1), MAX_PAGE_SIZE)
+        return min(max(limit, 1), AppConfig.MAX_PAGE_SIZE)
 
     def fetch_one(self, sql: str, params: Any = ()) -> Row | None:
         with self.database.cursor() as cursor:

@@ -11,6 +11,7 @@ from typing import Any
 from app.core.clock import LocalClock
 from app.services.analysis import NUTRIENT_FIELDS
 from app.services.body_composition import BodyComposition
+from app.core.config import AppConfig
 
 Row = dict[str, Any]
 
@@ -33,9 +34,6 @@ class RunningAverages:
     the window's only logged day). Weight and body fat % are averaged per day
     first, so a day with three weigh-ins counts once.
     """
-
-    MAX_WINDOW_DAYS = 366
-    MAX_SERIES_DAYS = 366
 
     def __init__(self, food, measurements, recommendations, today: Callable[[], date] = LocalClock.today) -> None:
         self.food = food
@@ -84,8 +82,8 @@ class RunningAverages:
         window_days = self._check_window(window_days)
         if end < start:
             raise ValueError("end_date must be on or after start_date.")
-        if (end - start).days + 1 > self.MAX_SERIES_DAYS:
-            raise ValueError(f"A series covers at most {self.MAX_SERIES_DAYS} days.")
+        if (end - start).days + 1 > AppConfig.MAX_SERIES_DAYS:
+            raise ValueError(f"A series covers at most {AppConfig.MAX_SERIES_DAYS} days.")
         data = self._load(start - timedelta(days=window_days - 1), end)
         days = []
         for offset in range((end - start).days + 1):
@@ -112,8 +110,8 @@ class RunningAverages:
     # Pieces
 
     def _check_window(self, days: int) -> int:
-        if not 1 <= int(days) <= self.MAX_WINDOW_DAYS:
-            raise ValueError(f"Window lengths must be 1-{self.MAX_WINDOW_DAYS} days.")
+        if not 1 <= int(days) <= AppConfig.MAX_WINDOW_DAYS:
+            raise ValueError(f"Window lengths must be 1-{AppConfig.MAX_WINDOW_DAYS} days.")
         return int(days)
 
     def _load(self, start: date, end: date) -> _DailyData:

@@ -2,12 +2,22 @@
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+from typing import ClassVar
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True)
 class AppConfig:
     """Immutable backend settings loaded from environment variables."""
+
+    ASSET_DIR: ClassVar[Path] = Path(__file__).resolve().parent.parent / "assets"
+    # Calendar days, "today", and logged times all resolve in this timezone.
+    TIMEZONE: ClassVar[ZoneInfo] = ZoneInfo("Asia/Kolkata")
+    MAX_PAGE_SIZE: ClassVar[int] = 500
+    MAX_WINDOW_DAYS: ClassVar[int] = 366
+    MAX_SERIES_DAYS: ClassVar[int] = 366
 
     database_url: str
     visia_api_url: str = "http://luna-visia-mcp:8000"

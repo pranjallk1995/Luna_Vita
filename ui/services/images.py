@@ -46,7 +46,7 @@ class FoodImages:
             raise ValueError("Choose a valid JPG, PNG, or WebP food photo.") from exc
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=256)
+    @st.cache_data(show_spinner=False, max_entries=UIConfig.IMAGE_CACHE_ENTRIES)
     def preview(source: str) -> str:
         """Return a distortion-free 3:2 preview while preserving its source."""
         if not source:
@@ -55,7 +55,7 @@ class FoodImages:
             if source.startswith("data:image/"):
                 image_bytes = base64.b64decode(source.partition(",")[2], validate=True)
             elif source.startswith(("https://", "http://")):
-                response = httpx.get(source, follow_redirects=True, timeout=10.0)
+                response = httpx.get(source, follow_redirects=True, timeout=UIConfig.IMAGE_FETCH_TIMEOUT_SECONDS)
                 response.raise_for_status()
                 image_bytes = response.content
             else:
