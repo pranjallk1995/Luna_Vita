@@ -1,6 +1,7 @@
 services:
   mcp:
     build: ./mcp
+    image: ghcr.io/pranjallk1995/luna-vita-mcp:latest
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
@@ -34,6 +35,7 @@ services:
 
   ui:
     build: ./ui
+    image: ghcr.io/pranjallk1995/luna-vita-ui:latest
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
