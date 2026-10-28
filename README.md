@@ -111,6 +111,15 @@ All user-facing energy values are labeled in kcal.
 
 ## Architecture
 
+### Luna ecosystem
+
+![Luna ecosystem architecture](docs/assets/luna-ecosystem.svg)
+
+Every Luna app is a Streamlit UI plus a FastMCP service on Luna Sentia's
+`luna_sentia_network`: its data lives in Sentia's PostgreSQL, people sign in
+through Sentia's `auth`, and model calls go to Sentia's Ollama. Orange lines are
+the calls between apps; the grey dashed line is the planned Lexia-to-Fiora link.
+
 | Component | Technology | Purpose |
 | --- | --- | --- |
 | UI | Streamlit | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
