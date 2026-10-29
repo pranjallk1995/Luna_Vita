@@ -27,7 +27,7 @@ class VisiaImageCatalog:
     )
     SEARCH_HINT = (
         "Search Luna Visia for a matching image and pass the public_url it returns; "
-        "if none fits, omit image_url to use the Luna Vita placeholder image."
+        "if none fits, omit image_url to use the Luna Vita food placeholder image."
     )
 
     def __init__(self, api_url: str, placeholder_image_id: str, timeout: float = 10.0) -> None:
@@ -62,12 +62,12 @@ class VisiaImageCatalog:
         return self.resolve_id(self.image_id(image_url))
 
     def placeholder_url(self) -> str:
-        """The public URL of the "add something relevant" placeholder in Visia."""
+        """The public URL of the food placeholder image in Visia."""
         try:
             return self.resolve_id(self.placeholder_image_id)
         except NotFoundError as error:
             raise NotFoundError(
-                f"The Luna Vita placeholder image ({self.placeholder_image_id}) is missing "
+                f"The Luna Vita food placeholder image ({self.placeholder_image_id}) is missing "
                 "from Luna Visia; restore it or set LUNAVITA_PLACEHOLDER_IMAGE_ID."
             ) from error
 

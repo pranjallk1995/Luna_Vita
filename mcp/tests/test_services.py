@@ -215,17 +215,22 @@ class FoodServiceTests(unittest.TestCase):
         self.assertTrue(result["saved"])
         self.assertEqual(self.repository.calls[-1][1].image_url, FakeImageCatalog.PLACEHOLDER)
 
-    def test_set_image_strips_surrounding_whitespace(self) -> None:
-        result = self.service.set_image(4, "  https://example.test/apple.jpg  ")
+    def test_set_image_stores_the_canonical_visia_url(self) -> None:
+        result = self.service.set_image(4, f"  {FakeImageCatalog.CANONICAL}  ")
 
-        self.assertEqual(result["image_url"], "https://example.test/apple.jpg")
-        self.assertEqual(
-            self.repository.calls[-1],
-            ("set_image", (4, "https://example.test/apple.jpg")),
-        )
+        self.assertEqual(result["image_url"], FakeImageCatalog.CANONICAL)
+        self.assertEqual(self.repository.calls[-1], ("set_image", (4, FakeImageCatalog.CANONICAL)))
 
-    def test_set_image_converts_blank_value_to_none(self) -> None:
-        self.assertIsNone(self.service.set_image(4, "   ")["image_url"])
+    def test_set_image_without_a_url_uses_the_food_placeholder(self) -> None:
+        for image_url in (None, "   "):
+            with self.subTest(image_url=image_url):
+                self.assertEqual(
+                    self.service.set_image(4, image_url)["image_url"], FakeImageCatalog.PLACEHOLDER)
+
+    def test_set_image_rejects_urls_missing_from_visia(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.set_image(4, "https://example.test/apple.jpg")
+        self.assertEqual(self.repository.calls, [])
 
     def test_new_entries_reuse_the_existing_name_or_alias(self) -> None:
         repository = FakeFoodRepository({"Paratha": 4, "Whey protein": 2})

@@ -84,8 +84,8 @@ class LunaVitaMCPTools:
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
-            image, omit image_url: the entry then shows the Luna Vita placeholder,
-            which asks the user to add something relevant in Luna Visia. Never
+            image, omit image_url: the entry then shows the Luna Vita food
+            placeholder, an image stored in Luna Visia. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             """
@@ -139,8 +139,8 @@ class LunaVitaMCPTools:
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
-            image, omit image_url: the entry then shows the Luna Vita placeholder,
-            which asks the user to add something relevant in Luna Visia. Never
+            image, omit image_url: the entry then shows the Luna Vita food
+            placeholder, an image stored in Luna Visia. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             Use the current date/time when the user says "now"; otherwise preserve
@@ -217,7 +217,14 @@ class LunaVitaMCPTools:
         def set_food_image(
             entry_id: int, image_url: str | None = None
         ) -> dict[str, Any]:
-            """Set, replace, or clear the optional image URL for a food entry."""
+            """Set or replace a food entry's image with a Luna Visia image.
+
+            Always search Luna Visia for a representative image of the food first
+            and pass the public_url it returns (an immutable
+            .../api/public/images/<image-id> URL); it is checked against Luna
+            Visia and rejected if not found. If no image fits, omit image_url to
+            use the Luna Vita food placeholder stored in Luna Visia.
+            """
             return update_result(food.set_image(entry_id, image_url))
 
         @server.tool()

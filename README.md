@@ -29,7 +29,7 @@ The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition es
 
 > I had 4 parathas of 40 g each right now.
 
-The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. The model searches Luna Visia for a representative image and passes its public image-ID URL (`.../api/public/images/<image-id>`). Luna Vita checks the URL against Visia's catalog before saving and stores the canonical URL Visia publishes, so filename URLs, data URIs, unknown or hidden images, and invented URLs are rejected. When the model finds no suitable image and omits the URL, the entry shows the Luna Vita placeholder, an "Add something relevant in Luna Visia" image stored in Visia itself (set with `LUNAVITA_PLACEHOLDER_IMAGE_ID`). If Luna Visia is unreachable the entry is refused rather than saved without an image. Photos uploaded through the Luna Vita UI remain optional and are not affected.
+The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. The model searches Luna Visia for a representative image and passes its public image-ID URL (`.../api/public/images/<image-id>`). Luna Vita checks the URL against Visia's catalog before saving and stores the canonical URL Visia publishes, so filename URLs, data URIs, unknown or hidden images, and invented URLs are rejected. When the model finds no suitable image and omits the URL, the entry shows the Luna Vita food placeholder, an image stored in Visia itself (set with `LUNAVITA_PLACEHOLDER_IMAGE_ID`). If Luna Visia is unreachable the entry is refused rather than saved without an image. Photos uploaded through the Luna Vita UI remain optional and are not affected.
 
 Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
 
@@ -118,9 +118,11 @@ All user-facing energy values are labeled in kcal.
 Every Luna app is a Streamlit UI plus a FastMCP service on Luna Sentia's
 `luna_sentia_network`: its data lives in Sentia's PostgreSQL, people sign in
 through Sentia's `auth`, and model calls go to Sentia's Ollama. Orange lines are
-Visia image URLs that other apps use: food images for Vita and room images for
-Lumia. Grey dashed lines are planned links into Fiora: tax details from Lexia,
-and transaction image and icon URLs from Visia.
+Visia image URLs that other apps use: food images for Vita, room images for
+Lumia, and cover art for Vibia. Grey dashed lines are planned: links into Fiora
+(tax details from Lexia, transaction image and icon URLs from Visia), and a
+proposed unifying app that detects which Luna apps are installed, shows them in
+one home, and opens each one with the shared sign-in.
 
 | Component | Technology | Purpose |
 | --- | --- | --- |
@@ -249,7 +251,7 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `log_consumed_food` — store food described conversationally after the active model infers missing nutrition and finds its image in Luna Visia, falling back to the placeholder image.
 - `get_food_log` — list food entries, optionally over an inclusive date range.
 - `update_food` — replace an existing food entry.
-- `set_food_image` — set, replace, or clear an optional food image.
+- `set_food_image` — set or replace a food image with a Luna Visia image, or the food placeholder when none fits.
 - `remove_food` — delete a food entry, optionally guarded by its expected date.
 
 ### Measurements and summaries

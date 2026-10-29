@@ -21,7 +21,8 @@ class AppConfig:
 
     database_url: str
     visia_api_url: str = "http://luna-visia-mcp:8000"
-    # The "Add something relevant in Luna Visia" image stored in Luna Visia.
+    # The food placeholder image stored in Luna Visia, shown when no Visia image fits a food.
+    # Set LUNAVITA_PLACEHOLDER_IMAGE_ID to its ID once it is stored.
     placeholder_image_id: str = "b7adf6ae-30b3-4750-8381-5dc6ab393de6"
     host: str = "0.0.0.0"
     port: int = 8000

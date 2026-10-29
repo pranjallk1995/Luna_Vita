@@ -57,7 +57,7 @@ class FoodService:
     """Record, correct, and remove food and supplement entries.
 
     Entries added by the assistant always show a Luna Visia image: the one it
-    found, or the Luna Vita placeholder when it supplied none. Entries from the
+    found, or the Luna Vita food placeholder when it supplied none. Entries from the
     UI may carry an uploaded photo or none. New entries are saved under the
     food's canonical name, so spelling variants never become separate foods.
     """
@@ -115,8 +115,10 @@ class FoodService:
         return self.food.update(entry_id, entry)
 
     def set_image(self, entry_id: int, image_url: str | None) -> Row | None:
-        normalized = image_url.strip() if image_url and image_url.strip() else None
-        return self.food.set_image(entry_id, normalized)
+        """Set an entry's image to Visia's canonical URL, or the placeholder if none was given."""
+        supplied = (image_url or "").strip()
+        resolved = self.images.resolve(supplied) if supplied else self.images.placeholder_url()
+        return self.food.set_image(entry_id, resolved)
 
     def remove(self, entry_id: int, expected_day: date | None = None) -> bool:
         return self.food.delete(entry_id, expected_day)
