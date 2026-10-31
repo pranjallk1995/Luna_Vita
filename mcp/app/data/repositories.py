@@ -121,6 +121,15 @@ class FoodRepository(Repository):
             (image_url, entry_id),
         )
 
+    def set_image_for_names(self, food_names: list[str], image_url: str) -> int:
+        """Point every entry logged under any of ``food_names`` at one image; return how many."""
+        with self.database.cursor() as cursor:
+            cursor.execute(
+                "UPDATE food_entries SET image_url=%s WHERE food_name = ANY(%s)",
+                (image_url, food_names),
+            )
+            return cursor.rowcount
+
     def delete(self, entry_id: int, expected_day: date | None = None) -> bool:
         return self.affects_row(
             """
@@ -427,6 +436,32 @@ class VerdictRepository(Repository):
     def delete(self, food_key: str) -> bool:
         return self.affects_row(
             "DELETE FROM food_verdicts WHERE food_key=%s RETURNING food_key", (food_key,)
+        )
+
+
+class FoodImageRepository(Repository):
+    """The Luna Visia image each food shows, keyed by normalized food name."""
+
+    def get(self, food_key: str) -> Row | None:
+        return self.fetch_one("SELECT * FROM food_images WHERE food_key=%s", (food_key,))
+
+    def upsert(self, food_key: str, food_name: str, image_url: str) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO food_images (food_key, food_name, image_url)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (food_key) DO UPDATE SET
+                food_name=EXCLUDED.food_name,
+                image_url=EXCLUDED.image_url,
+                updated_at=NOW()
+            RETURNING *
+            """,
+            (food_key, food_name, image_url),
+        )
+
+    def delete(self, food_key: str) -> bool:
+        return self.affects_row(
+            "DELETE FROM food_images WHERE food_key=%s RETURNING food_key", (food_key,)
         )
 
 

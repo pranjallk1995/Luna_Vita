@@ -1,9 +1,11 @@
 """MCP tools that let LLM clients track Luna Vita nutrition and measurements."""
 
 from datetime import date, timedelta
-from typing import Any
+from typing import Annotated, Any
 
+import anyio
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict, WithJsonSchema
 
 from app.core.clock import LocalClock
 from app.core.models import (
@@ -25,6 +27,41 @@ from app.core.models import (
 )
 from app.transport.report_tools import CurrentLogPdfTool
 from app.services.application import LunaVitaService
+
+# ChatGPT passes attachments (and images it generated) to parameters listed here
+# as {download_url, file_id}.
+FILE_PARAMS_META = {"openai/fileParams": ["file"]}
+
+
+class FileReference(BaseModel):
+    """A client-hosted file, as passed by ChatGPT for file parameters."""
+
+    model_config = ConfigDict(extra="allow")
+
+    download_url: str
+    file_id: str | None = None
+
+
+# Inline (no $ref) so every LLM client can read the parameter shape.
+FileInput = Annotated[
+    FileReference | None,
+    WithJsonSchema(
+        {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "download_url": {"type": "string"},
+                        "file_id": {"type": "string"},
+                    },
+                    "required": ["download_url"],
+                },
+                {"type": "null"},
+            ],
+            "description": "An image file from the chat client: one you generated or the user attached.",
+        }
+    ),
+]
 
 
 class LunaVitaMCPTools:
@@ -84,8 +121,8 @@ class LunaVitaMCPTools:
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
-            image, omit image_url: the entry then shows the Luna Vita food
-            placeholder, an image stored in Luna Visia. Never
+            image, omit image_url: the entry then shows the food's own image (see
+            update_food_image), or else the Luna Vita food placeholder. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             """
@@ -139,8 +176,8 @@ class LunaVitaMCPTools:
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
-            image, omit image_url: the entry then shows the Luna Vita food
-            placeholder, an image stored in Luna Visia. Never
+            image, omit image_url: the entry then shows the food's own image (see
+            update_food_image), or else the Luna Vita food placeholder. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             Use the current date/time when the user says "now"; otherwise preserve
@@ -223,9 +260,40 @@ class LunaVitaMCPTools:
             and pass the public_url it returns (an immutable
             .../api/public/images/<image-id> URL); it is checked against Luna
             Visia and rejected if not found. If no image fits, omit image_url to
-            use the Luna Vita food placeholder stored in Luna Visia.
+            use the Luna Vita food placeholder stored in Luna Visia. To change the
+            image of a food on all its entries, use update_food_image instead.
             """
             return update_result(food.set_image(entry_id, image_url))
+
+        @server.tool(meta=FILE_PARAMS_META)
+        async def update_food_image(
+            food_name: str,
+            file: FileInput = None,
+            image_url: str | None = None,
+            content_base64: str | None = None,
+        ) -> dict[str, Any]:
+            """Give a food one image, shown on all its entries and every one logged later.
+
+            Use this when the user asks to generate, add, or change a food's image,
+            or when a logged entry returns an image_hint. In one call the image is
+            stored in Luna Visia (captioned, tagged "food") and linked to the food
+            under every spelling and alias; nothing is linked if storing fails.
+
+            If you can generate images, first create an appetizing, realistic photo
+            of the dish (plated, no text), landscape with a 3:2 aspect ratio
+            (4.5 x 3, e.g. 1536x1024), then pass exactly one of:
+            - file: the image you generated or the user attached (ChatGPT supplies it).
+            - image_url: a public HTTPS image URL, or an image data URL.
+            - content_base64: Base64 image bytes; only practical for small images.
+            If you cannot generate images, search Luna Visia instead and pass the
+            public_url it returns as image_url. Retrying with the same image is safe.
+            """
+            source = {
+                "file": file.model_dump() if file else None,
+                "image_url": image_url,
+                "content_base64": content_base64,
+            }
+            return await anyio.to_thread.run_sync(food.update_image, food_name, source)
 
         @server.tool()
         def remove_food(

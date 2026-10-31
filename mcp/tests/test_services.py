@@ -31,6 +31,8 @@ from app.services.application import (
     ReportService,
     WorkoutService,
 )
+from app.integrations.visia import VisiaUnavailableError
+from app.services.analysis import FoodName
 
 
 class CallRecorder:
@@ -47,6 +49,13 @@ class FakeFoodRepository(CallRecorder):
 
     def name_counts(self) -> dict[str, int]:
         return self.counts
+
+    def names(self) -> list[str]:
+        return list(self.counts)
+
+    def set_image_for_names(self, food_names: list[str], image_url: str) -> int:
+        self.calls.append(("set_image_for_names", (sorted(food_names), image_url)))
+        return sum(self.counts[name] for name in food_names)
 
     def add(self, entry: FoodEntryCreate) -> dict[str, Any]:
         self.calls.append(("add", entry))
@@ -152,11 +161,106 @@ class FakeImageCatalog:
     def placeholder_url(self) -> str:
         return self.PLACEHOLDER
 
+    STORED = "https://visia.example/api/public/images/9a9a9a9a-0000-4000-8000-000000000001"
+
+    def __init__(self, store_error: Exception | None = None) -> None:
+        self.stored: list[tuple[str, list[str], dict]] = []
+        self.store_error = store_error
+
+    @staticmethod
+    def is_visia_url(image_url: str) -> bool:
+        return "/api/public/images/" in image_url
+
+    def store(self, name: str, tags: list[str], source: dict) -> dict:
+        if self.store_error:
+            raise self.store_error
+        self.stored.append((name, tags, source))
+        return {"status": "created", "name": f"{name}.png", "image_id": "9a9a", "public_url": self.STORED}
+
+
+class FakeFoodImages:
+    def __init__(self, rows: dict[str, dict] | None = None) -> None:
+        self.rows = rows or {}
+
+    def get(self, food_key: str) -> dict | None:
+        return self.rows.get(food_key)
+
+    def upsert(self, food_key: str, food_name: str, image_url: str) -> dict:
+        self.rows[food_key] = {"food_key": food_key, "food_name": food_name, "image_url": image_url}
+        return self.rows[food_key]
+
+    def delete(self, food_key: str) -> bool:
+        return self.rows.pop(food_key, None) is not None
+
+
+class FoodImageTests(unittest.TestCase):
+    """One image per food: stored in Visia, shown on all its entries, and on new ones."""
+
+    def setUp(self) -> None:
+        self.repository = FakeFoodRepository({"Schezuan Rice": 3, "schezuan rice": 1, "Paratha": 2})
+        self.catalog = FakeImageCatalog()
+        self.images = FakeFoodImages()
+        self.aliases = FakeAliases({FoodName.key("Szechuan fried rice"): "Schezuan Rice"})
+        self.service = FoodService(self.repository, self.catalog, self.aliases, self.images)
+
+    def test_generated_image_is_stored_in_visia_and_linked_to_every_spelling(self) -> None:
+        file = {"download_url": "https://files.example.test/gen.png", "file_id": "f1"}
+        result = self.service.update_image("szechuan fried rice", {"file": file, "image_url": None})
+
+        self.assertEqual(
+            self.catalog.stored,
+            [("Schezuan Rice", ["food", "luna vita", "schezuan rice"], {"file": file})],
+        )
+        self.assertEqual(
+            self.repository.calls,
+            [("set_image_for_names", (["Schezuan Rice", "schezuan rice"], FakeImageCatalog.STORED))],
+        )
+        self.assertEqual((result["food_name"], result["entries_updated"]), ("Schezuan Rice", 4))
+        self.assertEqual(result["visia"]["status"], "created")
+        self.assertEqual(self.images.get(FoodName.key("Schezuan Rice"))["image_url"], FakeImageCatalog.STORED)
+
+    def test_existing_visia_image_is_verified_not_stored_again(self) -> None:
+        result = self.service.update_image("Paratha", {"image_url": FakeImageCatalog.CANONICAL})
+        self.assertEqual(self.catalog.stored, [])
+        self.assertEqual((result["image_url"], result["visia"]["status"]), (FakeImageCatalog.CANONICAL, "linked"))
+
+    def test_needs_exactly_one_source(self) -> None:
+        for source in ({}, {"image_url": "https://x.test/a.png", "content_base64": "AAAA"}):
+            with self.subTest(source), self.assertRaisesRegex(ValueError, "exactly one"):
+                self.service.update_image("Paratha", source)
+
+    def test_nothing_is_linked_when_visia_cannot_store(self) -> None:
+        catalog = FakeImageCatalog(store_error=VisiaUnavailableError("down"))
+        service = FoodService(self.repository, catalog, self.aliases, self.images)
+        with self.assertRaises(VisiaUnavailableError):
+            service.update_image("Paratha", {"content_base64": "AAAA"})
+        self.assertEqual((self.repository.calls, self.images.rows), ([], {}))
+
+    def test_new_entries_show_the_foods_image(self) -> None:
+        self.images.upsert(FoodName.key("Schezuan Rice"), "Schezuan Rice", FakeImageCatalog.STORED)
+        rice = apple().model_copy(update={"food_name": "schezuan rice"})
+
+        from_ui = self.service.record(rice)
+        from_chat = self.service.record_with_visia_image(rice)
+
+        self.assertEqual(from_ui["image_url"], FakeImageCatalog.STORED)
+        self.assertEqual(from_chat["image_url"], FakeImageCatalog.STORED)
+        self.assertNotIn("image_hint", from_chat)
+
+    def test_placeholder_entries_ask_for_a_generated_image(self) -> None:
+        saved = self.service.record_with_visia_image(apple())
+        logged = self.service.log_consumed("an apple", apple())
+
+        self.assertEqual(saved["image_url"], FakeImageCatalog.PLACEHOLDER)
+        self.assertIn("update_food_image", saved["image_hint"])
+        self.assertIn("update_food_image", logged["image_hint"])
+        self.assertNotIn("image_hint", logged["entry"])
+
 
 class FoodServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repository = FakeFoodRepository()
-        self.service = FoodService(self.repository, FakeImageCatalog(), FakeAliases())
+        self.service = FoodService(self.repository, FakeImageCatalog(), FakeAliases(), FakeFoodImages())
 
     def test_record_delegates_validated_model(self) -> None:
         result = self.service.record(apple())
@@ -235,7 +339,7 @@ class FoodServiceTests(unittest.TestCase):
     def test_new_entries_reuse_the_existing_name_or_alias(self) -> None:
         repository = FakeFoodRepository({"Paratha": 4, "Whey protein": 2})
         service = FoodService(
-            repository, FakeImageCatalog(), FakeAliases({"on whey": "Whey protein"})
+            repository, FakeImageCatalog(), FakeAliases({"on whey": "Whey protein"}), FakeFoodImages()
         )
 
         service.record(apple().model_copy(update={"food_name": "parathas"}))
@@ -316,7 +420,7 @@ class ReportServiceTests(unittest.TestCase):
         food = FakeFoodRepository()
         renderer = FakeRenderer()
         service = ReportService(
-            FoodService(food, FakeImageCatalog(), FakeAliases()),
+            FoodService(food, FakeImageCatalog(), FakeAliases(), FakeFoodImages()),
             MeasurementService(FakeMeasurementRepository()),
             DayContextService(FakeDailyLogRepository()),
             renderer,
@@ -418,7 +522,10 @@ class AnalysisFixture(unittest.TestCase):
         self.verdicts = FakeVerdicts()
         self.ranges = FakeRanges()
         self.aliases = FakeAliases()
-        self.service = AnalysisService(self.food, self.verdicts, self.ranges, self.aliases)
+        self.food_images = FakeFoodImages()
+        self.service = AnalysisService(
+            self.food, self.verdicts, self.ranges, self.aliases, self.food_images
+        )
 
 
 class AnalysisServiceTests(AnalysisFixture):
@@ -491,6 +598,20 @@ class FoodAliasTests(AnalysisFixture):
             current_name="ON Gold Standard Whey", new_name="Whey protein"))
         self.assertTrue(full["alias_recorded"])
         self.assertEqual(self.aliases.rows, {"on gold standard whey": "Whey protein"})
+
+    def test_food_image_follows_a_full_rename(self) -> None:
+        self.food_images.upsert("paratha", "Paratha", "https://visia.example/p")
+        self.service.rename(FoodRename(current_name="Paratha", new_name="Aloo paratha"))
+        self.assertEqual(list(self.food_images.rows), ["aloo paratha"])
+        self.assertEqual(self.food_images.rows["aloo paratha"]["image_url"], "https://visia.example/p")
+
+    def test_merged_food_keeps_its_own_image(self) -> None:
+        self.food_images.upsert("whey protein", "Whey protein", "https://visia.example/w")
+        self.food_images.upsert("on gold standard whey", "ON Gold Standard Whey", "https://visia.example/on")
+        self.service.set_alias(FoodAliasUpsert(alias="ON Gold Standard Whey", canonical_name="Whey protein"))
+        self.assertEqual(
+            self.food_images.rows, {"whey protein": {"food_key": "whey protein", "food_name": "Whey protein", "image_url": "https://visia.example/w"}}
+        )
 
     def test_alias_merges_existing_entries_in_the_analysis(self) -> None:
         self.service.set_alias(FoodAliasUpsert(

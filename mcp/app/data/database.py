@@ -117,6 +117,14 @@ CREATE TABLE IF NOT EXISTS food_verdicts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- One Luna Visia image per food: shown on all its entries, past and future.
+CREATE TABLE IF NOT EXISTS food_images (
+    food_key TEXT PRIMARY KEY CHECK (length(trim(food_key)) > 0),
+    food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),
+    image_url TEXT NOT NULL CHECK (length(trim(image_url)) > 0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS food_aliases (
     alias_key TEXT PRIMARY KEY CHECK (length(trim(alias_key)) > 0),
     canonical_name TEXT NOT NULL CHECK (length(trim(canonical_name)) > 0),

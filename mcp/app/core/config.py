@@ -18,12 +18,17 @@ class AppConfig:
     MAX_PAGE_SIZE: ClassVar[int] = 500
     MAX_WINDOW_DAYS: ClassVar[int] = 366
     MAX_SERIES_DAYS: ClassVar[int] = 366
+    # Storing a new food image waits for Visia to caption it with its vision model.
+    VISIA_STORE_TIMEOUT_SECONDS: ClassVar[float] = 300.0
+    VISIA_STORE_ATTEMPTS: ClassVar[int] = 3
 
     database_url: str
     visia_api_url: str = "http://luna-visia-mcp:8000"
     # The food placeholder image stored in Luna Visia, shown when no Visia image fits a food.
     # Set LUNAVITA_PLACEHOLDER_IMAGE_ID to its ID once it is stored.
     placeholder_image_id: str = "b7adf6ae-30b3-4750-8381-5dc6ab393de6"
+    # Credential for storing new food images in Luna Visia ("" = linking existing ones only).
+    visia_companion_token: str = ""
     host: str = "0.0.0.0"
     port: int = 8000
     # Public HTTPS origin of this MCP server, used for icon URLs ("" = embedded icons only).
@@ -44,6 +49,9 @@ class AppConfig:
         ).strip()
         if not placeholder_image_id:
             raise RuntimeError("LUNAVITA_PLACEHOLDER_IMAGE_ID cannot be blank.")
+        visia_companion_token = os.getenv("LUNAVISIA_COMPANION_TOKEN", "").strip()
+        if visia_companion_token and len(visia_companion_token) < 32:
+            raise RuntimeError("LUNAVISIA_COMPANION_TOKEN must contain at least 32 characters.")
         mcp_public_url = os.getenv("MCP_PUBLIC_URL", "").strip().rstrip("/")
         if mcp_public_url:
             parsed_public_url = urlparse(mcp_public_url)
@@ -54,4 +62,5 @@ class AppConfig:
             database_url=database_url,
             visia_api_url=visia_api_url,
             placeholder_image_id=placeholder_image_id,
+            visia_companion_token=visia_companion_token,
         )

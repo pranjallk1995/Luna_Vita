@@ -31,6 +31,14 @@ The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition es
 
 The model should infer the complete-quantity values for kcal, protein, carbohydrates, fat, natural sugar, and added sugar, then call `log_consumed_food`. Food name and quantity are always mandatory. The model searches Luna Visia for a representative image and passes its public image-ID URL (`.../api/public/images/<image-id>`). Luna Vita checks the URL against Visia's catalog before saving and stores the canonical URL Visia publishes, so filename URLs, data URIs, unknown or hidden images, and invented URLs are rejected. When the model finds no suitable image and omits the URL, the entry shows the Luna Vita food placeholder, an image stored in Visia itself (set with `LUNAVITA_PLACEHOLDER_IMAGE_ID`). If Luna Visia is unreachable the entry is refused rather than saved without an image. Photos uploaded through the Luna Vita UI remain optional and are not affected.
 
+### Generated food images
+
+A food can have its own image, shown on every entry of that food, past and future, under any of its spellings and aliases. Ask for one in chat:
+
+> Generate and update the image for schezuan rice.
+
+A model that can generate images (for example ChatGPT) creates a photo of the dish and passes it to `update_food_image` in one call. Luna Vita sends the image to Luna Visia, which stores, captions, and tags it (`food`, `luna vita`, the food's name), then links Visia's stable public URL to the food and updates its existing entries. If Visia cannot store the image, nothing in Vita changes. Visia returns the image it already has when it gets the same bytes again, so a retried call never makes a duplicate. A model that cannot generate images passes a Visia `public_url` instead. Entries logged with the placeholder include an `image_hint` that asks the model to generate one. Renames and aliases carry the image to the new name. Storing images needs `LUNAVISIA_COMPANION_TOKEN`, set to the same value here and in Luna Visia; without it, only existing Visia images can be linked.
+
 Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
 
 ## Current features
@@ -252,7 +260,8 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `log_consumed_food` — store food described conversationally after the active model infers missing nutrition and finds its image in Luna Visia, falling back to the placeholder image.
 - `get_food_log` — list food entries, optionally over an inclusive date range.
 - `update_food` — replace an existing food entry.
-- `set_food_image` — set or replace a food image with a Luna Visia image, or the food placeholder when none fits.
+- `set_food_image` — set or replace one entry's image with a Luna Visia image, or the food placeholder when none fits.
+- `update_food_image` — store a generated or attached image in Luna Visia and show it on every entry of that food, now and later.
 - `remove_food` — delete a food entry, optionally guarded by its expected date.
 
 ### Measurements and summaries

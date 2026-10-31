@@ -77,5 +77,60 @@ class VisiaImageCatalogTests(unittest.TestCase):
                         self.catalog.resolve(PUBLIC + IMAGE_ID)
 
 
+def stored(status=201, payload=None):
+    request = httpx.Request("POST", "http://visia/api/companion/images")
+    body = payload if payload is not None else {"status": "created", "public_url": PUBLIC + IMAGE_ID}
+    return httpx.Response(status, json=body, request=request)
+
+
+@patch("app.integrations.visia.time.sleep")
+class VisiaImageStoreTests(unittest.TestCase):
+    TOKEN = "t" * 32
+
+    def setUp(self) -> None:
+        self.catalog = VisiaImageCatalog("http://visia/", PLACEHOLDER_ID, companion_token=self.TOKEN)
+
+    def test_posts_the_source_with_the_companion_token(self, _sleep) -> None:
+        with patch("app.integrations.visia.httpx.post", return_value=stored()) as post:
+            result = self.catalog.store("Rice", ["food"], {"image_url": "https://x.test/rice.png"})
+        self.assertEqual(result["public_url"], PUBLIC + IMAGE_ID)
+        self.assertEqual(post.call_args.args[0], "http://visia/api/companion/images")
+        self.assertEqual(
+            post.call_args.kwargs["json"],
+            {"name": "Rice", "tags": ["food"], "image_url": "https://x.test/rice.png"},
+        )
+        self.assertEqual(post.call_args.kwargs["headers"], {"Authorization": f"Bearer {self.TOKEN}"})
+
+    def test_retries_dropped_connections_and_server_errors(self, sleep) -> None:
+        responses = [httpx.ConnectError("refused"), stored(502, {"error": "restarting"}), stored()]
+        with patch("app.integrations.visia.httpx.post", side_effect=responses) as post:
+            result = self.catalog.store("Rice", [], {"content_base64": "AAAA"})
+        self.assertEqual((post.call_count, result["status"]), (3, "created"))
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
+
+    def test_gives_up_after_the_last_attempt(self, _sleep) -> None:
+        with patch("app.integrations.visia.httpx.post", return_value=stored(503, {"error": "off"})):
+            with self.assertRaisesRegex(VisiaUnavailableError, "HTTP 503: off"):
+                self.catalog.store("Rice", [], {"content_base64": "AAAA"})
+
+    def test_rejected_images_and_tokens_are_not_retried(self, _sleep) -> None:
+        for status, error in ((400, ValueError), (401, VisiaUnavailableError)):
+            with self.subTest(status=status):
+                with patch(
+                    "app.integrations.visia.httpx.post",
+                    return_value=stored(status, {"error": "Content is not a valid image."}),
+                ) as post, self.assertRaises(error):
+                    self.catalog.store("Rice", [], {"content_base64": "AAAA"})
+                self.assertEqual(post.call_count, 1)
+
+    def test_storing_needs_the_companion_token(self, _sleep) -> None:
+        with self.assertRaisesRegex(VisiaUnavailableError, "LUNAVISIA_COMPANION_TOKEN"):
+            VisiaImageCatalog("http://visia/", PLACEHOLDER_ID).store("Rice", [], {"content_base64": "AAAA"})
+
+    def test_recognizes_visia_urls(self, _sleep) -> None:
+        self.assertTrue(VisiaImageCatalog.is_visia_url(PUBLIC + IMAGE_ID))
+        self.assertFalse(VisiaImageCatalog.is_visia_url("https://files.example.test/rice.png"))
+
+
 if __name__ == "__main__":
     unittest.main()

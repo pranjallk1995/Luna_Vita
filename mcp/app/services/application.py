@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date, timedelta
+from typing import Any
 
 from app.services.analysis import (
     DuplicateFinder,
@@ -37,6 +38,7 @@ from app.data.repositories import (
     DailyLogRepository,
     ExerciseRepository,
     FoodAliasRepository,
+    FoodImageRepository,
     FoodRepository,
     MeasurementRepository,
     RecommendationRepository,
@@ -57,53 +59,118 @@ class FoodService:
     """Record, correct, and remove food and supplement entries.
 
     Entries added by the assistant always show a Luna Visia image: the one it
-    found, or the Luna Vita food placeholder when it supplied none. Entries from the
-    UI may carry an uploaded photo or none. New entries are saved under the
-    food's canonical name, so spelling variants never become separate foods.
+    found, the food's own image, or the Luna Vita food placeholder when there is
+    neither. Entries from the UI may carry an uploaded photo; without one they
+    show the food's image if it has one. New entries are saved under the food's
+    canonical name, so spelling variants never become separate foods.
     """
 
     NOTE_MAX_LENGTH = 2_000
+    IMAGE_TAGS = ["food", "luna vita"]
+    IMAGE_HINT = (
+        "'{name}' has no image of its own yet, so it shows the placeholder. If you can "
+        "generate images, create an appetizing landscape photo of the dish (3:2, "
+        "4.5 x 3) and pass it to "
+        "update_food_image; it is stored in Luna Visia and shown on every '{name}' entry."
+    )
 
     def __init__(
-        self, food: FoodRepository, images: VisiaImageCatalog, aliases: FoodAliasRepository
+        self,
+        food: FoodRepository,
+        images: VisiaImageCatalog,
+        aliases: FoodAliasRepository,
+        food_images: FoodImageRepository,
     ) -> None:
         self.food = food
         self.images = images
         self.aliases = aliases
+        self.food_images = food_images
 
     def with_canonical_name(self, entry: FoodEntryCreate) -> FoodEntryCreate:
         name = food_catalog(self.food, self.aliases).canonical(entry.food_name)
         return entry.model_copy(update={"food_name": name})
 
-    def record(self, entry: FoodEntryCreate) -> Row:
-        return self.food.add(self.with_canonical_name(entry))
+    def food_image(self, food_name: str) -> str | None:
+        """The image set for this food under any of its spellings, if any."""
+        row = self.food_images.get(food_catalog(self.food, self.aliases).key(food_name))
+        return row["image_url"] if row else None
 
-    def with_visia_image(self, entry: FoodEntryCreate) -> FoodEntryCreate:
-        """Store Visia's canonical URL for the image, or the placeholder if none was given."""
+    def record(self, entry: FoodEntryCreate) -> Row:
+        named = self.with_canonical_name(entry)
+        if not (named.image_url or "").strip():
+            named = named.model_copy(update={"image_url": self.food_image(named.food_name)})
+        return self.food.add(named)
+
+    def with_visia_image(self, entry: FoodEntryCreate) -> tuple[FoodEntryCreate, bool]:
+        """Store Visia's canonical URL for the image, else the food's, else the placeholder.
+
+        The flag says whether the placeholder was used.
+        """
         supplied = (entry.image_url or "").strip()
-        image_url = self.images.resolve(supplied) if supplied else self.images.placeholder_url()
-        return entry.model_copy(update={"image_url": image_url})
+        image_url = self.images.resolve(supplied) if supplied else self.food_image(entry.food_name)
+        placeholder = image_url is None
+        if placeholder:
+            image_url = self.images.placeholder_url()
+        return entry.model_copy(update={"image_url": image_url}), placeholder
 
     def record_with_visia_image(self, entry: FoodEntryCreate) -> Row:
-        return self.record(self.with_visia_image(entry))
+        imaged, placeholder = self.with_visia_image(entry)
+        saved = self.record(imaged)
+        if placeholder:
+            return {**saved, "image_hint": self.IMAGE_HINT.format(name=saved["food_name"])}
+        return saved
 
     def log_consumed(self, description: str, entry: FoodEntryCreate) -> Row:
         """Save an LLM-estimated entry, noting the chat message it came from."""
         note = f"AI-estimated from chat: {description.strip()}"[: self.NOTE_MAX_LENGTH]
         noted = FoodEntryCreate.model_validate({**entry.model_dump(), "notes": note})
         saved = self.record_with_visia_image(noted)
+        hint = saved.pop("image_hint", None)
         renamed = (
             f" Saved as '{saved['food_name']}', the name already used for this food."
             if saved["food_name"] != entry.food_name
             else ""
         )
-        return {
+        result = {
             "saved": True,
             "entry": saved,
             "message": (
                 "Estimated nutrition was saved to LunaVita. "
                 f"Values remain editable.{renamed}"
             ),
+        }
+        return {**result, "image_hint": hint} if hint else result
+
+    def update_image(self, food_name: str, source: dict[str, Any]) -> Row:
+        """Give a food one image, shown on all its entries now and logged later.
+
+        ``source`` is either a Luna Visia public_url (image_url), which is
+        verified, or a new image (image_url, content_base64, or file), which is
+        stored in Visia first. Nothing in Vita changes unless Visia has the image.
+        """
+        catalog = food_catalog(self.food, self.aliases)
+        name, key = catalog.canonical(food_name), catalog.key(food_name)
+        if not key:
+            raise ValueError("food_name must contain letters or digits.")
+        supplied = {field: value for field, value in source.items() if value not in (None, "")}
+        if len(supplied) != 1:
+            raise ValueError(
+                "Provide exactly one of file, image_url, or content_base64: the image you "
+                "generated, or a Luna Visia public_url."
+            )
+        url = supplied.get("image_url")
+        if isinstance(url, str) and self.images.is_visia_url(url):
+            image = {"status": "linked", "public_url": self.images.resolve(url)}
+        else:
+            image = self.images.store(name, [*self.IMAGE_TAGS, name.casefold()], supplied)
+        self.food_images.upsert(key, name, image["public_url"])
+        spellings = [logged for logged in self.food.names() if catalog.key(logged) == key]
+        return {
+            "food_name": name,
+            "image_url": image["public_url"],
+            "visia": {field: image.get(field) for field in ("status", "name", "image_id")},
+            "entries_updated": self.food.set_image_for_names(spellings, image["public_url"]),
+            "message": f"Every '{name}' entry, and every one logged from now on, shows this image.",
         }
 
     def list(
@@ -358,8 +425,8 @@ class AnalysisService:
     food entries, so renaming entries updates all of them. Aliases merge other
     spellings into one canonical food; a rename over all dates records one.
     Verdict overrides are stored per canonical food key and survive across
-    periods. A saved range, when present, replaces the calendar month on the
-    Monthly tab.
+    periods, and a food's own image follows it the same way. A saved range,
+    when present, replaces the calendar month on the Monthly tab.
     """
 
     def __init__(
@@ -368,11 +435,13 @@ class AnalysisService:
         verdicts: VerdictRepository,
         ranges: AnalysisRangeRepository,
         aliases: FoodAliasRepository,
+        food_images: FoodImageRepository,
     ) -> None:
         self.food = food
         self.verdicts = verdicts
         self.ranges = ranges
         self.aliases = aliases
+        self.food_images = food_images
 
     def catalog(self) -> FoodCatalog:
         return food_catalog(self.food, self.aliases)
@@ -457,6 +526,21 @@ class AnalysisService:
             )
         return self.merge_verdict(old_key, new_name)
 
+    def move_food_image(self, old_key: str, new_name: str) -> None:
+        """Give ``new_name`` the old name's image unless it has its own.
+
+        The old name keeps its image while entries still use it.
+        """
+        new_key = FoodName.key(new_name)
+        old = self.food_images.get(old_key)
+        if old is None or old_key == new_key:
+            return
+        if self.food_images.get(new_key) is None:
+            self.food_images.upsert(new_key, new_name, old["image_url"])
+        catalog = self.catalog()
+        if not any(catalog.key(name) == old_key for name in self.food.names()):
+            self.food_images.delete(old_key)
+
     def merge_verdict(self, old_key: str, new_name: str) -> str | None:
         """Move an override from ``old_key`` to ``new_name`` unless it already has one."""
         new_key = FoodName.key(new_name)
@@ -479,6 +563,7 @@ class AnalysisService:
         previous_names = sorted({row["food_name"] for row in entries})
         renamed = self.food.rename([row["id"] for row in entries], change.new_name)
         verdict_note = self.move_verdict(old_key, change.new_name)
+        self.move_food_image(old_key, change.new_name)
         everywhere = change.start_date is None and change.end_date is None
         if everywhere and old_key != FoodName.key(change.new_name):
             self.remember_alias(old_key, change.new_name)
@@ -533,6 +618,7 @@ class AnalysisService:
                 raise ValueError("alias and canonical_name are already the same food.")
             canonical = entry.canonical_name
         self.remember_alias(alias_key, canonical)
+        self.move_food_image(alias_key, canonical)
         return {
             "alias": alias_key,
             "canonical_name": canonical,

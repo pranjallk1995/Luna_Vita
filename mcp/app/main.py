@@ -12,6 +12,7 @@ from app.data.repositories import (
     DailyLogRepository,
     ExerciseRepository,
     FoodAliasRepository,
+    FoodImageRepository,
     FoodRepository,
     MeasurementRepository,
     RecommendationRepository,
@@ -57,9 +58,12 @@ class LunaVitaApplication:
     def _build_service(self) -> LunaVitaService:
         food_entries = FoodRepository(self.database)
         aliases = FoodAliasRepository(self.database)
+        food_images = FoodImageRepository(self.database)
         food = FoodService(food_entries, VisiaImageCatalog(
-            self.config.visia_api_url, self.config.placeholder_image_id
-        ), aliases)
+            self.config.visia_api_url,
+            self.config.placeholder_image_id,
+            companion_token=self.config.visia_companion_token,
+        ), aliases, food_images)
         measurement_entries = MeasurementRepository(self.database)
         recommendations = RecommendationRepository(self.database)
         measurements = MeasurementService(measurement_entries)
@@ -76,6 +80,7 @@ class LunaVitaApplication:
                 VerdictRepository(self.database),
                 AnalysisRangeRepository(self.database),
                 aliases,
+                food_images,
             ),
             workouts=WorkoutService(
                 WorkoutRepository(self.database), ExerciseRepository(self.database)
