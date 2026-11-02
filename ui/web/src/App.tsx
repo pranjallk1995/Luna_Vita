@@ -46,22 +46,20 @@ function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Setti
       <div className="lv-header-row">
         <Brand />
         <div className="lv-header-actions">
-          <div className="vt-stepper">
-            <button className="lv-button vt-square" type="button" aria-label="Previous day" title="Previous day" onClick={() => changeDay(addDays(day, -1))}>
-              <ChevronLeft size={17} />
-            </button>
-            <input
-              className="lv-input lv-date-input"
-              type="date"
-              aria-label="Log date"
-              value={day}
-              required
-              onChange={(event) => changeDay(event.target.value)}
-            />
-            <button className="lv-button vt-square" type="button" aria-label="Next day" title="Next day" onClick={() => changeDay(addDays(day, 1))}>
-              <ChevronRight size={17} />
-            </button>
-          </div>
+          <button className="lv-button" type="button" aria-label="Previous day" title="Previous day" onClick={() => changeDay(addDays(day, -1))}>
+            <ChevronLeft size={18} />
+          </button>
+          <input
+            className="lv-input lv-date-input"
+            type="date"
+            aria-label="Log date"
+            value={day}
+            required
+            onChange={(event) => changeDay(event.target.value)}
+          />
+          <button className="lv-button" type="button" aria-label="Next day" title="Next day" onClick={() => changeDay(addDays(day, 1))}>
+            <ChevronRight size={18} />
+          </button>
           <a className="lv-button lv-sign-out" href={logoutUrl}>
             <LogOut size={16} />
             Sign out

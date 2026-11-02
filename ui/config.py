@@ -56,7 +56,7 @@ class UIConfig:
     IMMUTABLE_CACHE_CONTROL: ClassVar[str] = "private, max-age=31536000, immutable"
     CONTENT_SECURITY_POLICY: ClassVar[str] = (
         # Food photos may be stored as data URLs or as links elsewhere.
-        "default-src 'self'; img-src 'self' data: https: http:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https: http:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     )
 

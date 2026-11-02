@@ -1,4 +1,4 @@
-import { CopyPlus, Download, Pencil, Plus, Trash2, Utensils } from "lucide-react";
+import { CopyPlus, Download, Ellipsis, Pencil, Plus, Trash2, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { fittedPhoto, useAct, useFood, useFoodBetween, useSummary, vita, type FoodEntry, type Settings } from "../api";
@@ -236,9 +236,9 @@ function Numbers({ calories, protein, carbs, fat }: { calories: number; protein:
       {(
         [
           ["kcal", number(calories)],
-          ["Protein", number(protein, 1)],
-          ["Carbs", number(carbs, 1)],
-          ["Fat", number(fat, 1)],
+          ["P", number(protein, 1)],
+          ["C", number(carbs, 1)],
+          ["F", number(fat, 1)],
         ] as const
       ).map(([label, value]) => (
         <div className="vt-num" key={label}>
@@ -256,10 +256,15 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  // Phones keep a food's actions behind its ⋯ button; wider screens always show them.
+  const [menu, setMenu] = useState<number | null>(null);
   const rows = useMemo(() => byTime(data ?? [], settings), [data, settings]);
 
   // A different day closes the editor; App has already asked before discarding changes.
-  useEffect(() => setEditing(null), [day]);
+  useEffect(() => {
+    setEditing(null);
+    setMenu(null);
+  }, [day]);
 
   const total = rows.reduce(
     (sum, row) => ({
@@ -321,7 +326,7 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
         </div>
       </SectionHead>
       {error && <p className="lv-alert lv-alert-error">{messageOf(error, "The food log is unavailable.")}</p>}
-      <div className="vt-food">
+      <div className="vt-food vt-food-log">
         {data && !rows.length && (
           <div className="vt-empty">
             <Utensils size={22} />
@@ -361,9 +366,19 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
                       </span>
                     </div>
                     <Numbers calories={row.calories} protein={row.protein_g} carbs={row.carbs_g} fat={row.fat_g} />
-                    <div className="vt-food-actions">
+                    <button
+                      className="lv-icon-button vt-food-more"
+                      type="button"
+                      aria-label={`Actions for ${row.food_name}`}
+                      aria-expanded={menu === row.id}
+                      onClick={() => setMenu(menu === row.id ? null : row.id)}
+                    >
+                      <Ellipsis size={18} />
+                    </button>
+                    <div className={menu === row.id ? "vt-food-actions vt-food-actions-open" : "vt-food-actions"}>
                       <button className="lv-icon-button" type="button" aria-label={`Log ${row.food_name} again`} title="Log again" onClick={() => logAgain(row)}>
                         <CopyPlus size={16} />
+                        <span className="vt-mobile-only">Log again</span>
                       </button>
                       <button
                         className="lv-icon-button"
@@ -371,12 +386,17 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
                         aria-label={`Edit ${row.food_name}`}
                         aria-expanded={editing === row.id}
                         title="Edit"
-                        onClick={() => setEditing(editing === row.id ? null : row.id)}
+                        onClick={() => {
+                          setEditing(editing === row.id ? null : row.id);
+                          setMenu(null);
+                        }}
                       >
                         <Pencil size={16} />
+                        <span className="vt-mobile-only">Edit</span>
                       </button>
                       <button className="lv-icon-button" type="button" aria-label={`Delete ${row.food_name}`} title="Delete" onClick={() => remove(row)}>
                         <Trash2 size={16} />
+                        <span className="vt-mobile-only">Delete</span>
                       </button>
                     </div>
                   </div>
