@@ -102,6 +102,10 @@ export const useRecommendations = () =>
 export const useFood = (day: string, limit: number) =>
   useQuery({ queryKey: ["food", day], queryFn: () => request<FoodEntry[]>(`/api/food?${range(day, day)}&limit=${limit}`) });
 
+/** Every entry between two days, newest first; feeds the recent foods in the Add dialog. */
+export const useFoodBetween = (start: string, end: string, limit: number) =>
+  useQuery({ queryKey: ["food-range", start, end], queryFn: () => request<FoodEntry[]>(`/api/food?${range(start, end)}&limit=${limit}`) });
+
 export const useMeasurements = (limit: number) =>
   useQuery({ queryKey: ["measurements"], queryFn: () => request<Measurement[]>(`/api/measurements?limit=${limit}`) });
 
@@ -122,7 +126,7 @@ export const useExercises = (day: string) =>
   useQuery({ queryKey: ["exercises", day], queryFn: () => request<Exercise[]>(`/api/workouts/exercises?${range(day, day)}`) });
 
 export const vita = {
-  createFood: (payload: unknown) => post("/api/food", payload),
+  createFood: (payload: unknown) => post<FoodEntry>("/api/food", payload),
   updateFood: (id: number, payload: unknown) => put(`/api/food/${id}`, payload),
   deleteFood: (id: number) => remove(`/api/food/${id}`),
   createMeasurements: (measurements: unknown[]) => post("/api/measurements/batch", { measurements }),

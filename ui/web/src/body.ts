@@ -4,6 +4,8 @@ import type { Measurement, RawReading } from "./api";
 import { moment, type Zone } from "./clock";
 
 export const PERIODS = ["Morning", "Night"] as const;
+
+export const NOT_RECORDED = "Not recorded";
 export type Period = (typeof PERIODS)[number];
 
 export const METRICS: Record<string, { label: string; unit: string }> = {
@@ -48,7 +50,7 @@ export function measurementTable(rows: DayMeasurement[]) {
   return Object.entries(METRICS).map(([metric, { label }]) => {
     const cell = (period: Period) => {
       const latest = rows.filter((row) => row.metric === metric && row.period === period).sort((a, b) => a.at - b.at).pop();
-      return latest ? formatMetric(metric, Number(latest.value), latest.unit) : "Not recorded";
+      return latest ? formatMetric(metric, Number(latest.value), latest.unit) : NOT_RECORDED;
     };
     return { label, Morning: cell("Morning"), Night: cell("Night") };
   });

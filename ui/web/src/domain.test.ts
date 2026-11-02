@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { average, byDay, fatRange, formatMetric, measurementPayloads, measurementTable, measurementsOn, periodOf, readings, weightRange } from "./body";
 import { addDays, combine, daysBetween, dayLabel, moment } from "./clock";
-import { byTime, displayTime, foodErrors, numberError, parseClock, payloadOf, resolveTime, textError, type FoodDraft } from "./food";
-import { floorStatus, limitStatus, macroPercentages, percentage } from "./nutrition";
+import { byTime, copyOf, displayTime, entryErrors, foodErrors, numberError, parseClock, payloadOf, recentFoods, resolveTime, textError, type FoodDraft } from "./food";
+import { NUTRIENTS, energySplit, floorStatus, limitStatus, macroPercentages, percentage, standing } from "./nutrition";
 import { calendarSpan, exerciseErrors, exercisePayload, monthWeeks, monthsBetween, statusOf } from "./workouts";
 
 const IST = { time_zone: "Asia/Kolkata", utc_offset: "+05:30" };
@@ -191,3 +191,73 @@ describe("workouts", () => {
     expect(exerciseErrors([{ id: 1, remove: false, exercise: " ", type: "", sets: "", reps: "", weight_kg: "", duration_min: "", notes: "" }])).toEqual(["Row 1: exercise name is required."]);
   });
 });
+
+describe("daily redesign", () => {
+  const nutrient = (key: string) => NUTRIENTS.find((item) => item.key === key)!;
+
+  it("splits energy by protein, carbs and fat, without counting sugar twice", () => {
+    // 41.8 g protein and 173.5 g carbs at 4 kcal/g, 33.3 g fat at 9 kcal/g.
+    const split = energySplit({ protein_g: 41.8, carbs_g: 173.5, fat_g: 33.3, natural_sugar_g: 20, added_sugar_g: 11 });
+    expect(split.map((part) => part.share)).toEqual([14, 60, 26]);
+    expect(split.map((part) => part.label)).toEqual(["Protein", "Carbs", "Fat"]);
+    expect(energySplit({}).map((part) => part.share)).toEqual([0, 0, 0]);
+  });
+
+  it("words a goal as to go and a limit as left, over or under", () => {
+    expect(standing(nutrient("protein"), 41.8, 145)).toEqual({ status: "", text: "103.2 g to go" });
+    expect(standing(nutrient("protein"), 150, 145)).toEqual({ status: "success", text: "Goal reached" });
+    expect(standing(nutrient("carbs"), 173.5, 295)).toEqual({ status: "", text: "121.5 g left" });
+    expect(standing(nutrient("fat"), 93.3, 80)).toEqual({ status: "danger", text: "13.3 g over" });
+    expect(standing(nutrient("sugars"), 45, 50).status).toBe("warning");
+    expect(standing(nutrient("calories"), 1168, 2400).text).toBe("1,232 kcal left");
+  });
+
+  it("words monthly averages", () => {
+    expect(standing(nutrient("protein"), 127.9, 145, true).text).toBe("17.1 g short");
+    expect(standing(nutrient("protein"), 150, 145, true).text).toBe("Goal met on average");
+    expect(standing(nutrient("sugars"), 37, 50, true).text).toBe("13.0 g under");
+  });
+});
+
+describe("food actions", () => {
+  const entry = (id: number, name: string, at: string) =>
+    ({
+      id,
+      food_name: name,
+      quantity: "1 bowl",
+      consumed_at: at,
+      consumed_date: at.slice(0, 10),
+      calories: 300,
+      protein_g: 10,
+      carbs_g: 40,
+      fat_g: 8,
+      natural_sugar_g: 2,
+      added_sugar_g: 1,
+      image_url: "https://visia.example/api/public/images/x",
+      time_label: null,
+      notes: null,
+    }) as Parameters<typeof copyOf>[0];
+
+  it("offers each recent food once, newest first", () => {
+    const rows = [entry(1, "Apple", "2026-11-01T09:00:00+05:30"), entry(2, "Noodles", "2026-11-02T12:00:00+05:30"), entry(3, "apple ", "2026-11-02T18:00:00+05:30")];
+    expect(recentFoods(rows, 8).map((row) => row.id)).toEqual([3, 2]);
+    expect(recentFoods(rows, 1).map((row) => row.id)).toEqual([3]);
+  });
+
+  it("copies an entry, at a new time when given, keeping its photo", () => {
+    const original = entry(7, "Noodles", "2026-11-02T02:00:00+05:30");
+    expect(copyOf(original)).toMatchObject({ food_name: "Noodles", consumed_at: original.consumed_at, image_url: original.image_url, meal_type: "other" });
+    const later = copyOf(original, { consumed_at: "2026-11-02T19:40:00+05:30", consumed_date: "2026-11-02", time_label: null });
+    expect(later.consumed_at).toBe("2026-11-02T19:40:00+05:30");
+    expect(later).not.toHaveProperty("id");
+  });
+
+  it("checks one edited food without row numbers", () => {
+    const draft = { ...draftRow(), food_name: "", calories: "-1" };
+    expect(entryErrors(draft)).toEqual(["Food / supplement cannot be blank.", "Calories cannot be negative."]);
+  });
+});
+
+function draftRow(): FoodDraft {
+  return { id: 1, remove: false, time: "7:30 PM", food_name: "Apple", quantity: "1", calories: "95", protein_g: "0.5", carbs_g: "25", fat_g: "0.3", natural_sugar_g: "19", added_sugar_g: "0", notes: "" };
+}

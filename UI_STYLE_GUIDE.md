@@ -136,7 +136,7 @@ The subtitle always follows the pattern "Private AI-managed …".
 | App | Controls, left to right |
 | --- | --- |
 | Luna Visia | Grid view, List view, **Upload Images** (primary), Sign out |
-| Luna Vita | Log date picker, Sign out |
+| Luna Vita | Previous day (icon only), Log date picker, Next day (icon only), Sign out |
 | Luna Lumia | Check lights (icon only), **Turn all on / off** (primary), Sign out |
 | Luna Fiora | From date, To date, Sign out |
 | Luna Lexia | Grid view, List view, **Upload Docs** (primary), Sign out |
@@ -367,11 +367,10 @@ guide or deliberately accepted here.
 | App | Deviation | Guide says |
 | --- | --- | --- |
 | Vita, Lumia, Fiora, Unia | Use the system monospace stack. | Self-hosted Source Code Pro. |
-| Vita, Lumia, Fiora | Navbar gap is `.35rem` with a `1rem` bottom margin; selected and hovered labels turn to primary text, without the hover lift. | `.2rem`, `.2rem 0 1.15rem`, muted labels, and `translateY(-1px)`. |
+| Lumia, Fiora | Navbar gap is `.35rem` with a `1rem` bottom margin; selected and hovered labels turn to primary text, without the hover lift. | `.2rem`, `.2rem 0 1.15rem`, muted labels, and `translateY(-1px)`. |
 | Visia, Vibia, Lexia | Navbar uses `grid-template-columns: repeat(3, 1fr)`. | `grid-auto-flow: column`, which fits any number of sections. Harmless with three. |
 | Visia, Vibia, Lexia | In windows 1760px and wider, the page grows to `1720px` and the gallery to four columns, so the header and navbar no longer line up with the other apps at those widths. | `max-width: 1180px`. Accepted, because a gallery wastes most of a wide window at 1180px. |
 | Visia | The content security policy has no `font-src 'self' data:`, so the browser refuses the font's inlined files. | Add it, as Vibia and Lexia have. |
-| Vita | Adds short aliases (`--panel`, `--text`, `--muted`, and others) for its chart and calendar rules. | `--lv-*` names. |
 | Lumia | Deleting a light, room, scheme, or schedule has no confirmation. | Nothing here deletes a stored file, so this is accepted for now. Revisit if mistaken deletes happen. |
 | Unia | No navbar. Its one page is a grid of app cards, and the status summary above the grid (`.lu-summary`) takes the navbar's surface and `.2rem 0 1.15rem` margin. | Full-width navbar below the header. Accepted: Unia has nothing to navigate between. |
 | Unia | Checks each app at `/_stcore/health`, which every gateway keeps as an alias of `/health`. | Move to `/health` and remove the alias once every app has merged its React UI. |

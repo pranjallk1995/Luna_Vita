@@ -1,13 +1,13 @@
-import { CalendarDays, CalendarRange, LogOut, type LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LogOut, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { Settings } from "./api";
-import { today } from "./clock";
-import { FoodLog } from "./components/FoodLog";
+import { addDays, today } from "./clock";
+import { EnergySplit, FoodLog } from "./components/FoodLog";
 import { Brand, ForbiddenPage, SignInPage, UnreachablePage } from "./components/Gate";
 import { Measurements } from "./components/Measurements";
 import { Monthly } from "./components/Monthly";
-import { Summary } from "./components/Summary";
+import { DayHeading, Summary } from "./components/Summary";
 import { Workout } from "./components/Workout";
 import { useSession } from "./http";
 import { remember, remembered } from "./lib";
@@ -23,20 +23,45 @@ const NAV: { id: Period; label: string; icon: LucideIcon }[] = [
 function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Settings }) {
   const [period, setPeriod] = useState<Period>(() => remembered("lv-period", PERIODS, "daily"));
   const [day, setDay] = useState(() => today(settings));
+  const [unsaved, setUnsaved] = useState(false);
+  const onDirtyChange = useCallback((dirty: boolean) => setUnsaved(dirty), []);
+
+  // An open food edit would be lost by changing day or leaving, so ask first.
+  const changeDay = (next: string) => {
+    if (next === day || !next) return;
+    if (unsaved && !window.confirm("Discard your unsaved changes to this food?")) return;
+    setUnsaved(false);
+    setDay(next);
+  };
+
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
 
   return (
     <main className="lv-page">
       <div className="lv-header-row">
         <Brand />
         <div className="lv-header-actions">
-          <input
-            className="lv-input lv-date-input"
-            type="date"
-            aria-label="Log date"
-            value={day}
-            required
-            onChange={(event) => event.target.value && setDay(event.target.value)}
-          />
+          <div className="vt-stepper">
+            <button className="lv-button vt-square" type="button" aria-label="Previous day" title="Previous day" onClick={() => changeDay(addDays(day, -1))}>
+              <ChevronLeft size={17} />
+            </button>
+            <input
+              className="lv-input lv-date-input"
+              type="date"
+              aria-label="Log date"
+              value={day}
+              required
+              onChange={(event) => changeDay(event.target.value)}
+            />
+            <button className="lv-button vt-square" type="button" aria-label="Next day" title="Next day" onClick={() => changeDay(addDays(day, 1))}>
+              <ChevronRight size={17} />
+            </button>
+          </div>
           <a className="lv-button lv-sign-out" href={logoutUrl}>
             <LogOut size={16} />
             Sign out
@@ -65,10 +90,18 @@ function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Setti
 
       {period === "daily" ? (
         <>
+          <DayHeading day={day} today={today(settings)} onToday={() => changeDay(today(settings))} />
           <Summary day={day} />
-          <FoodLog day={day} settings={settings} />
-          <Workout day={day} />
-          <Measurements day={day} settings={settings} />
+          <div className="vt-day-grid">
+            <FoodLog day={day} settings={settings} onDirtyChange={onDirtyChange} />
+            <aside className="vt-aside" aria-label="Rest of the day">
+              <EnergySplit day={day} />
+              <div className="vt-rail">
+                <Workout day={day} />
+                <Measurements day={day} settings={settings} />
+              </div>
+            </aside>
+          </div>
         </>
       ) : (
         <Monthly day={day} settings={settings} />

@@ -1,90 +1,37 @@
-import { Download, Save } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { CopyPlus, Download, Pencil, Plus, Trash2, Utensils } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { fittedPhoto, useAct, useFood, vita, type FoodEntry, type Settings } from "../api";
-import { currentClock, combine } from "../clock";
-import { NOT_RECORDED, byTime, draftOf, foodErrors, payloadOf, type FoodDraft } from "../food";
+import { fittedPhoto, useAct, useFood, useFoodBetween, useSummary, vita, type FoodEntry, type Settings } from "../api";
+import { addDays, combine, currentClock, today } from "../clock";
+import { NOT_RECORDED, byTime, copyOf, displayTime, draftOf, entryErrors, payloadOf, recentFoods, type FoodDraft } from "../food";
 import { messageOf } from "../lib";
-import { MACROS, macroPercentages, number } from "../nutrition";
+import { energySplit, number } from "../nutrition";
 import { Dialog } from "./Dialog";
 import { FoodPhoto } from "./FoodPhoto";
-import { SectionHeading, SectionWithAdd } from "./shared";
+import { SectionHead } from "./shared";
 import { useToast } from "./Toasts";
-
-function MacroChart({ rows }: { rows: FoodEntry[] }) {
-  const calories = rows.reduce((sum, row) => sum + Number(row.calories), 0);
-  const grams = MACROS.map(({ field }) => rows.reduce((sum, row) => sum + Number(row[field as keyof FoodEntry] ?? 0), 0));
-  const shares = macroPercentages(grams);
-  let offset = 0;
-  return (
-    <>
-      <SectionHeading title="Macro distribution" />
-      <section className="macro-content">
-        <div className="macro-legend">
-          {MACROS.map(({ label, color }, index) => (
-            <div className="macro-row" key={label}>
-              <span className="macro-dot" style={{ "--dot": color } as React.CSSProperties} />
-              <span>{label}</span>
-              <strong>{shares[index]}%</strong>
-            </div>
-          ))}
-        </div>
-        <div className="macro-donut">
-          <svg viewBox="0 0 120 120" role="img" aria-label="Macro distribution">
-            <circle className="macro-track" cx="60" cy="60" r="48" />
-            {MACROS.map(({ label, color }, index) => {
-              const segment = (
-                <g className="macro-slice" key={label}>
-                  <circle
-                    className="macro-segment"
-                    cx="60"
-                    cy="60"
-                    r="48"
-                    pathLength={100}
-                    stroke={color}
-                    color={color}
-                    strokeDasharray={`${shares[index]} ${100 - shares[index]}`}
-                    strokeDashoffset={-offset}
-                    transform="rotate(-90 60 60)"
-                  />
-                  <text className="macro-tooltip" x="60" y="56" textAnchor="middle">
-                    <tspan x="60">
-                      {label} {shares[index]}%
-                    </tspan>
-                    <tspan className="macro-tooltip-value" x="60" dy="10">
-                      {number(grams[index], 1)} g
-                    </tspan>
-                  </text>
-                </g>
-              );
-              offset += shares[index];
-              return segment;
-            })}
-          </svg>
-          <div className="macro-center">
-            {number(calories)}
-            <small>kcal</small>
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
 
 const NUTRITION_INPUTS = [
   ["calories", "Calories kcal", "1"],
   ["protein_g", "Protein g", "0.5"],
   ["carbs_g", "Carbs g", "0.5"],
   ["fat_g", "Fat g", "0.5"],
-  ["natural_sugar_g", "Natural sugar", "0.5"],
-  ["added_sugar_g", "Added sugar", "0.5"],
+  ["natural_sugar_g", "Natural sugar g", "0.5"],
+  ["added_sugar_g", "Added sugar g", "0.5"],
 ] as const;
+
+/** How far back the Add dialog looks for foods to offer again. */
+const RECENT_DAYS = 28;
+const RECENT_LIMIT = 8;
 
 function FoodDialog({ day, settings, onClose }: { day: string; settings: Settings; onClose: () => void }) {
   const act = useAct();
   const toast = useToast();
   const [includeTime, setIncludeTime] = useState(true);
   const [error, setError] = useState("");
+  const [preset, setPreset] = useState<FoodEntry | null>(null);
+  const history = useFoodBetween(addDays(day, -RECENT_DAYS), day, settings.max_food_rows);
+  const recents = useMemo(() => recentFoods(history.data ?? [], RECENT_LIMIT), [history.data]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -93,7 +40,8 @@ function FoodDialog({ day, settings, onClose }: { day: string; settings: Setting
     if (!text("name") || !text("quantity")) return setError("Food name and quantity are required.");
     setError("");
     const photo = fields.get("photo");
-    let imageUrl: string | null = null;
+    // A recent food brings its photo along unless a new one is chosen.
+    let imageUrl: string | null = preset?.image_url ?? null;
     if (photo instanceof File && photo.size) {
       try {
         imageUrl = await fittedPhoto(photo, settings.food_photo_size, settings.food_photo_quality);
@@ -123,7 +71,7 @@ function FoodDialog({ day, settings, onClose }: { day: string; settings: Setting
     await act(async () => {
       try {
         await vita.createFood(payload);
-        toast("Food saved to database");
+        toast(`${payload.food_name} added`);
         onClose();
       } catch (failure) {
         setError(messageOf(failure, "The food could not be saved."));
@@ -133,15 +81,28 @@ function FoodDialog({ day, settings, onClose }: { day: string; settings: Setting
 
   return (
     <Dialog title="Add food or supplement" size="large" onClose={onClose}>
-      <form className="lv-form" onSubmit={submit}>
+      {/* Choosing a recent food refills the form, so it remounts with that food's values. */}
+      <form className="lv-form" onSubmit={submit} key={preset?.id ?? "blank"}>
+        {recents.length > 0 && (
+          <div className="vt-recents">
+            <span className="vt-recents-label">Recent foods</span>
+            <div className="vt-pills" role="group" aria-label="Recent foods">
+              {recents.map((food) => (
+                <button className={preset?.id === food.id ? "vt-pill vt-pill-active" : "vt-pill"} type="button" key={food.id} aria-pressed={preset?.id === food.id} onClick={() => setPreset(food)}>
+                  {food.food_name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="vt-form-2-1">
           <label className="lv-field">
             Food / supplement
-            <input className="lv-input" name="name" maxLength={200} autoFocus />
+            <input className="lv-input" name="name" maxLength={200} defaultValue={preset?.food_name} autoFocus />
           </label>
           <label className="lv-field">
             Quantity
-            <input className="lv-input" name="quantity" maxLength={300} placeholder="30 g, 1 serving..." />
+            <input className="lv-input" name="quantity" maxLength={300} placeholder="30 g, 1 serving..." defaultValue={preset?.quantity} />
           </label>
         </div>
         <div className="vt-form-when">
@@ -167,14 +128,14 @@ function FoodDialog({ day, settings, onClose }: { day: string; settings: Setting
           <input className="lv-input" name="label" maxLength={100} placeholder="Morning, ~4:30 PM..." />
         </label>
         <label className="lv-field">
-          Food photo (optional)
+          {preset?.image_url ? `Food photo (optional; keeps ${preset.food_name}'s photo if left empty)` : "Food photo (optional)"}
           <input className="lv-input" name="photo" type="file" accept={settings.photo_upload_types.map((type) => `.${type}`).join(",")} />
         </label>
         <div className="vt-form-grid-6">
           {NUTRITION_INPUTS.map(([name, label, step]) => (
             <label className="lv-field" key={name}>
               {label}
-              <input className="lv-input" name={name} type="number" min="0" step={step} defaultValue="0" />
+              <input className="lv-input" name={name} type="number" min="0" step={step} defaultValue={preset ? String(preset[name]) : "0"} />
             </label>
           ))}
         </div>
@@ -184,112 +145,150 @@ function FoodDialog({ day, settings, onClose }: { day: string; settings: Setting
         </label>
         {error && <p className="lv-alert lv-alert-error">{error}</p>}
         <button className="lv-button lv-button-primary" type="submit">
-          Record food
+          Add food
         </button>
       </form>
     </Dialog>
   );
 }
 
-const NUMBER_COLUMNS = [
-  ["calories", "♨ Calories", "1"],
-  ["protein_g", "≋ Protein", "any"],
-  ["carbs_g", "≋ Carbs", "any"],
-  ["fat_g", "◉ Fat", "any"],
-  ["natural_sugar_g", "◇ Natural sugar", "any"],
-  ["added_sugar_g", "◇ Added sugar", "any"],
-] as const;
+/** One food's editor. It keeps its own draft, so fresh server data never overwrites typing. */
+function FoodEditor({ entry, settings, onDone, onDirty }: { entry: FoodEntry; settings: Settings; onDone: () => void; onDirty: (dirty: boolean) => void }) {
+  const act = useAct();
+  const toast = useToast();
+  const original = useMemo(() => draftOf(entry, settings), [entry, settings]);
+  const [draft, setDraft] = useState<FoodDraft>(original);
+  const [errors, setErrors] = useState<string[]>([]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(original);
 
-function FoodTable({ rows, drafts, setDrafts }: { rows: FoodEntry[]; drafts: FoodDraft[]; setDrafts: (next: FoodDraft[]) => void }) {
-  const change = (id: number, field: keyof FoodDraft, value: string | boolean) =>
-    setDrafts(drafts.map((draft) => (draft.id === id ? { ...draft, [field]: value } : draft)));
-  const byId = new Map(rows.map((row) => [row.id, row]));
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
+
+  const change = (field: keyof FoodDraft) => (event: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [field]: event.target.value });
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const problems = entryErrors(draft);
+    setErrors(problems);
+    if (problems.length) return;
+    if (!dirty) return onDone();
+    const saved = await act(() => vita.updateFood(entry.id, payloadOf(draft, entry, settings)), `${entry.food_name} could not be saved.`);
+    if (saved) {
+      toast(`${draft.food_name.trim()} saved`);
+      onDone();
+    }
+  };
+
   return (
-    <div className="lv-panel lv-table-scroll">
-      <table className="lv-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Image</th>
-            <th>Food / supplement</th>
-            <th>↪ Quantity</th>
-            {NUMBER_COLUMNS.map(([, label]) => (
-              <th key={label}>{label}</th>
+    <form className="vt-food-edit" onSubmit={save} aria-label={`Edit ${entry.food_name}`}>
+      <div className="vt-edit-top">
+        <label className="lv-field">
+          Food / supplement
+          <input className="lv-input" value={draft.food_name} onChange={change("food_name")} autoFocus />
+        </label>
+        <label className="lv-field">
+          Quantity
+          <input className="lv-input" value={draft.quantity} onChange={change("quantity")} />
+        </label>
+        <label className="lv-field">
+          Time
+          <input className="lv-input" value={draft.time} onChange={change("time")} placeholder="7:30 PM, Morning..." />
+        </label>
+      </div>
+      <div className="vt-form-grid-6">
+        {NUTRITION_INPUTS.map(([field, label, step]) => (
+          <label className="lv-field" key={field}>
+            {label}
+            <input className="lv-input" type="number" min="0" step={step} value={draft[field]} onChange={change(field)} />
+          </label>
+        ))}
+      </div>
+      <label className="lv-field">
+        Notes
+        <input className="lv-input" value={draft.notes} onChange={change("notes")} maxLength={2000} />
+      </label>
+      {errors.length > 0 && (
+        <div className="vt-errors" role="alert">
+          <ul>
+            {errors.map((problem) => (
+              <li key={problem}>{problem}</li>
             ))}
-            <th>Notes</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {drafts.map((draft, index) => {
-            const row = byId.get(draft.id);
-            const at = `Row ${index + 1}`;
-            return (
-              <tr key={draft.id}>
-                <td>
-                  <input aria-label={`${at} time`} value={draft.time} onChange={(event) => change(draft.id, "time", event.target.value)} />
-                </td>
-                <td>
-                  <FoodPhoto source={row?.image_url} alt="" className="vt-photo" emptyClass="vt-photo-empty" />
-                </td>
-                <td>
-                  <input className="vt-wide" aria-label={`${at} food`} value={draft.food_name} onChange={(event) => change(draft.id, "food_name", event.target.value)} />
-                </td>
-                <td>
-                  <input aria-label={`${at} quantity`} value={draft.quantity} onChange={(event) => change(draft.id, "quantity", event.target.value)} />
-                </td>
-                {NUMBER_COLUMNS.map(([field, label, step]) => (
-                  <td key={field}>
-                    <input type="number" min="0" step={step} aria-label={`${at} ${label}`} value={draft[field]} onChange={(event) => change(draft.id, field, event.target.value)} />
-                  </td>
-                ))}
-                <td>
-                  <input className="vt-wide" aria-label={`${at} notes`} value={draft.notes} onChange={(event) => change(draft.id, "notes", event.target.value)} />
-                </td>
-                <td>
-                  <input type="checkbox" aria-label={`${at} delete`} checked={draft.remove} onChange={(event) => change(draft.id, "remove", event.target.checked)} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+          </ul>
+        </div>
+      )}
+      <div className="vt-form-actions">
+        <button className="lv-button" type="button" onClick={onDone}>
+          Cancel
+        </button>
+        <button className="lv-button lv-button-primary" type="submit">
+          Save
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Numbers({ calories, protein, carbs, fat }: { calories: number; protein: number; carbs: number; fat: number }) {
+  return (
+    <div className="vt-food-nums">
+      {(
+        [
+          ["kcal", number(calories)],
+          ["Protein", number(protein, 1)],
+          ["Carbs", number(carbs, 1)],
+          ["Fat", number(fat, 1)],
+        ] as const
+      ).map(([label, value]) => (
+        <div className="vt-num" key={label}>
+          <span className="vt-num-label">{label}</span>
+          {value}
+        </div>
+      ))}
     </div>
   );
 }
 
-export function FoodLog({ day, settings }: { day: string; settings: Settings }) {
+export function FoodLog({ day, settings, onDirtyChange }: { day: string; settings: Settings; onDirtyChange: (dirty: boolean) => void }) {
   const { data, error } = useFood(day, settings.max_food_rows);
   const act = useAct();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
   const rows = useMemo(() => byTime(data ?? [], settings), [data, settings]);
-  const [drafts, setDrafts] = useState<FoodDraft[]>([]);
-  const table = useRef<HTMLDivElement>(null);
 
-  // New data replaces the drafts, unless someone is typing in the table.
-  useEffect(() => {
-    if (!table.current?.contains(window.document.activeElement)) setDrafts(rows.map((row) => draftOf(row, settings)));
-  }, [rows, settings]);
+  // A different day closes the editor; App has already asked before discarding changes.
+  useEffect(() => setEditing(null), [day]);
 
-  const save = async () => {
-    const problems = foodErrors(drafts);
-    setErrors(problems);
-    if (problems.length) return;
-    const originals = new Map(rows.map((row) => [row.id, row]));
-    const saved = await act(async () => {
-      for (const draft of drafts) {
-        const original = originals.get(draft.id);
-        if (!original) continue;
-        if (draft.remove) await vita.deleteFood(draft.id);
-        // A row left as it was is not sent, so a table of many rows saves as fast as one.
-        else if (JSON.stringify({ ...draft }) !== JSON.stringify(draftOf(original, settings))) {
-          await vita.updateFood(draft.id, payloadOf(draft, original, settings));
-        }
-      }
-    }, "The daily log could not be saved.");
-    if (saved) toast("Daily log saved");
+  const total = rows.reduce(
+    (sum, row) => ({
+      calories: sum.calories + Number(row.calories),
+      protein: sum.protein + Number(row.protein_g),
+      carbs: sum.carbs + Number(row.carbs_g),
+      fat: sum.fat + Number(row.fat_g),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  );
+
+  const remove = async (entry: FoodEntry) => {
+    if (editing === entry.id) setEditing(null);
+    const removed = await act(() => vita.deleteFood(entry.id), `${entry.food_name} could not be deleted.`);
+    // Undo logs it again; the backend gives the restored entry a new id.
+    if (removed) toast(`${entry.food_name} deleted`, { label: "Undo", run: () => act(() => vita.createFood(copyOf(entry)), `${entry.food_name} could not be restored.`) });
+  };
+
+  const logAgain = async (entry: FoodEntry) => {
+    // Today's repeat is logged now; a repeat on a past day keeps the original's time.
+    const now = day === today(settings) ? { consumed_at: combine(day, currentClock(settings), settings), consumed_date: day, time_label: null } : undefined;
+    const result: { created?: FoodEntry } = {};
+    const logged = await act(async () => {
+      result.created = await vita.createFood(copyOf(entry, now));
+    }, `${entry.food_name} could not be logged again.`);
+    if (logged && result.created) {
+      const { id } = result.created;
+      toast(`${entry.food_name} logged again`, { label: "Undo", run: () => act(() => vita.deleteFood(id), "The repeat could not be removed.") });
+    }
   };
 
   const downloadReport = async () => {
@@ -306,38 +305,130 @@ export function FoodLog({ day, settings }: { day: string; settings: Settings }) 
     }
   };
 
+  const isToday = day === today(settings);
+
+  return (
+    <section aria-labelledby="food-log-title">
+      <SectionHead title="Food log" id="food-log-title">
+        <div className="vt-section-actions">
+          <button className="lv-icon-button" type="button" aria-label="Download daily PDF" title="Download daily PDF" onClick={downloadReport}>
+            <Download size={17} />
+          </button>
+          <button className="lv-button lv-button-primary" type="button" onClick={() => setAdding(true)}>
+            <Plus size={17} />
+            Add food
+          </button>
+        </div>
+      </SectionHead>
+      {error && <p className="lv-alert lv-alert-error">{messageOf(error, "The food log is unavailable.")}</p>}
+      <div className="vt-food">
+        {data && !rows.length && (
+          <div className="vt-empty">
+            <Utensils size={22} />
+            <strong>Nothing logged for {isToday ? "today" : new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" })}</strong>
+            <p>Add food here, or ask Claude to log it for you.</p>
+            <button className="lv-button lv-button-primary" type="button" onClick={() => setAdding(true)}>
+              <Plus size={17} />
+              Add food
+            </button>
+          </div>
+        )}
+        {rows.length > 0 && (
+          <>
+            <div className="vt-food-row vt-food-labels" aria-hidden="true">
+              <span>Time</span>
+              <span />
+              <span>Food</span>
+              <span className="vt-num">kcal</span>
+              <span className="vt-num">Protein</span>
+              <span className="vt-num">Carbs</span>
+              <span className="vt-num">Fat</span>
+              <span />
+            </div>
+            {rows.map((row) => {
+              const time = displayTime(row, settings);
+              return (
+                <div key={row.id}>
+                  <div className="vt-food-row">
+                    <span className="vt-food-time">{time}</span>
+                    <FoodPhoto source={row.image_url} alt="" className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                    <div className="vt-food-name">
+                      <strong title={row.food_name}>{row.food_name}</strong>
+                      <span title={row.quantity}>
+                        <span className="vt-mobile-only">{time} · </span>
+                        {row.quantity}
+                        {row.notes && <span className="vt-food-notes"> · {row.notes}</span>}
+                      </span>
+                    </div>
+                    <Numbers calories={row.calories} protein={row.protein_g} carbs={row.carbs_g} fat={row.fat_g} />
+                    <div className="vt-food-actions">
+                      <button className="lv-icon-button" type="button" aria-label={`Log ${row.food_name} again`} title="Log again" onClick={() => logAgain(row)}>
+                        <CopyPlus size={16} />
+                      </button>
+                      <button
+                        className="lv-icon-button"
+                        type="button"
+                        aria-label={`Edit ${row.food_name}`}
+                        aria-expanded={editing === row.id}
+                        title="Edit"
+                        onClick={() => setEditing(editing === row.id ? null : row.id)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button className="lv-icon-button" type="button" aria-label={`Delete ${row.food_name}`} title="Delete" onClick={() => remove(row)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  {editing === row.id && <FoodEditor entry={row} settings={settings} onDone={() => setEditing(null)} onDirty={onDirtyChange} />}
+                </div>
+              );
+            })}
+            <div className="vt-food-row vt-food-total">
+              <span className="vt-food-time" />
+              <span className="vt-food-photo vt-hidden" />
+              <div className="vt-food-name">
+                <strong>Total</strong>
+              </div>
+              <Numbers {...total} />
+              <span className="vt-food-actions" />
+            </div>
+          </>
+        )}
+      </div>
+      {adding && <FoodDialog day={day} settings={settings} onClose={() => setAdding(false)} />}
+    </section>
+  );
+}
+
+/** Protein, carbs and fat by energy; the bar sits level with Add food, the legend with the log. */
+export function EnergySplit({ day }: { day: string }) {
+  const { data } = useSummary(day);
+  const parts = energySplit(data ?? {});
+  const logged = parts.some((part) => part.grams > 0);
+  const label = logged ? `Energy split: ${parts.map((part) => `${part.label} ${part.share}%`).join(", ")}` : "No food logged";
   return (
     <>
-      <SectionWithAdd title="Food and nutrition" description="Log your meals, snacks and supplements for the day." onAdd={() => setAdding(true)} />
-      {error && <p className="lv-alert lv-alert-error">{messageOf(error, "The food log is unavailable.")}</p>}
-      {data && !rows.length && <p className="lv-alert">No food entries for this day yet.</p>}
-      {rows.length > 0 && (
-        <div ref={table}>
-          <FoodTable rows={rows} drafts={drafts} setDrafts={setDrafts} />
+      <SectionHead title="Energy split">
+        <div className="vt-split" role="img" aria-label={label}>
+          {parts.map((part) => (
+            <i key={part.label} style={{ width: `${part.share}%`, background: part.color }} />
+          ))}
         </div>
-      )}
-      {errors.length > 0 && (
-        <div className="vt-errors" role="alert">
-          Please correct the daily log before saving:
-          <ul>
-            {errors.map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="vt-actions">
-        <button className="lv-button lv-button-primary" type="button" disabled={!rows.length} onClick={save}>
-          <Save size={17} />
-          Save daily log
-        </button>
-        <button className="lv-button" type="button" onClick={downloadReport}>
-          <Download size={17} />
-          Download daily PDF
-        </button>
-      </div>
-      <MacroChart rows={data ?? []} />
-      {adding && <FoodDialog day={day} settings={settings} onClose={() => setAdding(false)} />}
+      </SectionHead>
+      <section className="vt-card" aria-label="Energy split by macro">
+        {parts.map((part) => (
+          <div className="vt-split-row" key={part.label}>
+            <i style={{ background: part.color }} />
+            <span>{part.label}</span>
+            <strong>{part.share}%</strong>
+            <span>{number(part.grams, 1)} g</span>
+          </div>
+        ))}
+        <p className="vt-caption">
+          Natural and added sugar are part of carbs.
+        </p>
+      </section>
     </>
   );
 }

@@ -43,14 +43,6 @@ export const nutrientStatus = (nutrient: Nutrient, value: number, target: number
 export const number = (value: number, decimals = 0) =>
   value.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
-export const MACROS = [
-  { label: "Protein", field: "protein_g", color: "#4ade80" },
-  { label: "Carbs", field: "carbs_g", color: "#60a5fa" },
-  { label: "Fat", field: "fat_g", color: "#fbbf24" },
-  { label: "Natural sugar", field: "natural_sugar_g", color: "#c084fc" },
-  { label: "Added sugar", field: "added_sugar_g", color: "#fb7185" },
-];
-
 /** Round non-negative macro shares to integers totaling exactly 100%. */
 export function macroPercentages(values: number[]): number[] {
   const total = values.reduce((sum, value) => sum + value, 0);
@@ -63,4 +55,31 @@ export function macroPercentages(values: number[]): number[] {
     .sort((left, right) => exact[right] - shares[right] - (exact[left] - shares[left]) || left - right);
   for (const index of byRemainder.slice(0, remaining)) shares[index] += 1;
   return shares;
+}
+
+/** Kilocalories per gram, so the split is by energy rather than weight. */
+export const ENERGY = [
+  { label: "Protein", field: "protein_g", color: "#4ade80", kcalPerGram: 4 },
+  { label: "Carbs", field: "carbs_g", color: "#60a5fa", kcalPerGram: 4 },
+  { label: "Fat", field: "fat_g", color: "#fbbf24", kcalPerGram: 9 },
+] as const;
+
+/**
+ * Protein, carbs and fat as shares of their combined energy. Sugars are part of
+ * carbs already, so counting them again would inflate the carb share.
+ */
+export function energySplit(totals: Record<string, number>) {
+  const grams = ENERGY.map(({ field }) => Number(totals[field] ?? 0));
+  const shares = macroPercentages(ENERGY.map(({ kcalPerGram }, index) => grams[index] * kcalPerGram));
+  return ENERGY.map(({ label, color }, index) => ({ label, color, grams: grams[index], share: shares[index] }));
+}
+
+/** A nutrient's state in words; a goal reads "to go" and a limit reads "left". */
+export function standing(nutrient: Nutrient, value: number, target: number, averaged = false) {
+  const status = nutrientStatus(nutrient, value, target);
+  const gap = `${number(Math.abs(target - value), nutrient.decimals)} ${nutrient.unit}`;
+  if (status === "success") return { status, text: averaged ? "Goal met on average" : "Goal reached" };
+  if (status === "danger") return { status, text: `${gap} over` };
+  if (averaged) return { status, text: `${gap} ${nutrient.isFloor ? "short" : "under"}` };
+  return { status, text: `${gap} ${nutrient.isFloor ? "to go" : "left"}` };
 }

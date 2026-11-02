@@ -132,6 +132,43 @@ export function draftOf(entry: FoodEntry, zone: Zone): FoodDraft {
   };
 }
 
+/** The problems in one edited entry, without the table's row numbers. */
+export const entryErrors = (draft: FoodDraft) => foodErrors([draft]).map((problem) => problem.replace(/^Row 1 /, ""));
+
+/** The foods logged most recently, one per name, newest first. */
+export function recentFoods(entries: FoodEntry[], limit: number): FoodEntry[] {
+  const seen = new Set<string>();
+  const recent: FoodEntry[] = [];
+  for (const entry of [...entries].sort((a, b) => b.consumed_at.localeCompare(a.consumed_at) || b.id - a.id)) {
+    const name = entry.food_name.trim().toLowerCase();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    recent.push(entry);
+    if (recent.length === limit) break;
+  }
+  return recent;
+}
+
+/** A stored entry as a create payload, to log it again or bring it back after a delete. */
+export function copyOf(entry: FoodEntry, at?: { consumed_at: string; consumed_date: string; time_label: string | null }) {
+  return {
+    food_name: entry.food_name,
+    quantity: entry.quantity,
+    meal_type: entry.meal_type ?? "other",
+    calories: entry.calories,
+    protein_g: entry.protein_g,
+    carbs_g: entry.carbs_g,
+    fat_g: entry.fat_g,
+    natural_sugar_g: entry.natural_sugar_g,
+    added_sugar_g: entry.added_sugar_g,
+    image_url: entry.image_url ?? null,
+    consumed_at: at?.consumed_at ?? entry.consumed_at,
+    consumed_date: at?.consumed_date ?? entry.consumed_date,
+    time_label: at ? at.time_label : (entry.time_label ?? null),
+    notes: entry.notes ?? null,
+  };
+}
+
 /** An edited row merged onto the stored entry it came from. */
 export function payloadOf(draft: FoodDraft, original: FoodEntry, zone: Zone) {
   return {

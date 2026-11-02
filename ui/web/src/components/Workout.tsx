@@ -1,12 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Save, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Check, Dumbbell, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAct, useExercises, useWorkouts, vita, type WorkoutRecord } from "../api";
+import { useAct, useExercises, useWorkouts, vita, type Exercise, type WorkoutRecord } from "../api";
 import { messageOf } from "../lib";
-import { WORKOUT_TYPES, exerciseDraft, exerciseErrors, exercisePayload, statusOf, type ExerciseDraft } from "../workouts";
+import { WORKOUT_TYPES, exerciseDraft, exercisePayload, statusOf } from "../workouts";
 import { Dialog } from "./Dialog";
-import { SectionWithAdd } from "./shared";
 import { useToast } from "./Toasts";
 
 function TypeOptions() {
@@ -22,10 +21,12 @@ function TypeOptions() {
   );
 }
 
-function ExerciseDialog({ day, onClose }: { day: string; onClose: () => void }) {
+/** Adds an exercise, or edits one when ``exercise`` is given. */
+function ExerciseDialog({ day, exercise, onClose }: { day: string; exercise?: Exercise; onClose: () => void }) {
   const act = useAct();
   const toast = useToast();
   const [error, setError] = useState("");
+  const initial = exercise ? exerciseDraft(exercise) : null;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -39,8 +40,13 @@ function ExerciseDialog({ day, onClose }: { day: string; onClose: () => void }) 
     );
     await act(async () => {
       try {
-        await vita.addExercises([payload]);
-        toast("Exercise saved; the day is marked done");
+        if (exercise) {
+          await vita.updateExercise(exercise.id, payload);
+          toast(`${payload.exercise} saved`);
+        } else {
+          await vita.addExercises([payload]);
+          toast("Exercise saved; the day is marked done");
+        }
         onClose();
       } catch (failure) {
         setError(messageOf(failure, "The exercise could not be saved."));
@@ -49,16 +55,16 @@ function ExerciseDialog({ day, onClose }: { day: string; onClose: () => void }) 
   };
 
   return (
-    <Dialog title="Add exercise" size="large" onClose={onClose}>
+    <Dialog title={exercise ? `Edit ${exercise.exercise}` : "Add exercise"} size="large" onClose={onClose}>
       <form className="lv-form" onSubmit={submit}>
         <div className="vt-form-2-1">
           <label className="lv-field">
             Exercise
-            <input className="lv-input" name="exercise" maxLength={120} placeholder="Barbell squat" autoFocus />
+            <input className="lv-input" name="exercise" maxLength={120} placeholder="Barbell squat" defaultValue={initial?.exercise} autoFocus />
           </label>
           <label className="lv-field">
             Type
-            <select className="lv-select" name="type">
+            <select className="lv-select" name="type" defaultValue={initial?.type ?? ""}>
               <TypeOptions />
             </select>
           </label>
@@ -66,24 +72,24 @@ function ExerciseDialog({ day, onClose }: { day: string; onClose: () => void }) 
         <div className="lv-form-row">
           <label className="lv-field">
             Sets
-            <input className="lv-input" name="sets" type="number" min="1" max="100" step="1" />
+            <input className="lv-input" name="sets" type="number" min="1" max="100" step="1" defaultValue={initial?.sets} />
           </label>
           <label className="lv-field">
             Reps
-            <input className="lv-input" name="reps" type="number" min="1" max="1000" step="1" />
+            <input className="lv-input" name="reps" type="number" min="1" max="1000" step="1" defaultValue={initial?.reps} />
           </label>
           <label className="lv-field">
             Weight (kg)
-            <input className="lv-input" name="weight_kg" type="number" min="0" max="1000" step="0.5" />
+            <input className="lv-input" name="weight_kg" type="number" min="0" max="1000" step="0.5" defaultValue={initial?.weight_kg} />
           </label>
           <label className="lv-field">
             Duration (min)
-            <input className="lv-input" name="duration_min" type="number" min="0.5" max="1440" step="0.5" />
+            <input className="lv-input" name="duration_min" type="number" min="0.5" max="1440" step="0.5" defaultValue={initial?.duration_min} />
           </label>
         </div>
         <label className="lv-field">
           Notes
-          <input className="lv-input" name="notes" maxLength={2000} />
+          <input className="lv-input" name="notes" maxLength={2000} defaultValue={initial?.notes} />
         </label>
         {error && <p className="lv-alert lv-alert-error">{error}</p>}
         <button className="lv-button lv-button-primary" type="submit">
@@ -95,103 +101,48 @@ function ExerciseDialog({ day, onClose }: { day: string; onClose: () => void }) 
   );
 }
 
-function Exercises({ day }: { day: string }) {
+/** "3 × 10 · 40 kg · 12 min", leaving out what was not recorded. */
+function detailOf(row: Exercise): string {
+  const parts = [
+    row.sets && row.reps ? `${row.sets} × ${row.reps}` : row.sets ? `${row.sets} sets` : row.reps ? `${row.reps} reps` : "",
+    row.weight_kg ? `${row.weight_kg} kg` : "",
+    row.duration_min ? `${row.duration_min} min` : "",
+  ].filter(Boolean);
+  const kind = row.type && WORKOUT_TYPES[row.type] ? WORKOUT_TYPES[row.type].label : "";
+  return [kind, ...parts].filter(Boolean).join(" · ");
+}
+
+function Exercises({ day, onEdit }: { day: string; onEdit: (row: Exercise) => void }) {
   const { data } = useExercises(day);
   const act = useAct();
   const toast = useToast();
   const rows = data ?? [];
-  const [drafts, setDrafts] = useState<ExerciseDraft[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
-  const table = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!table.current?.contains(window.document.activeElement)) setDrafts((data ?? []).map(exerciseDraft));
-  }, [data]);
-
-  if (data && !rows.length) return <p className="lv-caption">No exercises logged for this day yet. Use Add entry to log one.</p>;
   if (!rows.length) return null;
 
-  const change = (id: number, field: keyof ExerciseDraft, value: string | boolean) =>
-    setDrafts(drafts.map((draft) => (draft.id === id ? { ...draft, [field]: value } : draft)));
-
-  const save = async () => {
-    const problems = exerciseErrors(drafts);
-    setErrors(problems);
-    if (problems.length) return;
-    const originals = new Map(rows.map((row) => [row.id, row]));
-    const saved = await act(async () => {
-      for (const draft of drafts) {
-        const original = originals.get(draft.id);
-        if (draft.remove) await vita.deleteExercise(draft.id);
-        else if (!original || JSON.stringify(draft) !== JSON.stringify(exerciseDraft(original))) {
-          await vita.updateExercise(draft.id, exercisePayload(draft, day));
-        }
-      }
-    }, "The exercises could not be saved.");
-    if (saved) toast("Exercises saved");
+  const remove = async (row: Exercise) => {
+    const removed = await act(() => vita.deleteExercise(row.id), `${row.exercise} could not be deleted.`);
+    // Undo adds it back; the backend gives it a new id.
+    const restore = exercisePayload(exerciseDraft(row), day);
+    if (removed) toast(`${row.exercise} deleted`, { label: "Undo", run: () => act(() => vita.addExercises([restore]), `${row.exercise} could not be restored.`) });
   };
 
-  const numeric = (draft: ExerciseDraft, at: string, field: "sets" | "reps" | "weight_kg" | "duration_min", label: string, min: string, max: string, step: string) => (
-    <td>
-      <input type="number" min={min} max={max} step={step} aria-label={`${at} ${label}`} value={draft[field]} onChange={(event) => change(draft.id, field, event.target.value)} />
-    </td>
-  );
-
   return (
-    <>
-      <div className="lv-panel lv-table-scroll" ref={table}>
-        <table className="lv-table">
-          <thead>
-            <tr>
-              {["Exercise", "Type", "Sets", "Reps", "Weight (kg)", "Duration (min)", "Notes", "Delete"].map((label) => (
-                <th key={label}>{label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {drafts.map((draft, index) => {
-              const at = `Exercise ${index + 1}`;
-              return (
-                <tr key={draft.id}>
-                  <td>
-                    <input className="vt-wide" aria-label={`${at} name`} value={draft.exercise} onChange={(event) => change(draft.id, "exercise", event.target.value)} />
-                  </td>
-                  <td>
-                    <select aria-label={`${at} type`} value={draft.type} onChange={(event) => change(draft.id, "type", event.target.value)}>
-                      <TypeOptions />
-                    </select>
-                  </td>
-                  {numeric(draft, at, "sets", "sets", "1", "100", "1")}
-                  {numeric(draft, at, "reps", "reps", "1", "1000", "1")}
-                  {numeric(draft, at, "weight_kg", "weight", "0", "1000", "0.5")}
-                  {numeric(draft, at, "duration_min", "duration", "0.5", "1440", "0.5")}
-                  <td>
-                    <input className="vt-wide" aria-label={`${at} notes`} value={draft.notes} onChange={(event) => change(draft.id, "notes", event.target.value)} />
-                  </td>
-                  <td>
-                    <input type="checkbox" aria-label={`${at} delete`} checked={draft.remove} onChange={(event) => change(draft.id, "remove", event.target.checked)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {errors.length > 0 && (
-        <div className="vt-errors" role="alert">
-          Please correct the exercises before saving:
-          <ul>
-            {errors.map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <button className="lv-button lv-button-primary lv-button-wide" type="button" onClick={save}>
-        <Save size={17} />
-        Save exercises
-      </button>
-    </>
+    <ul className="vt-exercises" aria-label="Exercises">
+      {rows.map((row) => (
+        <li key={row.id}>
+          <div>
+            <strong>{row.exercise}</strong>
+            {detailOf(row) && <span>{detailOf(row)}</span>}
+          </div>
+          <button className="lv-icon-button" type="button" aria-label={`Edit ${row.exercise}`} title="Edit" onClick={() => onEdit(row)}>
+            <Pencil size={15} />
+          </button>
+          <button className="lv-icon-button" type="button" aria-label={`Delete ${row.exercise}`} title="Delete" onClick={() => remove(row)}>
+            <Trash2 size={15} />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -199,7 +150,7 @@ export function Workout({ day }: { day: string }) {
   const { data } = useWorkouts(day, day);
   const act = useAct();
   const client = useQueryClient();
-  const [adding, setAdding] = useState(false);
+  const [dialog, setDialog] = useState<{ exercise?: Exercise } | null>(null);
   const record = data?.[0];
   const status = statusOf(record);
   const key = ["workouts", day, day];
@@ -234,12 +185,11 @@ export function Workout({ day }: { day: string }) {
   };
 
   return (
-    <>
-      <SectionWithAdd
-        title="Workout"
-        description="Mark the day done or skipped, pick what you trained, and log your exercises."
-        onAdd={() => setAdding(true)}
-      />
+    <section className="vt-card" aria-labelledby="workout-title">
+      <h3 id="workout-title">
+        <Dumbbell size={16} />
+        Workout
+      </h3>
       <div className="vt-segments" role="group" aria-label={`Workout on ${day}`}>
         <button className={status === "done" ? "vt-segment vt-segment-done" : "vt-segment"} type="button" aria-pressed={status === "done"} onClick={() => choose("done")}>
           <Check size={16} />
@@ -262,8 +212,12 @@ export function Workout({ day }: { day: string }) {
           })}
         </div>
       )}
-      <Exercises day={day} />
-      {adding && <ExerciseDialog day={day} onClose={() => setAdding(false)} />}
-    </>
+      <Exercises day={day} onEdit={(exercise) => setDialog({ exercise })} />
+      <button className="lv-button vt-wide" type="button" onClick={() => setDialog({})}>
+        <Plus size={16} />
+        Add exercise
+      </button>
+      {dialog && <ExerciseDialog day={day} exercise={dialog.exercise} onClose={() => setDialog(null)} />}
+    </section>
   );
 }

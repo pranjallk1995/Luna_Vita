@@ -1,145 +1,305 @@
-import { CalendarRange, Check, Dumbbell, Flame, Apple, Droplet, PersonStanding, Scale, ThumbsDown, ThumbsUp, Wheat, X, type LucideIcon } from "lucide-react";
+import { Apple, CalendarRange, ChevronLeft, ChevronRight, Droplet, Dumbbell, Flame, PersonStanding, Scale, ThumbsDown, ThumbsUp, Wheat, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useAct, useAnalysis, useBodyComposition, useRecommendations, useWorkouts, vita, type Analysis, type AnalysisFood, type DayTotals, type Settings, type WorkoutRecord } from "../api";
 import { PERIODS, average, byDay, fatRange, readings, weightRange, type Reading } from "../body";
 import { dayLabel, daysBetween, today } from "../clock";
 import { messageOf } from "../lib";
-import { MACROS, NUTRIENTS, number, type Nutrient } from "../nutrition";
-import { MAX_ICONS, WORKOUT_TYPES, calendarSpan, cellLabel, monthLabel, monthWeeks, monthsBetween, statusOf } from "../workouts";
+import { NUTRIENTS, number, type Nutrient } from "../nutrition";
+import { WORKOUT_TYPES, calendarSpan, cellLabel, monthLabel, monthWeeks, monthsBetween, statusOf } from "../workouts";
 import { FoodPhoto } from "./FoodPhoto";
-import { NutrientCards, SectionHeading, cardClasses, targetsOf } from "./shared";
+import { SectionHead, SummaryTiles, targetsOf } from "./shared";
 
 const SLOT = 10; // viewBox units per day
 const HEIGHT = 60;
 const OVERRIDE_LABEL = "Your rating";
-const VERDICT_LABELS: Record<string, string> = { prefer: "Prefer", avoid: "Avoid", neutral: "" };
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+/** Prefer and Avoid show this many until expanded, so the column stays level with the food list. */
+const CHOICES_SHOWN = 3;
 
-function DailyTrend({ nutrient, days, value, target }: { nutrient: Nutrient; days: DayTotals[]; value: number; target: number }) {
-  const logged = days.filter((day) => day.logged).map((day) => Number(day[nutrient.summaryField] ?? 0));
-  const scaleMax = Math.max(target, ...logged, 1) * 1.08;
-  const y = (amount: number) => HEIGHT - (amount / scaleMax) * HEIGHT;
-  const width = SLOT * days.length;
-  const barWidth = 7;
-  const middle = days[Math.floor(days.length / 2)].date;
+/** A day's bars; a day with nothing logged gets a small mark so gaps read as gaps. */
+type Bar = { x: number; width: number; value: number; className: string };
+type Slot = { day: string; tip: string; bars: Bar[] };
+
+function BarPlot({ slots, low, high, target, label }: { slots: Slot[]; low: number; high: number; target?: number; label: string }) {
+  const y = (value: number) => HEIGHT - ((value - low) / (high - low)) * HEIGHT;
+  const width = SLOT * slots.length;
   return (
-    <div className={`nutrition-card nutrient-trend ${cardClasses(nutrient, value, target)}`}>
-      <div className="nutrient-trend-head">
-        <span>Per day</span>
-        <span>
-          <i className="nutrient-trend-key" />
-          Target {number(target)} {nutrient.unit}
-        </span>
-      </div>
-      <svg className="nutrient-trend-plot" viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={`${nutrient.label} per day`}>
-        <line className="nutrient-trend-base" x1="0" x2={width} y1={HEIGHT} y2={HEIGHT} />
-        {days.map((day, index) => {
-          const x = index * SLOT;
-          const amount = Number(day[nutrient.summaryField] ?? 0);
-          return (
-            <g className="nutrient-trend-day" key={day.date}>
-              <title>{`${dayLabel(day.date)} · ${day.logged ? `${number(amount, nutrient.decimals)} ${nutrient.unit}` : "not logged"}`}</title>
-              <rect className="nutrient-trend-hit" x={x} y="0" width={SLOT} height={HEIGHT} />
-              {day.logged && <rect className="nutrient-trend-bar" x={x + (SLOT - barWidth) / 2} y={y(amount)} width={barWidth} height={HEIGHT - y(amount)} />}
-            </g>
-          );
-        })}
-        <line className="nutrient-trend-target" x1="0" x2={width} y1={y(target)} y2={y(target)} />
-      </svg>
-      <div className="nutrient-trend-axis">
-        <span>{dayLabel(days[0].date)}</span>
-        <span>{dayLabel(middle)}</span>
-        <span>{dayLabel(days[days.length - 1].date)}</span>
-      </div>
+    <svg className="vt-plot" viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={label}>
+      {slots.map((slot, index) => {
+        const x = index * SLOT;
+        return (
+          <g className="vt-plot-day" key={slot.day}>
+            <title>{slot.tip}</title>
+            <rect className="vt-plot-hit" x={x} y="0" width={SLOT} height={HEIGHT} />
+            {slot.bars.length ? (
+              slot.bars.map((bar, at) => (
+                <rect className={`vt-plot-bar ${bar.className}`} key={at} x={x + bar.x} y={y(bar.value)} width={bar.width} height={Math.max(HEIGHT - y(bar.value), 0.6)} rx="1" />
+              ))
+            ) : (
+              <rect className="vt-plot-gap" x={x + 4} y={HEIGHT - 1.2} width="2" height="1.2" />
+            )}
+          </g>
+        );
+      })}
+      <line className="vt-plot-base" x1="0" x2={width} y1={HEIGHT} y2={HEIGHT} />
+      {target !== undefined && <line className="vt-plot-target" x1="0" x2={width} y1={y(target)} y2={y(target)} />}
+    </svg>
+  );
+}
+
+function Axis({ days }: { days: string[] }) {
+  return (
+    <div className="vt-axis">
+      <span>{dayLabel(days[0])}</span>
+      <span>{dayLabel(days[Math.floor(days.length / 2)])}</span>
+      <span>{dayLabel(days[days.length - 1])}</span>
     </div>
+  );
+}
+
+/** One nutrient at a time, with each day against the target. */
+function PerDay({ days, averages, targets }: { days: DayTotals[]; averages: Record<string, number>; targets: Record<string, number> }) {
+  const [key, setKey] = useState("calories");
+  const nutrient = NUTRIENTS.find((item) => item.key === key)!;
+  const target = targets[key];
+  const amount = (day: DayTotals) => Number(day[nutrient.summaryField] ?? 0);
+  const logged = days.filter((day) => day.logged);
+  const over = (value: number) => !nutrient.isFloor && value > target;
+  const met = (value: number) => Boolean(nutrient.isFloor) && value >= target;
+  const high = Math.max(target, ...logged.map(amount), 1) * 1.08;
+  const count = nutrient.isFloor ? logged.filter((day) => met(amount(day))).length : logged.filter((day) => over(amount(day))).length;
+  const slots: Slot[] = days.map((day) => {
+    const value = amount(day);
+    const shown = `${number(value, nutrient.decimals)} ${nutrient.unit}`;
+    return {
+      day: day.date,
+      tip: `${dayLabel(day.date)} · ${day.logged ? shown : "not logged"}`,
+      bars: day.logged ? [{ x: 1.5, width: 7, value, className: over(value) ? "over" : met(value) ? "met" : "" }] : [],
+    };
+  });
+
+  return (
+    <section className="vt-stretch-col" aria-labelledby="per-day-title">
+      <SectionHead title="Per day" id="per-day-title">
+        <div className="vt-chips" role="group" aria-label="Nutrient">
+          {NUTRIENTS.map((item) => (
+            <button className="vt-chip" type="button" key={item.key} aria-pressed={item.key === key} onClick={() => setKey(item.key)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </SectionHead>
+      <div className="vt-card vt-trend">
+        <div className="vt-trend-top">
+          <strong>
+            {number(averages[key], nutrient.decimals)}{" "}
+            <small>
+              {nutrient.unit} average · target {number(target)} {nutrient.unit}
+            </small>
+          </strong>
+          <span className="vt-legend">
+            {count} of {logged.length} logged days {nutrient.isFloor ? "reached the goal" : "went over"}
+          </span>
+        </div>
+        <div className="vt-plot-box">
+          <BarPlot slots={slots} low={0} high={high} target={target} label={`${nutrient.label} per day`} />
+        </div>
+        <Axis days={days.map((day) => day.date)} />
+        <div className="vt-legend">
+          <span>
+            <i className={nutrient.isFloor ? "vt-key vt-key-met" : "vt-key vt-key-over"} />
+            {nutrient.isFloor ? "Goal reached" : "Over target"}
+          </span>
+          <span>
+            <i className="vt-key vt-key-line" />
+            Target
+          </span>
+          <span>
+            <i className="vt-key vt-key-gap" />
+            Not logged
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The selected day's month when the range holds it; otherwise the month with most of the range. */
+function openingMonth(start: string, end: string, selected: string): string {
+  if (selected >= start && selected <= end) return `${selected.slice(0, 7)}-01`;
+  const days = daysBetween(start, end);
+  const counts = new Map<string, number>();
+  for (const day of days) counts.set(`${day.slice(0, 7)}-01`, (counts.get(`${day.slice(0, 7)}-01`) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0][0];
+}
+
+/** One month at a time; dots count the muscle groups trained, and a tap lists them. */
+function WorkoutCalendar({ start, end, selected, settings }: { start: string; end: string; selected: string; settings: Settings }) {
+  const [first, last] = calendarSpan(start, end, selected);
+  const { data } = useWorkouts(first, last);
+  const months = monthsBetween(first, last);
+  const inside = selected >= start && selected <= end;
+  const [month, setMonth] = useState(() => openingMonth(start, end, selected));
+  const [picked, setPicked] = useState(inside ? selected : end);
+  const now = today(settings);
+  const shown = months.includes(month) ? month : months[months.length - 1];
+  const at = months.indexOf(shown);
+
+  // A new day or range reopens on the month that matters most.
+  useEffect(() => {
+    setMonth(openingMonth(start, end, selected));
+    setPicked(selected >= start && selected <= end ? selected : end);
+  }, [selected, start, end]);
+
+  const records = new Map((data ?? []).filter((row) => row.workout_date >= first && row.workout_date <= last).map((row): [string, WorkoutRecord] => [row.workout_date, row]));
+  const inRange = [...records.values()].filter((row) => row.workout_date >= start && row.workout_date <= end);
+  const done = inRange.filter((row) => row.done).length;
+  const pickedRecord = records.get(picked);
+  const pickedKinds = (pickedRecord?.types ?? []).filter((kind) => kind in WORKOUT_TYPES).map((kind) => WORKOUT_TYPES[kind].label);
+  const pickedText = pickedRecord ? (pickedRecord.done ? `Done${pickedKinds.length ? `: ${pickedKinds.join(", ")}` : ", no muscle groups recorded"}` : "Skipped") : "Not recorded";
+
+  return (
+    <aside className="vt-stretch-col" aria-labelledby="workouts-title">
+      <SectionHead title="Workouts" id="workouts-title">
+        <span className="vt-legend">
+          <span>
+            <i className="vt-key vt-key-met" />
+            {done} done
+          </span>
+          <span>
+            <i className="vt-key vt-key-over" />
+            {inRange.length - done} skipped
+          </span>
+        </span>
+      </SectionHead>
+      <div className="vt-card">
+        <div className="vt-cal-nav">
+          <button className="lv-icon-button" type="button" aria-label="Previous month" disabled={at <= 0} onClick={() => setMonth(months[at - 1])}>
+            <ChevronLeft size={16} />
+          </button>
+          <strong>{monthLabel(shown)}</strong>
+          <button className="lv-icon-button" type="button" aria-label="Next month" disabled={at >= months.length - 1} onClick={() => setMonth(months[at + 1])}>
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <div className="vt-cal">
+          {WEEKDAYS.map((name, index) => (
+            <span className="vt-cal-weekday" key={index} aria-hidden="true">
+              {name}
+            </span>
+          ))}
+          {monthWeeks(shown)
+            .flat()
+            .map((cell, index) => {
+              if (!cell) return <span className="vt-cal-day vt-cal-out" key={`${shown}-${index}`} />;
+              const record = records.get(cell);
+              const status = statusOf(record);
+              const kinds = record?.done ? (record.types ?? []).filter((kind) => kind in WORKOUT_TYPES) : [];
+              const outside = cell < start || cell > end;
+              const classes = ["vt-cal-day", status, outside && "outside", cell === now && "today"].filter(Boolean).join(" ");
+              return (
+                <button className={classes} type="button" key={cell} aria-pressed={cell === picked} aria-label={`${cellLabel(cell)}: ${status === "none" ? "not recorded" : status}`} onClick={() => setPicked(cell)}>
+                  {Number(cell.slice(8))}
+                  {kinds.length > 0 && (
+                    <i aria-hidden="true">
+                      {kinds.slice(0, 4).map((kind) => (
+                        <b key={kind} />
+                      ))}
+                    </i>
+                  )}
+                </button>
+              );
+            })}
+        </div>
+        <p className="vt-cal-detail">
+          <strong>{dayLabel(picked)}</strong> · {pickedText}
+        </p>
+      </div>
+    </aside>
   );
 }
 
 type Metric = { label: string; unit: string; decimals: number; icon: LucideIcon };
 const WEIGHT: Metric = { label: "Weight", unit: "kg", decimals: 2, icon: Scale };
 const BODY_FAT: Metric = { label: "Body fat", unit: "%", decimals: 1, icon: PersonStanding };
-const amountOf = (metric: Metric, value: number) => `${value.toFixed(metric.decimals)}${metric.unit === "%" ? "" : " "}${metric.unit}`;
+const amountOf = (metric: Metric, value: number) => `${value.toFixed(metric.decimals)}${metric.unit === "%" ? "%" : ` ${metric.unit}`}`;
 
-function BodyPlot({ metric, series, days, low, high, target }: { metric: Metric; series: Reading[]; days: string[]; low: number; high: number; target?: number }) {
-  const y = (value: number) => HEIGHT - ((value - low) / (high - low)) * HEIGHT;
+function BodyCard({ metric, series, days, range, target }: { metric: Metric; series: Reading[]; days: string[]; range: [number, number]; target?: number }) {
   const grouped = byDay(series);
-  const width = SLOT * days.length;
-  const [barWidth, barGap] = [3.6, 0.8];
-  const inset = (SLOT - 2 * barWidth - barGap) / 2;
-  return (
-    <svg className="nutrient-trend-plot body-trend-plot" viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={`${metric.label} per day`}>
-      <line className="nutrient-trend-base" x1="0" x2={width} y1={HEIGHT} y2={HEIGHT} />
-      {days.map((day, index) => {
-        const periods = grouped.get(day) ?? {};
-        const shown = PERIODS.flatMap((period, slot) => (periods[period] ? [{ period, slot, reading: periods[period]! }] : []));
-        const tips = [
-          dayLabel(day),
-          ...shown.map(({ period, reading }) => `${period} ${amountOf(metric, reading.value)}${reading.estimated ? " (est.)" : ""}`),
-          ...(shown.length ? [] : ["not recorded"]),
-        ];
-        return (
-          <g className="nutrient-trend-day" key={day}>
-            <title>{tips.join(" · ")}</title>
-            <rect className="nutrient-trend-hit" x={index * SLOT} y="0" width={SLOT} height={HEIGHT} />
-            {shown.map(({ period, slot, reading }) => (
-              <rect
-                className={`body-trend-bar ${period.toLowerCase()}`}
-                key={period}
-                x={index * SLOT + inset + slot * (barWidth + barGap)}
-                y={y(reading.value)}
-                width={barWidth}
-                height={HEIGHT - y(reading.value)}
-              />
-            ))}
-          </g>
-        );
-      })}
-      {target !== undefined && <line className="nutrient-trend-target" x1="0" x2={width} y1={y(target)} y2={y(target)} />}
-    </svg>
-  );
-}
-
-function BodyHead({ metric, latest, children }: { metric: Metric; latest: Reading; children: React.ReactNode }) {
+  const latest = series[series.length - 1];
+  const mean = average(series)!;
+  const values = series.map(({ value }) => value);
+  const [low, high] = range;
   const Icon = metric.icon;
+  const slots: Slot[] = days.map((day) => {
+    const periods = grouped.get(day) ?? {};
+    const shown = PERIODS.flatMap((period, slot) => (periods[period] ? [{ period, slot, reading: periods[period]! }] : []));
+    return {
+      day,
+      tip: [dayLabel(day), ...shown.map(({ period, reading }) => `${period} ${amountOf(metric, reading.value)}${reading.estimated ? " (est.)" : ""}`), ...(shown.length ? [] : ["not recorded"])].join(" · "),
+      bars: shown.map(({ period, slot, reading }) => ({ x: 1.2 + slot * 4, width: 3.4, value: reading.value, className: period.toLowerCase() })),
+    };
+  });
+  const aboveTarget = target !== undefined && mean > target;
   return (
-    <div className="body-trend-head">
-      <span className="nutrition-card-label">
-        <span className="nutrition-card-icon">
-          <Icon size={16} />
+    <div className="vt-card">
+      <div className="vt-body-top">
+        <div className="vt-tile-label">
+          <Icon size={15} />
+          {metric.label}
+        </div>
+        <div className="vt-tile-value">
+          {latest.value.toFixed(metric.decimals)}{" "}
+          <small>
+            {metric.unit}
+            {latest.estimated ? " est." : ""} latest
+          </small>
+        </div>
+        <div className="vt-body-stats">
+          <span className={aboveTarget ? "danger" : ""}>
+            Average
+            <b>{amountOf(metric, mean)}</b>
+          </span>
+          {target !== undefined ? (
+            <span>
+              Target
+              <b>{amountOf(metric, target)}</b>
+            </span>
+          ) : (
+            <span>
+              Range
+              <b>
+                {Math.min(...values).toFixed(1)} to {Math.max(...values).toFixed(1)}
+              </b>
+            </span>
+          )}
+        </div>
+      </div>
+      <BarPlot slots={slots} low={low} high={high} target={target} label={`${metric.label} per day`} />
+      <Axis days={days} />
+      <div className="vt-legend">
+        {PERIODS.map((period) => (
+          <span key={period}>
+            <i className={`vt-key vt-key-${period.toLowerCase()}`} />
+            {period}
+          </span>
+        ))}
+        {target !== undefined && (
+          <span>
+            <i className="vt-key vt-key-line" />
+            Target
+          </span>
+        )}
+        <span>
+          Bars start at {amountOf({ ...metric, decimals: 0 }, low)}
         </span>
-        {metric.label}
-      </span>
-      <strong>
-        {amountOf(metric, latest.value)}
-        {latest.estimated ? " (est.)" : ""}
-      </strong>
-      <span className="body-trend-note">{children}</span>
+      </div>
     </div>
   );
 }
 
-function AverageCard({ metric, series, target }: { metric: Metric; series: Reading[]; target?: number }) {
-  const value = average(series);
-  if (value === null) return null;
-  const Icon = metric.icon;
-  return (
-    <div className={target !== undefined && value > target ? "body-average-card danger" : "body-average-card"}>
-      <span className="nutrition-card-label">
-        <span className="nutrition-card-icon">
-          <Icon size={16} />
-        </span>
-        Average {metric.label.toLowerCase()}
-      </span>
-      <strong>{amountOf(metric, value)}</strong>
-      <small>
-        {series.length} reading{series.length === 1 ? "" : "s"}
-      </small>
-    </div>
-  );
-}
-
-function BodyCard({ start, end, settings }: { start: string; end: string; settings: Settings }) {
+function Body({ start, end, settings }: { start: string; end: string; settings: Settings }) {
   const { data } = useBodyComposition(start, end);
   if (!data) return null;
   const weight = readings(data.weight, settings);
@@ -147,166 +307,117 @@ function BodyCard({ start, end, settings }: { start: string; end: string; settin
   if (!weight.length && !fat.length) return null;
   const target = Number(data.body_fat_target_percent);
   const days = daysBetween(start, end);
-  const [weightLow, weightHigh] = weight.length ? weightRange(weight) : [0, 1];
-  const [fatLow, fatHigh] = fat.length ? fatRange(fat, target) : [0, 1];
+  const estimated = fat.some((reading) => reading.estimated);
   return (
-    <div className="nutrition-card body-trend-card">
-      {weight.length > 0 && (
-        <div className="body-trend-section">
-          <BodyHead metric={WEIGHT} latest={weight[weight.length - 1]}>
-            {PERIODS.map((period) => (
-              <span key={period}>
-                <i className={`body-trend-key ${period.toLowerCase()}`} />
-                {period}
-              </span>
-            ))}
-            <span>Bars from {weightLow.toFixed(0)} kg</span>
-          </BodyHead>
-          <BodyPlot metric={WEIGHT} series={weight} days={days} low={weightLow} high={weightHigh} />
-        </div>
-      )}
-      {fat.length > 0 && (
-        <div className="body-trend-section">
-          <BodyHead metric={BODY_FAT} latest={fat[fat.length - 1]}>
-            <i className="nutrient-trend-key" />
-            Target {amountOf(BODY_FAT, target)}
-            <span>Bars from {fatLow.toFixed(0)}%</span>
-          </BodyHead>
-          <BodyPlot metric={BODY_FAT} series={fat} days={days} low={fatLow} high={fatHigh} target={target} />
-        </div>
-      )}
-      <div className="nutrient-trend-axis">
-        <span>{dayLabel(start)}</span>
-        <span>{dayLabel(days[Math.floor(days.length / 2)])}</span>
-        <span>{dayLabel(end)}</span>
+    <section className="vt-month-row" aria-labelledby="body-title">
+      <SectionHead title="Body" id="body-title">
+        {estimated && <p className="vt-head-note">Body fat is estimated from body water, within about 3 to 5 points</p>}
+      </SectionHead>
+      <div className="vt-body-grid">
+        {weight.length > 0 && <BodyCard metric={WEIGHT} series={weight} days={days} range={weightRange(weight)} />}
+        {fat.length > 0 && <BodyCard metric={BODY_FAT} series={fat} days={days} range={fatRange(fat, target)} target={target} />}
       </div>
-      <div className="body-trend-averages">
-        <AverageCard metric={WEIGHT} series={weight} />
-        <AverageCard metric={BODY_FAT} series={fat} target={target} />
-      </div>
-    </div>
+    </section>
   );
 }
 
-function WorkoutTypeIcon({ kind }: { kind: string }) {
-  const { label, body } = WORKOUT_TYPES[kind];
-  // The bodies are this app's own constants, in workouts.ts.
-  return (
-    <svg className="workout-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={label} dangerouslySetInnerHTML={{ __html: body }} />
-  );
-}
+const VERDICT_LABELS: Record<string, string> = { prefer: "Prefer", avoid: "Avoid" };
 
-function WorkoutCalendar({ start, end, selected, settings }: { start: string; end: string; selected: string; settings: Settings }) {
-  const [first, last] = calendarSpan(start, end, selected);
-  const { data } = useWorkouts(first, last);
-  const now = today(settings);
-  const records = new Map((data ?? []).filter((row) => row.workout_date >= first && row.workout_date <= last).map((row): [string, WorkoutRecord] => [row.workout_date, row]));
-  const done = [...records.values()].filter((row) => row.done).length;
-  const skipped = records.size - done;
-
+/** Every food in the range, most frequent first, in a list that scrolls inside its card. */
+function Foods({ foods, span }: { foods: AnalysisFood[]; span: string }) {
   return (
-    <div className="workout-calendar">
-      <div className="workout-calendar-head">
-        <strong>Workouts</strong>
-        <span className="workout-legend">
-          <span>
-            <i className="workout-key done" />
-            {done} done
-          </span>
-          <span>
-            <i className="workout-key skipped" />
-            {skipped} skipped
-          </span>
+    <section className="vt-stretch-col" aria-labelledby="foods-title">
+      <SectionHead title="What you had" id="foods-title">
+        <span className="vt-head-note">
+          {foods.length} foods, most frequent first, with totals {span}
         </span>
-      </div>
-      <div className="workout-months">
-        {monthsBetween(first, last).map((month) => (
-          <div className="workout-month" key={month}>
-            <div className="workout-month-label">{monthLabel(month)}</div>
-            <div className="workout-grid">
-              {WEEKDAYS.map((name) => (
-                <div className="workout-weekday" key={name}>
-                  {name}
-                </div>
-              ))}
-              {monthWeeks(month).flat().map((cell, index) => {
-                if (!cell) return <div className="workout-day outside" key={`${month}-${index}`} />;
-                const record = records.get(cell);
-                const status = statusOf(record);
-                const kinds = record?.done ? (record.types ?? []).filter((kind) => kind in WORKOUT_TYPES) : [];
-                const label = { done: "Workout done", skipped: "Workout skipped", none: "Not recorded" }[status];
-                const classes = ["workout-day", status, cell === selected && "selected", cell === now && "today"].filter(Boolean).join(" ");
-                return (
-                  <div className={classes} key={cell} title={`${cellLabel(cell)} · ${label}${kinds.length ? `: ${kinds.map((kind) => WORKOUT_TYPES[kind].label).join(", ")}` : ""}`}>
-                    <span className="workout-date">{Number(cell.slice(8))}</span>
-                    {kinds.length > 0 ? (
-                      <span className="workout-types">
-                        {kinds.slice(0, MAX_ICONS).map((kind) => (
-                          <WorkoutTypeIcon kind={kind} key={kind} />
-                        ))}
-                        {kinds.length > MAX_ICONS && <span className="workout-type-more">+{kinds.length - MAX_ICONS}</span>}
-                      </span>
-                    ) : status === "done" ? (
-                      <span className="workout-marker">
-                        <Check size={14} />
-                      </span>
-                    ) : status === "skipped" ? (
-                      <span className="workout-marker">
-                        <X size={14} />
-                      </span>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+      </SectionHead>
+      <div className="vt-scroll-box">
+        <div className="vt-food vt-month-foods" tabIndex={0} role="region" aria-label="Foods eaten in this range">
+          <div className="vt-food-row vt-food-labels" aria-hidden="true">
+            <span>Times</span>
+            <span />
+            <span>Food</span>
+            <span className="vt-num">kcal</span>
+            <span className="vt-num">Protein</span>
+            <span className="vt-num">Carbs</span>
+            <span className="vt-num">Fat</span>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const CHIPS = [
-  ["protein_g", "Protein"],
-  ["carbs_g", "Carbs"],
-  ["fat_g", "Fat"],
-  ["added_sugar_g", "Sugar"],
-] as const;
-
-function FoodTile({ food }: { food: AnalysisFood }) {
-  const { totals, verdict } = food;
-  const label = VERDICT_LABELS[verdict.kind];
-  const shownVerdict = verdict.source === "override" ? (label ? `${label} (${OVERRIDE_LABEL.toLowerCase()})` : OVERRIDE_LABEL) : label;
-  const days = `${food.days} day${food.days === 1 ? "" : "s"}`;
-  return (
-    <figure
-      className={`food-tile ${verdict.kind}`}
-      title={`${food.name}: ${food.count}× over ${days}, ${number(totals.calories)} kcal, ${Math.round(food.protein_share * 100)}% of calories from protein`}
-    >
-      <div className="food-tile-media">
-        <FoodPhoto source={food.image_url} alt={food.name} className="vt-tile-photo" emptyClass="food-tile-empty" />
-        <span className="food-tile-count">{food.count}×</span>
-        {shownVerdict && <span className="food-tile-verdict">{shownVerdict}</span>}
-      </div>
-      <figcaption>
-        <strong>{food.name}</strong>
-        <span className="food-tile-meta">
-          {days} · {number(totals.calories)} kcal
-        </span>
-        <div className="food-chips">
-          {CHIPS.map(([field, chip]) => {
-            const macro = MACROS.find((item) => item.field === field)!;
+          {foods.map((food) => {
+            const verdict = VERDICT_LABELS[food.verdict.kind];
             return (
-              <span className="food-chip" style={{ "--chip": macro.color } as React.CSSProperties} title={`${macro.label}: ${number(totals[field], 1)} g`} key={field}>
-                <i />
-                {chip}
-                <b>{number(totals[field])} g</b>
-              </span>
+              <div className="vt-food-row" key={food.name} title={`${food.name}: ${Math.round(food.protein_share * 100)}% of calories from protein`}>
+                <span className="vt-count">{food.count}×</span>
+                <FoodPhoto source={food.image_url} alt="" className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                <div className="vt-food-name">
+                  <strong>{food.name}</strong>
+                  <span>
+                    {food.days} day{food.days === 1 ? "" : "s"}
+                    {verdict && (
+                      <em className={`vt-verdict ${food.verdict.kind}`}>
+                        {verdict}
+                        {food.verdict.source === "override" ? ` · ${OVERRIDE_LABEL.toLowerCase()}` : ""}
+                      </em>
+                    )}
+                  </span>
+                </div>
+                <div className="vt-food-nums">
+                  {(
+                    [
+                      ["kcal", number(food.totals.calories)],
+                      ["Protein", number(food.totals.protein_g, 1)],
+                      ["Carbs", number(food.totals.carbs_g, 1)],
+                      ["Fat", number(food.totals.fat_g, 1)],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div className="vt-num" key={label}>
+                      <span className="vt-num-label">{label}</span>
+                      {value}
+                    </div>
+                  ))}
+                </div>
+              </div>
             );
           })}
         </div>
-      </figcaption>
-    </figure>
+      </div>
+    </section>
+  );
+}
+
+function Choice({ kind, icon: Icon, title, rule, foods, empty }: { kind: string; icon: LucideIcon; title: string; rule: string; foods: AnalysisFood[]; empty: string }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? foods : foods.slice(0, CHOICES_SHOWN);
+  return (
+    <section className={`vt-card vt-choice ${kind}`} aria-label={title}>
+      <h3>
+        <Icon size={16} />
+        {title}
+      </h3>
+      <p>{rule}</p>
+      {foods.length ? (
+        <ul>
+          {shown.map((food) => (
+            <li key={food.name}>
+              <strong>
+                {food.name}
+                {food.verdict.source === "override" && <em className={`vt-verdict ${kind}`}>{OVERRIDE_LABEL.toLowerCase()}</em>}
+              </strong>
+              <span>
+                {food.count}× · {number(food.totals.calories)} kcal · {food.verdict.reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="vt-empty-note">{empty}</p>
+      )}
+      {foods.length > CHOICES_SHOWN && (
+        <button className="vt-link-button" type="button" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${foods.length}`}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -322,71 +433,37 @@ const amountIn = (value: number, unit: string) => (unit === "kcal" ? `${number(v
 
 function Contributors({ analysis, span, period }: { analysis: Analysis; span: string; period: string }) {
   return (
-    <>
-      <SectionHeading title="Top contributors" description={`Which foods supplied the most of each nutrient, as a share of the ${period}'s total.`} />
-      <section className="analysis-contributors">
+    <section className="vt-month-row" aria-labelledby="contributors-title">
+      <SectionHead title="Top contributors" id="contributors-title">
+        <p className="vt-head-note">Share of the {period}'s total</p>
+      </SectionHead>
+      <div className="vt-contributors">
         {CONTRIBUTORS.map(([field, label, unit, Icon]) => (
-          <div className="analysis-panel" key={field}>
+          <section className="vt-card" key={field} aria-label={`${label} contributors`}>
             <h3>
-              <span className="analysis-icon">
-                <Icon size={16} />
-              </span>
+              <Icon size={16} />
               {label}
             </h3>
-            <div className="analysis-panel-total">
+            <p className="vt-contrib-total">
               {amountIn(analysis.totals[field], unit)} {span}
-            </div>
+            </p>
             {analysis.top_contributors[field].length ? (
               analysis.top_contributors[field].map((item) => (
-                <div className="analysis-bar-row" key={item.name} title={`${item.name}: ${amountIn(item.amount, unit)} (${Math.round(item.share * 100)}% of the ${period})`}>
-                  <div className="analysis-bar-name">{item.name}</div>
-                  <div className="analysis-bar-line">
-                    <div className="analysis-bar-track">
-                      <div className="analysis-bar-fill" style={{ width: `${(item.share * 100).toFixed(1)}%` }} />
-                    </div>
-                    <strong>{Math.round(item.share * 100)}%</strong>
+                <div className="vt-share" key={item.name} title={`${item.name}: ${amountIn(item.amount, unit)} (${Math.round(item.share * 100)}% of the ${period})`}>
+                  <span>{item.name}</span>
+                  <strong>{Math.round(item.share * 100)}%</strong>
+                  <div className="vt-share-track">
+                    <i style={{ width: `${(item.share * 100).toFixed(1)}%` }} />
                   </div>
                 </div>
               ))
             ) : (
-              <p className="analysis-empty">None logged {span}.</p>
+              <p className="vt-empty-note">None logged {span}.</p>
             )}
-          </div>
+          </section>
         ))}
-      </section>
-    </>
-  );
-}
-
-function Suggestions({ kind, icon: Icon, title, description, foods, empty }: { kind: string; icon: LucideIcon; title: string; description: string; foods: AnalysisFood[]; empty: string }) {
-  return (
-    <div className={`analysis-suggestions ${kind}`}>
-      <h3>
-        <span className="analysis-icon">
-          <Icon size={16} />
-        </span>
-        {title}
-      </h3>
-      <p>{description}</p>
-      {foods.length ? (
-        <ul>
-          {foods.map((food) => (
-            <li key={food.name}>
-              <span className="analysis-food">
-                {food.name}
-                {food.verdict.source === "override" && <span className="analysis-badge">{OVERRIDE_LABEL}</span>}
-              </span>
-              <span className="analysis-meta">
-                {food.count}× · {number(food.totals.calories)} kcal
-              </span>
-              <span className="analysis-reason">{food.verdict.reason}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="analysis-empty">{empty}</p>
-      )}
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -426,8 +503,8 @@ function RangePicker({ analysis, custom }: { analysis: Analysis; custom: boolean
     }, "Could not update the date range.");
 
   return (
-    <>
-      <div className="vt-range">
+    <div className="vt-range-wrap">
+      <div className="vt-range" role="group" aria-label="Date range">
         <label className="lv-field">
           From
           <input className="lv-input" type="date" aria-label="Range from" value={from} onChange={(event) => save(event.target.value, to)} />
@@ -444,7 +521,23 @@ function RangePicker({ analysis, custom }: { analysis: Analysis; custom: boolean
         )}
       </div>
       {error && <p className="lv-alert lv-alert-error">{error}</p>}
-    </>
+    </div>
+  );
+}
+
+function MonthHead({ analysis, custom }: { analysis: Analysis; custom: boolean }) {
+  const { window: range } = analysis;
+  return (
+    <div className="vt-month-head">
+      <div className="vt-day-head">
+        <h2>{range.label}</h2>
+        <p>
+          {custom ? "Custom range · " : ""}
+          {analysis.entries} entries · {analysis.foods.length} foods · {analysis.days_logged} of {range.days} days logged
+        </p>
+      </div>
+      <RangePicker analysis={analysis} custom={custom} />
+    </div>
   );
 }
 
@@ -453,87 +546,69 @@ export function Monthly({ day, settings }: { day: string; settings: Settings }) 
   const recommendations = useRecommendations();
 
   if (error && !analysis) return <p className="lv-alert lv-alert-error">{messageOf(error, "The Luna Vita service is unavailable.")}</p>;
-  if (!analysis) return null;
+  if (!analysis) return <SummaryTiles values={null} targets={null} averaged />;
 
   const { window: range } = analysis;
   const custom = analysis.range_source === "saved";
   const period = custom ? "range" : "month";
   const span = custom ? "in this range" : "this month";
-  const picker = <RangePicker analysis={analysis} custom={custom} />;
-  const body = <BodyCard start={range.start} end={range.end} settings={settings} />;
   const calendar = <WorkoutCalendar start={range.start} end={range.end} selected={day} settings={settings} />;
+  const body = <Body start={range.start} end={range.end} settings={settings} />;
 
   if (!analysis.foods.length) {
     return (
       <>
-        {picker}
-        <SectionHeading title="Overview" description={range.label} />
-        {body}
-        {calendar}
+        <MonthHead analysis={analysis} custom={custom} />
         <p className="lv-alert">No food entries {span} yet.</p>
+        <div className="vt-day-grid vt-month-row">
+          <div />
+          {calendar}
+        </div>
+        {body}
       </>
     );
   }
 
-  const values = Object.fromEntries(NUTRIENTS.map((nutrient) => [nutrient.key, Number(analysis.daily_averages[nutrient.summaryField])]));
+  const averages = Object.fromEntries(NUTRIENTS.map((nutrient: Nutrient) => [nutrient.key, Number(analysis.daily_averages[nutrient.summaryField])]));
   const targets = recommendations.data ? targetsOf(recommendations.data) : null;
   const { rules } = analysis;
   const share = (value: number) => `${Math.round(value * 100)}%`;
 
   return (
     <>
-      {picker}
-      <SectionHeading
-        title="Overview"
-        description={`${range.label}${custom ? " · custom range" : ""} · ${analysis.entries} entries · ${analysis.foods.length} different foods · ${analysis.days_logged} of ${range.days} days logged`}
-      />
-      {targets ? (
-        <>
-          <div className="analysis-caption">Daily average across logged days, not counting today, with each day below</div>
-          <div className="overview-grid">
-            <NutrientCards
-              values={values}
-              targets={targets}
-              footers={Object.fromEntries(
-                NUTRIENTS.map((nutrient) => [
-                  nutrient.key,
-                  <DailyTrend nutrient={nutrient} days={analysis.daily_totals} value={values[nutrient.key]} target={targets[nutrient.key]} key={nutrient.key} />,
-                ]),
-              )}
+      <MonthHead analysis={analysis} custom={custom} />
+      <p className="vt-caption vt-averages-note">Daily average across logged days, not counting today</p>
+      <SummaryTiles values={averages} targets={targets} averaged />
+      <div className="vt-day-grid vt-month-row vt-stretch">
+        {targets ? <PerDay days={analysis.daily_totals} averages={averages} targets={targets} /> : <div />}
+        {calendar}
+      </div>
+      {body}
+      <div className="vt-day-grid vt-month-row vt-stretch">
+        <Foods foods={analysis.foods} span={span} />
+        <aside className="vt-stretch-col" aria-labelledby="choices-title">
+          <SectionHead title="Food choices" id="choices-title" />
+          <div className="vt-rail">
+            <Choice
+              kind="prefer"
+              icon={ThumbsUp}
+              title="Prefer"
+              rule={`At least ${share(rules.prefer_min_protein_share)} of calories from protein, at most ${share(rules.prefer_max_carb_share)} from carbs, little added sugar.`}
+              foods={analysis.prefer}
+              empty={`Nothing ${span} met the high-protein, low-carb bar.`}
             />
-            {body}
+            <Choice
+              kind="avoid"
+              icon={ThumbsDown}
+              title="Avoid"
+              rule={`${share(rules.avoid_min_added_sugar_share)}+ of calories from added sugar, or under ${share(rules.avoid_max_protein_share)} from protein. Biggest calorie impact first.`}
+              foods={analysis.avoid}
+              empty={`Nothing ${span} was sugar-heavy or protein-poor.`}
+            />
           </div>
-        </>
-      ) : (
-        body
-      )}
-      {calendar}
-      <SectionHeading title="What you had" description={`Each food logged ${span}, most frequent first, with its total macros.`} />
-      <div className="food-gallery">
-        {analysis.foods.map((food) => (
-          <FoodTile food={food} key={food.name} />
-        ))}
+        </aside>
       </div>
       <Contributors analysis={analysis} span={span} period={period} />
-      <SectionHeading title="Food choices" description={`Rated on macros: protein share of calories, carbs, and added sugar. "${OVERRIDE_LABEL}" marks ratings set through the assistant.`} />
-      <section className="analysis-choices">
-        <Suggestions
-          kind="prefer"
-          icon={ThumbsUp}
-          title="Prefer"
-          description={`At least ${share(rules.prefer_min_protein_share)} of calories from protein, at most ${share(rules.prefer_max_carb_share)} from carbs, little added sugar.`}
-          foods={analysis.prefer}
-          empty={`Nothing ${span} met the high-protein, low-carb bar.`}
-        />
-        <Suggestions
-          kind="avoid"
-          icon={ThumbsDown}
-          title="Avoid"
-          description={`${share(rules.avoid_min_added_sugar_share)}+ of calories from added sugar, or under ${share(rules.avoid_max_protein_share)} from protein. Biggest calorie impact first.`}
-          foods={analysis.avoid}
-          empty={`Nothing ${span} was sugar-heavy or protein-poor.`}
-        />
-      </section>
     </>
   );
 }

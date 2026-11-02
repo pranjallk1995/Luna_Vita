@@ -1,12 +1,11 @@
-import { Save, Trash2 } from "lucide-react";
+import { Plus, Save, Scale, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { useAct, useMeasurements, vita, type Settings } from "../api";
-import { PERIODS, measurementPayloads, measurementTable, measurementsOn, type Period } from "../body";
+import { NOT_RECORDED, PERIODS, measurementPayloads, measurementTable, measurementsOn, type Period } from "../body";
 import { combine, currentClock } from "../clock";
 import { messageOf } from "../lib";
 import { Dialog } from "./Dialog";
-import { SectionWithAdd } from "./shared";
 import { useToast } from "./Toasts";
 
 const METRIC_INPUTS = [
@@ -43,7 +42,7 @@ function MeasurementDialog({ day, settings, onClose }: { day: string; settings: 
   };
 
   return (
-    <Dialog title="Add body measurements" size="large" onClose={onClose}>
+    <Dialog title="Add weigh-in" size="large" onClose={onClose}>
       <form className="lv-form" onSubmit={submit}>
         <label className="lv-field">
           Weight (kg)
@@ -101,6 +100,9 @@ export function Measurements({ day, settings }: { day: string; settings: Setting
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const rows = measurementsOn(data ?? [], day, settings);
+  const table = measurementTable(rows);
+  const [weight, ...others] = table;
+  const recorded = others.filter((row) => row.Morning !== NOT_RECORDED || row.Night !== NOT_RECORDED);
 
   const deletePeriod = async (period: Period) => {
     const done = await act(async () => {
@@ -110,43 +112,44 @@ export function Measurements({ day, settings }: { day: string; settings: Setting
   };
 
   return (
-    <>
-      <SectionWithAdd
-        title="Body measurements"
-        description="Track morning and night weight, BMR, health score, body age, BMI, and water ratio."
-        onAdd={() => setAdding(true)}
-      />
+    <section className="vt-card" aria-labelledby="weigh-title">
+      <h3 id="weigh-title">
+        <Scale size={16} />
+        Weigh-in
+      </h3>
       {error && <p className="lv-alert lv-alert-error">{messageOf(error, "Measurements are unavailable.")}</p>}
-      <div className="lv-panel lv-table-scroll">
-        <table className="lv-table">
-          <thead>
-            <tr>
-              <th>Measurement</th>
-              {PERIODS.map((period) => (
-                <th key={period}>{period}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {measurementTable(rows).map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                <td>{row.Morning}</td>
-                <td>{row.Night}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="vt-weigh">
+        {PERIODS.map((period) => {
+          const value = weight[period];
+          const has = value !== NOT_RECORDED;
+          return (
+            <div key={period}>
+              <span>{period}</span>
+              <strong className={has ? "" : "vt-none"}>{has ? value : "Not logged"}</strong>
+              {has && (
+                <button className="lv-icon-button" type="button" aria-label={`Delete ${period.toLowerCase()} weigh-in`} title={`Delete ${period.toLowerCase()} weigh-in`} onClick={() => deletePeriod(period)}>
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className="vt-delete-row">
-        {PERIODS.map((period) => (
-          <button className="lv-button" type="button" key={period} disabled={!rows.some((row) => row.period === period)} onClick={() => deletePeriod(period)}>
-            <Trash2 size={16} />
-            Delete {period.toLowerCase()} weigh-in
-          </button>
-        ))}
-      </div>
+      {recorded.length > 0 && (
+        <dl className="vt-metrics">
+          {recorded.map((row) => (
+            <div key={row.label}>
+              <dt>{row.label}</dt>
+              <dd>{PERIODS.map((period) => row[period]).filter((value) => value !== NOT_RECORDED).join(" / ")}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <button className="lv-button vt-wide" type="button" onClick={() => setAdding(true)}>
+        <Plus size={16} />
+        Add weigh-in
+      </button>
       {adding && <MeasurementDialog day={day} settings={settings} onClose={() => setAdding(false)} />}
-    </>
+    </section>
   );
 }

@@ -14,9 +14,6 @@ export const WORKOUT_TYPES: Record<string, { label: string; body: string }> = {
   full_body: { label: "Full body", body: '<circle cx="12" cy="4.5" r="2"/><path d="M4.5 9.5 12 9l7.5.5"/><path d="M12 9v6.5"/><path d="M8.5 21l3.5-5.5 3.5 5.5"/>' },
 };
 
-/** A day cell fits three icons; more collapse into a "+n" count. */
-export const MAX_ICONS = 3;
-
 export type DayStatus = "done" | "skipped" | "none";
 
 export const statusOf = (record?: WorkoutRecord): DayStatus => (record ? (record.done ? "done" : "skipped") : "none");
