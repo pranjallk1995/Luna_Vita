@@ -1,11 +1,10 @@
-"""Validated presentation and service settings for the Streamlit UI."""
+"""Validated settings for the UI gateway and the browser app it serves."""
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 from urllib.parse import urlparse
-from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True)
@@ -18,6 +17,7 @@ class SSOConfig:
     # in another app takes effect here within this many seconds.
     RECHECK_SECONDS: ClassVar[int] = 60
     LOOKUP_TIMEOUT_SECONDS: ClassVar[float] = 5.0
+    SESSION_CACHE_ENTRIES: ClassVar[int] = 256
 
     public_url: str
     internal_url: str = "http://luna-sentia-auth:8000"
@@ -33,26 +33,43 @@ class SSOConfig:
 
 @dataclass(frozen=True)
 class UIConfig:
-    """Immutable UI layout and backend-connection settings."""
+    """Immutable gateway settings."""
 
     UI_ROOT: ClassVar[Path] = Path(__file__).resolve().parent
-    LOGO_PATH: ClassVar[Path] = UI_ROOT / "assets" / "lunavita_logo.png"
-    FOOD_IMAGE_DISPLAY_SIZE: ClassVar[tuple[int, int]] = (360, 240)
-    FOOD_IMAGE_COLUMN_WIDTH: ClassVar[int] = 96
-    FOOD_IMAGE_ROW_HEIGHT: ClassVar[int] = 64
-    # Calendar days and logged times all resolve in this timezone, as in the backend.
-    LOCAL_TIMEZONE: ClassVar[ZoneInfo] = ZoneInfo("Asia/Kolkata")
-    IMAGE_FETCH_TIMEOUT_SECONDS: ClassVar[float] = 10.0
-    IMAGE_CACHE_ENTRIES: ClassVar[int] = 256
+    # The built React app; the Dockerfile puts it here.
+    STATIC_DIR: ClassVar[Path] = UI_ROOT / "static"
+    API_TIMEOUT_SECONDS: ClassVar[float] = 10.0
+    # A food photo reaches the backend inside its entry, already fitted by the browser.
+    MAX_REQUEST_BYTES: ClassVar[int] = 4 * 1024 * 1024
+    # Calendar days and logged times all resolve in this zone, as in the backend.
+    TIME_ZONE: ClassVar[str] = "Asia/Kolkata"
+    UTC_OFFSET: ClassVar[str] = "+05:30"
+    # 3:2 photos in the food table and the Monthly gallery.
+    FOOD_PHOTO_SIZE: ClassVar[tuple[int, int]] = (360, 240)
+    FOOD_PHOTO_QUALITY: ClassVar[int] = 85
+    FOOD_PHOTO_CACHE_ENTRIES: ClassVar[int] = 256
+    FOOD_PHOTO_TIMEOUT_SECONDS: ClassVar[float] = 10.0
+    PHOTO_UPLOAD_TYPES: ClassVar[tuple[str, ...]] = ("jpg", "jpeg", "png", "webp")
+    MAX_FOOD_ROWS: ClassVar[int] = 500
+    MAX_MEASUREMENT_ROWS: ClassVar[int] = 500
+    # Hashed bundles never change under the same name.
+    IMMUTABLE_CACHE_CONTROL: ClassVar[str] = "private, max-age=31536000, immutable"
+    CONTENT_SECURITY_POLICY: ClassVar[str] = (
+        # Food photos may be stored as data URLs or as links elsewhere.
+        "default-src 'self'; img-src 'self' data: https: http:; style-src 'self' 'unsafe-inline'; "
+        "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    )
 
     api_url: str
     allowed_emails: frozenset[str]
     sso: SSOConfig
-    timeout: float = 10.0
+    # Luna Visia's API on the private network, where stored food photos are fetched from.
+    visia_api_url: str = "http://luna-visia-mcp:8000"
 
     @classmethod
     def from_env(cls) -> "UIConfig":
-        api_url = os.getenv("LUNAVITA_API_URL", "http://localhost:18001").rstrip("/")
+        """Build and validate gateway configuration from environment variables."""
+        api_url = os.getenv("LUNAVITA_API_URL", "http://luna-vita-mcp:8000").rstrip("/")
         parsed = urlparse(api_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError("LUNAVITA_API_URL must be a valid HTTP(S) URL.")
@@ -63,4 +80,9 @@ class UIConfig:
         )
         if not allowed_emails:
             raise RuntimeError("LUNAVITA_ALLOWED_EMAILS must list at least one account.")
-        return cls(api_url=api_url, allowed_emails=allowed_emails, sso=SSOConfig.from_env())
+        return cls(
+            api_url=api_url,
+            allowed_emails=allowed_emails,
+            sso=SSOConfig.from_env(),
+            visia_api_url=os.getenv("LUNAVISIA_INTERNAL_URL", cls.visia_api_url).rstrip("/"),
+        )

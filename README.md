@@ -11,7 +11,7 @@
 
 ## Track, Analyze, and Manage your Nutrition, Calories, Macros, and Fitness Goals using LLMs
 
-Luna Vita combines a responsive Streamlit interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and persistence in Luna Sentia's shared PostgreSQL. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the shared private Docker network created by [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) while keeping its service names, host ports, and database separate.
+Luna Vita combines a responsive React interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and persistence in Luna Sentia's shared PostgreSQL. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the shared private Docker network created by [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) while keeping its service names, host ports, and database separate.
 
 > **Requires Luna Sentia, running and healthy:** Luna Vita keeps its data in Luna Sentia's PostgreSQL (`luna-sentia-db`) and joins Sentia's `luna_sentia_network`; it has no database of its own. Start [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) first and wait until its `postgres` and `ollama` services report healthy, as described under [Start](#start). Food-image matching also needs Luna Visia running on the same network.
 
@@ -123,7 +123,7 @@ All user-facing energy values are labeled in kcal.
 
 ![Luna ecosystem architecture](docs/assets/luna-ecosystem.svg)
 
-Every Luna app is a Streamlit UI plus a FastMCP service on Luna Sentia's
+Every Luna app is a React UI plus a FastMCP service on Luna Sentia's
 `luna_sentia_network`: its data lives in Sentia's PostgreSQL, people sign in
 through Sentia's `auth`, and model calls go to Sentia's Ollama. Orange lines are
 Visia image URLs that other apps use: food images for Vita, room images for
@@ -135,7 +135,7 @@ beats of the track Vibia plays, which Lumia's lights follow.
 
 | Component | Technology | Purpose |
 | --- | --- | --- |
-| UI | Streamlit | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
+| UI | React + TypeScript (Vite), served by a Starlette gateway | Daily tracker, entry dialogs, editable food log, charts, and PDF download |
 | HTTP and MCP | FastMCP custom routes + tools | UI endpoints and conversational tools on one server |
 | Database | PostgreSQL 17 in Luna Sentia (`luna-sentia-db`) | Food, health measurements, recommendations, and daily context |
 | Network | `luna_sentia_network` (external) | Shared private network created by Luna Sentia and joined by every Luna app |
@@ -351,29 +351,27 @@ Luna Vita, Luna Lumia, and Luna Visia share this layout:
 │   │                       # and the app's own domain modules
 │   ├── scripts/            # one-off maintenance scripts, when needed
 │   └── tests/              # python -m unittest discover -s tests
-└── ui/                     # Streamlit interface
-    ├── Dockerfile
+└── ui/                     # React interface and its gateway
+    ├── Dockerfile          # builds the React app, then the gateway image
     ├── requirements.txt
-    ├── .streamlit/         # Streamlit theme and server settings
-    ├── assets/             # logos
-    ├── app.py              # entry point and page composition
+    ├── assets/             # source logo
     ├── config.py           # environment-backed settings
-    ├── styles.py           # shared dark theme
-    ├── services/           # backend API client, caching, and session state
-    ├── domain/             # Streamlit-free logic and view models, when the app has any
-    ├── views/              # Streamlit rendering: tabs, sections, dialogs, shared widgets
-    └── tests/              # UI logic tests, when the app has any
+    ├── gateway.py          # serves the app; checks sign-in; fronts the backend
+    ├── photos.py           # fits food photos stored in Luna Visia
+    ├── sso.py              # single sign-on through Luna Sentia
+    ├── tests/              # gateway tests: python -m unittest discover -s tests
+    └── web/                # the React app (TypeScript, Vite); npm test runs its logic tests
 ```
 
-Dependencies point one way: `views/` uses `services/` and `domain/`, and `domain/`
-imports neither Streamlit nor the API client, so it can be tested on its own.
+The browser app talks only to the gateway, which checks the shared session and allowlist
+on every data request and forwards only the backend routes the UI uses.
 
 ## Development workflow
 
 Compose Watch synchronizes source changes while the foreground watcher is running:
 
 - Changes under `mcp/app` sync and restart the API/MCP container.
-- Changes under `ui` sync into the Streamlit container.
+- Changes to the gateway under `ui` sync and restart it; changes under `ui/web/src` rebuild the UI image (for hot reload, run `npm run dev` in `ui/web`).
 - Dependency or Dockerfile changes rebuild the affected service.
 
 Use:
@@ -394,28 +392,17 @@ Stopping the foreground watcher also stops automatic source synchronization.
 
 Pure logic lives in `domain/` and is unit tested directly, backend access and caching live in `services/`, and the `views/` package only renders.
 
-- `ui/sso.py` - single sign-on through Luna Sentia: reads the shared `luna_sso` cookie, checks it with Sentia, and applies the allowlist.
-- `ui/app.py` - `LunaVitaApp` composition root: styling, header, period navigation, and the daily views; plus the source-reload notice.
-- `ui/views/summary_view.py` - recommendation-aware nutrition summary cards.
-- `ui/views/food_log_view.py` - editable food log, add-entry dialog, save/PDF actions, and macro donut chart.
-- `ui/views/measurements_view.py` - Morning/Night body-measurement table, period deletion, and add dialog.
-- `ui/views/monthly_view.py` - renders the backend's monthly analysis: overview, item counts, top contributors, and prefer/avoid lists.
-- `ui/views/navigation.py` - Daily/Weekly/Monthly selector that keeps its selection on repeated clicks.
-- `ui/views/shared.py` - view base class, the shared section header with its "Add entry" button, and the nutrient cards used by the daily and monthly views.
-- `ui/domain/nutrition.py` - nutrient card definitions, target status rules, and macro percentages.
-- `ui/domain/food_entries.py` - consumed-time display, ordering, and parsing, plus food-entry payload building.
-- `ui/domain/body_measurements.py` - tracked body metrics, Morning/Night tables, and measurement payloads.
-- `ui/domain/body_trends.py` - body weight and body fat % per day as Morning/Night bars in one overview card.
-- `ui/domain/validation.py` - client-side mirrors of the backend text and number rules for the editable log.
-- `ui/services/images.py` - food-photo normalization for uploads and table previews.
-- `ui/domain/clock.py` - Asia/Kolkata dates and timestamps.
-- `ui/services/api.py` - typed HTTP client for food entries, measurements, recommendations, daily context, summaries, and reports.
-- `ui/config.py` - validated UI environment settings, including the Luna Vita API URL and request timeout.
-- `ui/styles.py` - shared dark visual system, responsive layout rules, and component styling.
-- `ui/assets/` - Luna Vita logo assets used by the desktop and mobile layouts.
-- `ui/tests/` - unit tests for UI logic: ordering, validation, macro math, measurement tables, and payloads.
-- `ui/.streamlit/config.toml` - Streamlit theme and server settings.
-- `ui/requirements.txt` - Python dependencies used by the UI container.
+- `ui/gateway.py` - serves the built app, reports the session and settings at `/auth/session`, fits food photos, and forwards an allowlist of backend routes.
+- `ui/config.py` and `ui/sso.py` - validated gateway settings, and single sign-on through Luna Sentia.
+- `ui/web/src/nutrition.ts` - nutrient card definitions, target status rules, and macro percentages.
+- `ui/web/src/food.ts` - consumed-time display, ordering, and parsing, food-entry payloads, and client-side mirrors of the backend's text and number rules.
+- `ui/web/src/body.ts` - tracked body metrics, Morning/Night tables, measurement payloads, and weight and body fat series.
+- `ui/web/src/workouts.ts` - workout types, the calendar, and exercise rows.
+- `ui/web/src/clock.ts` - Asia/Kolkata dates and timestamps.
+- `ui/web/src/api.ts` - the backend routes and hooks, and fitting a chosen food photo in the browser.
+- `ui/web/src/components/` - the summary, food log, workout, measurements, and Monthly sections.
+- `ui/web/src/domain.test.ts` - unit tests for ordering, validation, macro math, measurement tables, and payloads.
+- `ui/requirements.txt` - Python dependencies used by the gateway.
 - `ui/Dockerfile` - builds the UI container image.
 
 ### MCP modules
