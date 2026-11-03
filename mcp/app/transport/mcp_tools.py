@@ -699,7 +699,7 @@ class LunaVitaMCPTools:
 
             done is true when the workout was done and false when it was skipped.
             types lists what a done workout trained, any of legs, back, chest,
-            shoulders, biceps, triceps, core, cardio, full_body (e.g. ["back",
+            shoulders, biceps, triceps, forearms, core, cardio, full_body (e.g. ["back",
             "biceps"]); a skipped day has none. Recording a day again replaces
             its earlier record, types and notes included. The UI shows each
             record as a marker on the workout calendar, with an icon per type.

@@ -13,7 +13,8 @@ MealType = Literal["breakfast", "lunch", "dinner", "snack", "other"]
 Sex = Literal["male", "female", "other"]
 VerdictKind = Literal["prefer", "avoid", "neutral"]
 WorkoutType = Literal[
-    "legs", "back", "chest", "shoulders", "biceps", "triceps", "core", "cardio", "full_body"
+    "legs", "back", "chest", "shoulders", "biceps", "triceps", "forearms", "core", "cardio",
+    "full_body",
 ]
 
 
@@ -114,7 +115,7 @@ class WorkoutRecord(BaseModel):
 
     done: bool
     notes: str | None = Field(default=None, max_length=2_000)
-    types: list[WorkoutType] = Field(default_factory=list, max_length=9)
+    types: list[WorkoutType] = Field(default_factory=list, max_length=10)
 
     @field_validator("notes")
     @classmethod

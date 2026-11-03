@@ -3,7 +3,7 @@
 import json
 import unittest
 from datetime import date
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import ValidationError
 
@@ -21,6 +21,7 @@ from app.core.models import (
     HealthMeasurementCreate,
     WorkoutBatch,
     WorkoutRecord,
+    WorkoutType,
 )
 from app.services.application import (
     AnalysisService,
@@ -811,6 +812,12 @@ class WorkoutServiceTests(unittest.TestCase):
             self.repository.calls,
             [("upsert", (date(2026, 10, 21), True, None, ["back", "biceps"]))],
         )
+
+    def test_workout_can_train_forearms_alongside_every_other_type(self) -> None:
+        types = list(get_args(WorkoutType))
+
+        self.assertIn("forearms", types)
+        self.assertEqual(WorkoutRecord(done=True, types=types).types, types)
 
     def test_workout_types_reject_unknown_values_and_skipped_days(self) -> None:
         with self.assertRaises(ValidationError):

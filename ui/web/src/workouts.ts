@@ -9,6 +9,7 @@ export const WORKOUT_TYPES: Record<string, { label: string; body: string }> = {
   shoulders: { label: "Shoulders", body: '<circle cx="12" cy="5.5" r="2.5"/><path d="M3.5 20v-5.5A4.5 4.5 0 0 1 8 10h8a4.5 4.5 0 0 1 4.5 4.5V20"/><path d="M5 13.2c.8-1.6 2.3-2.4 4-2.2"/><path d="M19 13.2c-.8-1.6-2.3-2.4-4-2.2"/>' },
   biceps: { label: "Biceps", body: '<path d="M3 12.5c1.6-.6 2.7-1.7 4.2-2.9 2.4-1.8 5.6-1.5 7.5.7l1-4.4-1.9-1.7c.2-1 1-1.7 2-1.7h1.7c1 0 1.9.7 2.1 1.7l.4 2.2c.5 2.8.5 5.6.1 8.4-.3 2-2 3.4-4 3.4H3"/>' },
   triceps: { label: "Triceps", body: '<path transform="matrix(1 0 0 -1 0 24)" d="M3 12.5c1.6-.6 2.7-1.7 4.2-2.9 2.4-1.8 5.6-1.5 7.5.7l1-4.4-1.9-1.7c.2-1 1-1.7 2-1.7h1.7c1 0 1.9.7 2.1 1.7l.4 2.2c.5 2.8.5 5.6.1 8.4-.3 2-2 3.4-4 3.4H3"/>' },
+  forearms: { label: "Forearms", body: '<path d="M3 18 12.5 9.5l1.8-3c.5-.9 1.4-1.5 2.5-1.5h1.7C20 5 21 6.1 21 7.5v2.5c0 1.4-1.1 2.5-2.5 2.5h-2.3L7 21"/><path d="m12.5 9.5 3.7 3"/>' },
   core: { label: "Core", body: '<rect x="6" y="3" width="12" height="18" rx="4"/><path d="M12 3v18M6.5 9h11M6.5 15h11"/>' },
   cardio: { label: "Cardio", body: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/><path d="M5 12h3.5l1.5-2.5 2.5 5 1.5-2.5H19"/>' },
   full_body: { label: "Full body", body: '<circle cx="12" cy="4.5" r="2"/><path d="M4.5 9.5 12 9l7.5.5"/><path d="M12 9v6.5"/><path d="M8.5 21l3.5-5.5 3.5 5.5"/>' },
