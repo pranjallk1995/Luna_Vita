@@ -5,7 +5,7 @@ from unittest.mock import patch
 from config import SSOConfig, UIConfig
 from sso import LunaSingleSignOn
 
-ENV = {"LUNA_SSO_URL": "https://auth.example.com", "LUNAVITA_ALLOWED_EMAILS": " Owner@Example.com "}
+ENV = {"LUNAVITA_API_TOKEN": "t" * 32, "LUNA_SSO_URL": "https://auth.example.com", "LUNAVITA_ALLOWED_EMAILS": " Owner@Example.com "}
 
 
 class AuthenticationTests(unittest.TestCase):

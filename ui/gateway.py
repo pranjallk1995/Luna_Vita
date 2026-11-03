@@ -21,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 
 from config import SSOConfig, UIConfig
 from photos import FoodPhotos
-from sso import LunaSingleSignOn
+from sso import CURRENT_USER, LunaSingleSignOn, send_user
 
 ID = r"\d+"
 DAY = r"\d{4}-\d{2}-\d{2}"
@@ -76,9 +76,13 @@ class UIGateway:
         visia_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.config = config
-        self.sso = LunaSingleSignOn(config.allowed_emails, config.sso, sso_transport)
+        self.sso = LunaSingleSignOn(config.allowed_emails, config.sso, sso_transport, app="vita")
         self.backend = httpx.AsyncClient(
-            base_url=config.api_url, timeout=UIConfig.API_TIMEOUT_SECONDS, transport=backend_transport
+            event_hooks={"request": [send_user]},
+            base_url=config.api_url,
+            headers={"Authorization": f"Bearer {config.api_token}"},
+            timeout=UIConfig.API_TIMEOUT_SECONDS,
+            transport=backend_transport,
         )
         self.visia = httpx.AsyncClient(
             base_url=config.visia_api_url, timeout=UIConfig.FOOD_PHOTO_TIMEOUT_SECONDS, transport=visia_transport
@@ -108,7 +112,11 @@ class UIGateway:
                 return JSONResponse({"error": "Sign in to continue."}, status_code=401)
             if not self.sso.is_allowed(user):
                 return JSONResponse({"error": "This account is not authorized."}, status_code=403)
-            return await handler(request)
+            token = CURRENT_USER.set(user.get("user_id"))
+            try:
+                return await handler(request)
+            finally:
+                CURRENT_USER.reset(token)
 
         return endpoint
 

@@ -62,6 +62,7 @@ class UIConfig:
     )
 
     api_url: str
+    api_token: str
     allowed_emails: frozenset[str]
     sso: SSOConfig
     # Luna Visia's API on the private network, where stored food photos are fetched from.
@@ -74,6 +75,9 @@ class UIConfig:
         parsed = urlparse(api_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError("LUNAVITA_API_URL must be a valid HTTP(S) URL.")
+        api_token = os.getenv("LUNAVITA_API_TOKEN", "").strip()
+        if len(api_token) < 32:
+            raise RuntimeError("LUNAVITA_API_TOKEN must contain at least 32 characters.")
         allowed_emails = frozenset(
             email.strip().casefold()
             for email in os.getenv("LUNAVITA_ALLOWED_EMAILS", "").split(",")
@@ -83,6 +87,7 @@ class UIConfig:
             raise RuntimeError("LUNAVITA_ALLOWED_EMAILS must list at least one account.")
         return cls(
             api_url=api_url,
+            api_token=api_token,
             allowed_emails=allowed_emails,
             sso=SSOConfig.from_env(),
             visia_api_url=os.getenv("LUNAVISIA_INTERNAL_URL", cls.visia_api_url).rstrip("/"),

@@ -23,6 +23,7 @@ class AppConfig:
     VISIA_STORE_ATTEMPTS: ClassVar[int] = 3
 
     database_url: str
+    api_token: str
     visia_api_url: str = "http://luna-visia-mcp:8000"
     # The food placeholder image stored in Luna Visia, shown when no Visia image fits a food.
     # Set LUNAVITA_PLACEHOLDER_IMAGE_ID to its ID once it is stored.
@@ -40,6 +41,9 @@ class AppConfig:
         database_url = os.getenv("DATABASE_URL", "").strip()
         if not database_url:
             raise RuntimeError("DATABASE_URL is required.")
+        api_token = os.getenv("LUNAVITA_API_TOKEN", "").strip()
+        if len(api_token) < 32:
+            raise RuntimeError("LUNAVITA_API_TOKEN must contain at least 32 characters.")
         visia_api_url = os.getenv("LUNAVISIA_API_URL", cls.visia_api_url).strip().rstrip("/")
         parsed = urlparse(visia_api_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -60,6 +64,7 @@ class AppConfig:
         return cls(
             mcp_public_url=mcp_public_url,
             database_url=database_url,
+            api_token=api_token,
             visia_api_url=visia_api_url,
             placeholder_image_id=placeholder_image_id,
             visia_companion_token=visia_companion_token,

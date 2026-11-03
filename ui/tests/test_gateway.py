@@ -8,8 +8,8 @@ from starlette.testclient import TestClient
 from config import SSOConfig, UIConfig
 from gateway import UIGateway
 
-OWNER = {"email": "owner@example.com", "email_verified": True}
-STRANGER = {"email": "other@example.com", "email_verified": True}
+OWNER = {"user_id": "owner", "email": "owner@example.com", "email_verified": True}
+STRANGER = {"user_id": "stranger", "email": "other@example.com", "email_verified": True}
 PHOTO = "https://visia.example.com/api/public/images/12345678-1234-1234-1234-123456789012"
 
 
@@ -43,6 +43,7 @@ class GatewayTestCase(unittest.TestCase):
 
         config = UIConfig(
             api_url="http://backend",
+            api_token="t" * 32,
             allowed_emails=frozenset({"owner@example.com"}),
             sso=SSOConfig(public_url="https://auth.example.com"),
         )

@@ -2,10 +2,14 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from psycopg import Cursor
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
+
+from app.core import tenancy
+from app.data.tenants import TenantSchemas, use_space
 
 
 SCHEMA_SQL = """
@@ -164,6 +168,7 @@ class Database:
 
     def __init__(self, url: str, min_size: int = 1, max_size: int = 8) -> None:
         self.pool = ConnectionPool(url, min_size=min_size, max_size=max_size, open=False)
+        self.tenants = TenantSchemas(self.pool.connection, self.create_tables)
 
     def open(self) -> None:
         self.pool.open(wait=True)
@@ -172,12 +177,20 @@ class Database:
         self.pool.close()
 
     def initialize_schema(self) -> None:
-        """Create or upgrade the complete idempotent Luna Vita schema."""
-        with self.cursor() as cursor:
-            cursor.execute(SCHEMA_SQL)
+        """Give the owner any data from before there were users; schemas come on first use."""
+        self.tenants.adopt_public_tables()
+
+    @staticmethod
+    def create_tables(connection: Any) -> None:
+        """Create or upgrade one person's complete idempotent Luna Vita schema."""
+        connection.execute(SCHEMA_SQL)
 
     @contextmanager
     def cursor(self) -> Iterator[Cursor]:
+        """A cursor on the current person's schema, in one transaction."""
+        user_id = tenancy.current()
+        self.tenants.ensure(user_id)
         with self.pool.connection() as connection:
+            use_space(connection, user_id)
             with connection.cursor(row_factory=dict_row) as cursor:
                 yield cursor
