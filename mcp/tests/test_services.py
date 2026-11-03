@@ -33,6 +33,7 @@ from app.services.application import (
     WorkoutService,
 )
 from app.integrations.visia import VisiaUnavailableError
+from app.transport.mcp_tools import log_image_failure
 from app.services.analysis import FoodName
 
 
@@ -179,6 +180,16 @@ class FakeImageCatalog:
         return {"status": "created", "name": f"{name}.png", "image_id": "9a9a", "public_url": self.STORED}
 
 
+class ImageFailureLogTests(unittest.TestCase):
+    def test_failure_names_the_source_but_never_its_link(self) -> None:
+        source = {"file": {"download_url": "https://files.example/x?sig=1"}, "image_url": None}
+        with self.assertLogs("app.transport.mcp_tools", "WARNING") as logs:
+            log_image_failure("update_food_image", "Paratha", source, ValueError("no https://files.example/x?sig=1 here"))
+
+        self.assertIn("update_food_image failed for 'Paratha' (given: ['file']): ValueError: no <link> here", logs.output[0])
+        self.assertNotIn("sig=1", logs.output[0])
+
+
 class FakeFoodImages:
     def __init__(self, rows: dict[str, dict] | None = None) -> None:
         self.rows = rows or {}
@@ -247,6 +258,17 @@ class FoodImageTests(unittest.TestCase):
         self.assertEqual(from_ui["image_url"], FakeImageCatalog.STORED)
         self.assertEqual(from_chat["image_url"], FakeImageCatalog.STORED)
         self.assertNotIn("image_hint", from_chat)
+
+    def test_missing_placeholder_still_saves_the_food_and_asks_for_an_image(self) -> None:
+        for error in (NotFoundError("gone"), VisiaUnavailableError("down")):
+            def unavailable(error: Exception = error) -> str:
+                raise error
+
+            self.catalog.placeholder_url = unavailable
+            with self.subTest(error=error), self.assertLogs("app.services.application", "WARNING"):
+                saved = self.service.record_with_visia_image(apple())
+                self.assertIsNone(saved["image_url"])
+                self.assertIn("update_food_image", saved["image_hint"])
 
     def test_placeholder_entries_ask_for_a_generated_image(self) -> None:
         saved = self.service.record_with_visia_image(apple())

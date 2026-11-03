@@ -1,5 +1,7 @@
 """MCP tools that let LLM clients track Luna Vita nutrition and measurements."""
 
+import logging
+import re
 from datetime import date, timedelta
 from typing import Annotated, Any
 
@@ -31,6 +33,17 @@ from app.services.application import LunaVitaService
 # ChatGPT passes attachments (and images it generated) to parameters listed here
 # as {download_url, file_id}.
 FILE_PARAMS_META = {"openai/fileParams": ["file"]}
+
+
+logger = logging.getLogger(__name__)
+LINK = re.compile(r"https?://\S+")
+
+
+def log_image_failure(tool: str, subject: str, source: dict[str, Any], error: Exception) -> None:
+    """Record a failed image call, leaving out links: chat file links are signed."""
+    given = [field for field, value in source.items() if value not in (None, "")]
+    message = LINK.sub("<link>", str(error))
+    logger.warning("%s failed for %r (given: %s): %s: %s", tool, subject, given, type(error).__name__, message)
 
 
 class FileReference(BaseModel):
@@ -287,13 +300,19 @@ class LunaVitaMCPTools:
             - content_base64: Base64 image bytes; only practical for small images.
             If you cannot generate images, search Luna Visia instead and pass the
             public_url it returns as image_url. Retrying with the same image is safe.
+            If passing a file fails, give it to Luna Visia's upload_image instead,
+            then call this with the public_url it returns as image_url.
             """
             source = {
                 "file": file.model_dump() if file else None,
                 "image_url": image_url,
                 "content_base64": content_base64,
             }
-            return await anyio.to_thread.run_sync(food.update_image, food_name, source)
+            try:
+                return await anyio.to_thread.run_sync(food.update_image, food_name, source)
+            except Exception as error:
+                log_image_failure("update_food_image", food_name, source, error)
+                raise
 
         @server.tool()
         def remove_food(

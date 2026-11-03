@@ -54,6 +54,7 @@ class LunaVitaApplication:
         )
         LunaVitaMCPTools(self.mcp, self.service)
         LunaVitaHTTPRoutes(self.mcp, self.service, self.branding)
+        self.service.food.placeholder()  # warns at startup when it is missing
 
     def _build_service(self) -> LunaVitaService:
         food_entries = FoodRepository(self.database)

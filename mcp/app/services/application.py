@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from datetime import date, timedelta
 from typing import Any
@@ -46,8 +47,11 @@ from app.data.repositories import (
     VerdictRepository,
     WorkoutRepository,
 )
-from app.integrations.visia import VisiaImageCatalog
+from app.integrations.visia import VisiaImageCatalog, VisiaUnavailableError
 from app.core.config import AppConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 def food_catalog(food: FoodRepository, aliases: FoodAliasRepository) -> FoodCatalog:
@@ -58,9 +62,10 @@ def food_catalog(food: FoodRepository, aliases: FoodAliasRepository) -> FoodCata
 class FoodService:
     """Record, correct, and remove food and supplement entries.
 
-    Entries added by the assistant always show a Luna Visia image: the one it
-    found, the food's own image, or the Luna Vita food placeholder when there is
-    neither. Entries from the UI may carry an uploaded photo; without one they
+    Entries added by the assistant show a Luna Visia image: the one it found, the
+    food's own image, or the Luna Vita food placeholder when there is neither. If
+    the placeholder cannot be found the entry still saves, with no image. Entries
+    from the UI may carry an uploaded photo; without one they
     show the food's image if it has one. New entries are saved under the food's
     canonical name, so spelling variants never become separate foods.
     """
@@ -68,7 +73,7 @@ class FoodService:
     NOTE_MAX_LENGTH = 2_000
     IMAGE_TAGS = ["food", "luna vita"]
     IMAGE_HINT = (
-        "'{name}' has no image of its own yet, so it shows the placeholder. If you can "
+        "'{name}' has no image of its own yet. If you can "
         "generate images, create an appetizing landscape photo of the dish (3:2, "
         "4.5 x 3) and pass it to "
         "update_food_image; it is stored in Luna Visia and shown on every '{name}' entry."
@@ -110,8 +115,16 @@ class FoodService:
         image_url = self.images.resolve(supplied) if supplied else self.food_image(entry.food_name)
         placeholder = image_url is None
         if placeholder:
-            image_url = self.images.placeholder_url()
+            image_url = self.placeholder()
         return entry.model_copy(update={"image_url": image_url}), placeholder
+
+    def placeholder(self) -> str | None:
+        """The placeholder's URL, or None when it cannot be found, so that food still saves."""
+        try:
+            return self.images.placeholder_url()
+        except (NotFoundError, VisiaUnavailableError) as error:
+            logger.warning("No food placeholder image: %s", error)
+            return None
 
     def record_with_visia_image(self, entry: FoodEntryCreate) -> Row:
         imaged, placeholder = self.with_visia_image(entry)

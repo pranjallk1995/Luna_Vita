@@ -26,7 +26,7 @@ class AppConfig:
     visia_api_url: str = "http://luna-visia-mcp:8000"
     # The food placeholder image stored in Luna Visia, shown when no Visia image fits a food.
     # Set LUNAVITA_PLACEHOLDER_IMAGE_ID to its ID once it is stored.
-    placeholder_image_id: str = "b7adf6ae-30b3-4750-8381-5dc6ab393de6"
+    placeholder_image_id: str = "858eafb0-73ad-4717-8095-8cef43c62d3c"
     # Credential for storing new food images in Luna Visia ("" = linking existing ones only).
     visia_companion_token: str = ""
     host: str = "0.0.0.0"

@@ -175,7 +175,7 @@ Create a private `.env`:
 # Must equal LUNAVITA_DB_PASSWORD in Luna_Sentia/.env
 POSTGRES_PASSWORD=replace-with-a-private-database-password
 LUNAVISIA_API_URL=http://luna-visia-mcp:8000
-LUNAVITA_PLACEHOLDER_IMAGE_ID=b7adf6ae-30b3-4750-8381-5dc6ab393de6
+LUNAVITA_PLACEHOLDER_IMAGE_ID=858eafb0-73ad-4717-8095-8cef43c62d3c
 LUNAVITA_ALLOWED_EMAILS=you@example.com
 ```
 
