@@ -19,10 +19,10 @@ Luna Vita combines a responsive React interface, one FastMCP service for convers
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
 </p>
 
-[Luna Visia](https://github.com/pranjallk1995/Luna_Visia) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share the private `luna_sentia_network`, allowing both applications to remain independently managed while participating in the same conversational workflow as shown.
+[Luna Visia](https://github.com/pranjallk1995/Luna_Visia) provides the private image-vault workflow, while Luna Vita records food, nutrition, consumed time, and the matching food images. Their separate services share the private `luna_sentia_network`, allowing both applications to remain independently managed while participating in the same conversational workflow.
 
 <p align="center">
-  <img src="docs/assets/luna-vita-luna-visia.png" alt="Luna Visia food-image workflow working alongside the Luna Vita nutrition dashboard" width="1200">
+  <img src="docs/assets/luna-vita-monthly.png" alt="Luna Vita monthly tracking page with daily averages, a per-day chart, and a workout calendar" width="1200">
 </p>
 
 The active ChatGPT/Codex model (or the LLM of your choice) performs nutrition estimation before calling Luna Vita. For example:
