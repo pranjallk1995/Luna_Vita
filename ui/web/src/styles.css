@@ -786,6 +786,9 @@ a {
 .vt-food-photo { display: block; width: 3.75rem; height: 2.5rem; border-radius: 0.35rem; object-fit: cover; background: var(--lv-control); }
 .vt-food-photo-empty { display: grid; place-items: center; color: var(--lv-muted); }
 .vt-food-photo-empty svg { width: 16px; height: 16px; }
+.vt-photo-zoom { padding: 0; overflow: hidden; border: 0; cursor: zoom-in; }
+.vt-photo-zoom img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vt-photo-large { display: block; width: 100%; height: auto; max-height: calc(100dvh - 7rem); border-radius: 0.5rem; object-fit: contain; }
 .vt-food-name { min-width: 0; }
 .vt-food-name strong { display: block; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .vt-food-name > span { display: block; overflow: hidden; color: var(--lv-muted); font-size: var(--luna-text-small); text-overflow: ellipsis; white-space: nowrap; }

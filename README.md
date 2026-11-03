@@ -52,6 +52,7 @@ Inference happens in the active AI conversation. Luna Vita stores the supplied s
 - Food name and quantity are required.
 - Optional consumed time; historical or free-form time labels remain supported.
 - Optional image upload from the device. Images are resized before being stored with the entry.
+- Click a food photo to zoom it.
 - Row deletion through the final **Delete** column.
 - Save and daily PDF actions on one row.
 - Daily, Weekly, and Monthly navigation; Daily and Monthly are implemented and Weekly is a placeholder.

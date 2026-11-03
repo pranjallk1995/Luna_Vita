@@ -1,4 +1,4 @@
-"""Food photos stored in Luna Visia, fitted to the table's 3:2 format and encoded once."""
+"""Food photos stored in Luna Visia, fitted to the table's 3:2 format or enlarged whole, and encoded once."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ VISIA_IMAGE_PATH = re.compile(r"/api/public/images/[0-9a-fA-F-]{36}/?$")
 
 class FoodPhotos:
     def __init__(self) -> None:
-        self.fitted: OrderedDict[str, bytes] = OrderedDict()
+        self.fitted: OrderedDict[tuple[str, bool], bytes] = OrderedDict()
 
     @staticmethod
     def visia_image_path(url: str) -> str | None:
@@ -23,21 +23,25 @@ class FoodPhotos:
         match = VISIA_IMAGE_PATH.search(url)
         return match.group(0) if match else None
 
-    def cached(self, path: str) -> bytes | None:
-        data = self.fitted.get(path)
+    def cached(self, path: str, large: bool = False) -> bytes | None:
+        data = self.fitted.get((path, large))
         if data is not None:
-            self.fitted.move_to_end(path)
+            self.fitted.move_to_end((path, large))
         return data
 
-    def fit(self, path: str, source: bytes) -> bytes:
+    def fit(self, path: str, source: bytes, large: bool = False) -> bytes:
         with Image.open(BytesIO(source)) as opened:
             image = ImageOps.exif_transpose(opened).convert("RGB")
-        fitted = ImageOps.fit(image, UIConfig.FOOD_PHOTO_SIZE, method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        if large:
+            fitted = image
+            fitted.thumbnail(UIConfig.FOOD_PHOTO_LARGE_SIZE, Image.Resampling.LANCZOS)
+        else:
+            fitted = ImageOps.fit(image, UIConfig.FOOD_PHOTO_SIZE, method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
         encoded = BytesIO()
         fitted.save(encoded, "WEBP", quality=UIConfig.FOOD_PHOTO_QUALITY)
         data = encoded.getvalue()
-        self.fitted[path] = data
-        self.fitted.move_to_end(path)
+        self.fitted[(path, large)] = data
+        self.fitted.move_to_end((path, large))
         while len(self.fitted) > UIConfig.FOOD_PHOTO_CACHE_ENTRIES:
             self.fitted.popitem(last=False)
         return data

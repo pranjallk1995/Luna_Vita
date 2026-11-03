@@ -356,7 +356,7 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
                 <div key={row.id}>
                   <div className="vt-food-row">
                     <span className="vt-food-time">{time}</span>
-                    <FoodPhoto source={row.image_url} alt="" className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                    <FoodPhoto source={row.image_url} name={row.food_name} className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
                     <div className="vt-food-name">
                       <strong title={row.food_name}>{row.food_name}</strong>
                       <span title={row.quantity}>

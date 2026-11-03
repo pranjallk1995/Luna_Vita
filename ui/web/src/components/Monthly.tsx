@@ -348,7 +348,7 @@ function Foods({ foods, span }: { foods: AnalysisFood[]; span: string }) {
             return (
               <div className="vt-food-row" key={food.name} title={`${food.name}: ${Math.round(food.protein_share * 100)}% of calories from protein`}>
                 <span className="vt-count">{food.count}×</span>
-                <FoodPhoto source={food.image_url} alt="" className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                <FoodPhoto source={food.image_url} name={food.name} className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
                 <div className="vt-food-name">
                   <strong>{food.name}</strong>
                   <span>

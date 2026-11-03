@@ -46,6 +46,7 @@ class UIConfig:
     UTC_OFFSET: ClassVar[str] = "+05:30"
     # 3:2 photos in the food table and the Monthly gallery.
     FOOD_PHOTO_SIZE: ClassVar[tuple[int, int]] = (360, 240)
+    FOOD_PHOTO_LARGE_SIZE: ClassVar[tuple[int, int]] = (1280, 1280)
     FOOD_PHOTO_QUALITY: ClassVar[int] = 85
     FOOD_PHOTO_CACHE_ENTRIES: ClassVar[int] = 256
     FOOD_PHOTO_TIMEOUT_SECONDS: ClassVar[float] = 10.0

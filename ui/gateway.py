@@ -138,17 +138,18 @@ class UIGateway:
     # Food photos
 
     async def food_photo(self, request: Request) -> Response:
-        """A stored Luna Visia photo for ``?url=<its public link>``, fitted to the table's 3:2 format."""
+        """A stored Luna Visia photo for ``?url=<its public link>``, fitted to the table's 3:2 format, or whole with ``&size=large``."""
         url = request.query_params.get("url", "")
         path = FoodPhotos.visia_image_path(url)
         if path is None:
             return JSONResponse({"error": "Not a Luna Visia image."}, status_code=404)
-        data = self.photos.cached(path)
+        large = request.query_params.get("size") == "large"
+        data = self.photos.cached(path, large)
         if data is None:
             try:
                 response = await self.visia.get(path)
                 response.raise_for_status()
-                data = await anyio.to_thread.run_sync(self.photos.fit, path, response.content)
+                data = await anyio.to_thread.run_sync(self.photos.fit, path, response.content, large)
             except (httpx.HTTPError, OSError):
                 return JSONResponse({"error": "That photo is unavailable."}, status_code=404)
         return Response(data, media_type="image/webp", headers={"Cache-Control": UIConfig.IMMUTABLE_CACHE_CONTROL})

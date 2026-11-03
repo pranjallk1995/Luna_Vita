@@ -163,10 +163,10 @@ export function useAct() {
 
 const VISIA_IMAGE = /\/api\/public\/images\/[0-9a-fA-F-]{36}\/?$/;
 
-/** Where the browser loads a food photo: fitted by the gateway when it lives in Luna Visia. */
-export function photoSource(source?: string | null): string {
+/** Where the browser loads a food photo: fitted by the gateway when it lives in Luna Visia, whole when large. */
+export function photoSource(source?: string | null, large = false): string {
   if (!source) return "";
-  return VISIA_IMAGE.test(source) ? `/app/food-photos?url=${encodeURIComponent(source)}` : source;
+  return VISIA_IMAGE.test(source) ? `/app/food-photos?url=${encodeURIComponent(source)}${large ? "&size=large" : ""}` : source;
 }
 
 /** Fit a chosen photo to the table's 3:2 format, as a compact data URL for the database. */

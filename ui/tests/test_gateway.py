@@ -130,6 +130,15 @@ class FoodPhotoTests(GatewayTestCase):
         with Image.open(BytesIO(response.content)) as image:
             self.assertEqual(image.size, UIConfig.FOOD_PHOTO_SIZE)
 
+    def test_large_photo_keeps_the_whole_image_and_never_enlarges_it(self):
+        self.sign_in()
+        table = self.client.get("/app/food-photos", params={"url": PHOTO})
+        response = self.client.get("/app/food-photos", params={"url": PHOTO, "size": "large"})
+        self.assertEqual((response.status_code, response.headers["content-type"]), (200, "image/webp"))
+        self.assertNotEqual(response.content, table.content)
+        with Image.open(BytesIO(response.content)) as image:
+            self.assertEqual(image.size, (64, 32))
+
     def test_other_addresses_are_never_fetched(self):
         self.sign_in()
         response = self.client.get("/app/food-photos", params={"url": "http://169.254.169.254/latest"})
