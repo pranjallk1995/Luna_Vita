@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.core import tenancy
 from app.core.config import AppConfig
 from app.core.errors import NotFoundError
 
@@ -66,7 +67,7 @@ class VisiaImageCatalog:
                 "same value in Luna Vita and Luna Visia."
             )
         body = {"name": name, "tags": tags, **source}
-        headers = {"Authorization": f"Bearer {self.companion_token}"}
+        headers = {"Authorization": f"Bearer {self.companion_token}", tenancy.USER_HEADER: tenancy.current()}
         for attempt in range(AppConfig.VISIA_STORE_ATTEMPTS):
             try:
                 response = httpx.post(
@@ -114,7 +115,11 @@ class VisiaImageCatalog:
 
     def images(self) -> list[dict]:
         try:
-            response = httpx.get(f"{self.api_url}/api/metadata", timeout=self.timeout)
+            response = httpx.get(
+                f"{self.api_url}/api/metadata",
+                headers={"Authorization": f"Bearer {self.companion_token}", tenancy.USER_HEADER: tenancy.current()},
+                timeout=self.timeout,
+            )
             response.raise_for_status()
             return response.json()["images"]
         except (httpx.HTTPError, ValueError, KeyError) as error:
@@ -129,7 +134,8 @@ class VisiaImageCatalog:
     def placeholder_url(self) -> str:
         """The public URL of the food placeholder image in Visia."""
         try:
-            return self.resolve_id(self.placeholder_image_id)
+            with tenancy.acting_as(tenancy.OWNER):  # One shared image, kept in the owner's gallery.
+                return self.resolve_id(self.placeholder_image_id)
         except NotFoundError as error:
             raise NotFoundError(
                 f"The Luna Vita food placeholder image ({self.placeholder_image_id}) is missing "

@@ -99,7 +99,7 @@ class VisiaImageStoreTests(unittest.TestCase):
             post.call_args.kwargs["json"],
             {"name": "Rice", "tags": ["food"], "image_url": "https://x.test/rice.png"},
         )
-        self.assertEqual(post.call_args.kwargs["headers"], {"Authorization": f"Bearer {self.TOKEN}"})
+        self.assertEqual(post.call_args.kwargs["headers"], {"Authorization": f"Bearer {self.TOKEN}", "x-luna-user": "owner"})
 
     def test_retries_dropped_connections_and_server_errors(self, sleep) -> None:
         responses = [httpx.ConnectError("refused"), stored(502, {"error": "restarting"}), stored()]

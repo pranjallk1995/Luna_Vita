@@ -1,10 +1,10 @@
 """Compose and run the Luna Vita MCP and HTTP server."""
 
-from mcp.server.fastmcp import FastMCP
-
 from app.transport.branding import ServerBranding
+from app.core import tenancy
 from app.core.config import AppConfig
 from app.data.database import Database
+from app.transport.luna_mcp import LunaMCP
 from app.transport.http_routes import LunaVitaHTTPRoutes
 from app.transport.mcp_tools import LunaVitaMCPTools
 from app.data.repositories import (
@@ -44,8 +44,10 @@ class LunaVitaApplication:
         self.database.initialize_schema()
         self.service = self._build_service()
         self.branding = ServerBranding(config.mcp_public_url)
-        self.mcp = FastMCP(
+        self.mcp = LunaMCP(
             "LunaVita",
+            public_url=config.mcp_public_url or f"http://localhost:{config.port}",
+            api_token=config.api_token,
             icons=self.branding.mcp_icons(),
             host=config.host,
             port=config.port,
@@ -54,7 +56,8 @@ class LunaVitaApplication:
         )
         LunaVitaMCPTools(self.mcp, self.service)
         LunaVitaHTTPRoutes(self.mcp, self.service, self.branding)
-        self.service.food.placeholder()  # warns at startup when it is missing
+        with tenancy.acting_as(tenancy.OWNER):
+            self.service.food.placeholder()  # warns at startup when it is missing
 
     def _build_service(self) -> LunaVitaService:
         food_entries = FoodRepository(self.database)
