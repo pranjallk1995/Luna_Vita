@@ -46,6 +46,8 @@ class LunaVitaApplication:
         self.branding = ServerBranding(config.mcp_public_url)
         self.mcp = LunaMCP(
             "LunaVita",
+            app="vita",
+            remove_user=self.remove_user,
             public_url=config.mcp_public_url or f"http://localhost:{config.port}",
             api_token=config.api_token,
             icons=self.branding.mcp_icons(),
@@ -91,6 +93,11 @@ class LunaVitaApplication:
             ),
             averages=RunningAverages(food_entries, measurement_entries, recommendations),
         )
+
+    def remove_user(self, user_id: str) -> None:
+        """Delete everything this person has in this app."""
+        self.database.tenants.remove(user_id)
+
 
     def run(self) -> None:
         try:
