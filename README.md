@@ -276,10 +276,6 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 
 ## MCP tools
 
-### Web UI
-
-- `get_ui_link` - the link to open this app's web UI, to give the user; they sign in with their Luna account.
-
 ### Food
 
 - `record_food` — store a completed food entry with a Visia-verified image URL, or the placeholder image when none is given.
