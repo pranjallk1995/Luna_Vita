@@ -13,6 +13,7 @@ services:
       LUNAVISIA_COMPANION_TOKEN: ${LUNAVISIA_COMPANION_TOKEN:-}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-858eafb0-73ad-4717-8095-8cef43c62d3c}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18001}
+      UI_PUBLIC_URL: ${UI_PUBLIC_URL:-http://localhost:18502}
       TZ: Asia/Kolkata
     expose:
       - "8000"
