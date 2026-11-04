@@ -118,6 +118,18 @@ The generated PDF contains:
 
 All user-facing energy values are labeled in kcal.
 
+## Users and separate storage
+
+Each person signs in with Google and has their own space in Luna Vita: the schema `u_<id>` in the `lunavita` database. It is created the first time they use the app. The owner adds, disables, and deletes people at Luna Sentia's `/admin`, and can hide this app from everyone else there; see [Users and separate storage](https://github.com/pranjallk1995/Luna_Sentia#users-and-separate-storage).
+
+### Connecting an MCP client
+
+Add `https://<your vita MCP host>/mcp` to your client, such as Claude or ChatGPT, as a custom connector using OAuth. The client signs you in with Google and shows an approval page; check the return address, then allow it. Its tools then act only on your data. A request without a valid token gets 401.
+
+Food photos are stored in the person's own Luna Visia gallery. The food placeholder image is one shared image in the owner's gallery.
+
+In the code, `mcp/app/core/tenancy.py` holds who the current request or job acts for, `mcp/app/data/tenants.py` creates and removes each person's schema, and `mcp/app/transport/luna_mcp.py` checks connector tokens and the private token on `/api/` routes. Code that does not say who it acts for raises `NoUserError` rather than reading anyone's data.
+
 ## Architecture
 
 ### Luna ecosystem
@@ -176,10 +188,13 @@ Create a private `.env`:
 POSTGRES_PASSWORD=replace-with-a-private-database-password
 LUNAVISIA_API_URL=http://luna-visia-mcp:8000
 LUNAVITA_PLACEHOLDER_IMAGE_ID=858eafb0-73ad-4717-8095-8cef43c62d3c
-LUNAVITA_ALLOWED_EMAILS=you@example.com
+LUNAVITA_ALLOWED_EMAILS=*
+LUNAVITA_API_TOKEN=replace-with-a-random-value-of-at-least-32-characters
 ```
 
-Separate multiple emails with commas. Keep `LUNAVISIA_API_URL` on the shared
+`LUNAVITA_API_TOKEN` is a shared secret between the UI and the MCP server. Generate your own with `openssl rand -hex 32`.
+
+`*` allows everyone with a Luna account; otherwise separate accounts with commas. Keep `LUNAVISIA_API_URL` on the shared
 Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18001`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
 different existing Visia image as its fallback.
 
@@ -193,8 +208,8 @@ Vita needs no Google client of its own. Set in `.env`:
   Sentia's `.env`), for example `https://auth.lunaapps.fyi`.
 - `LUNA_SSO_INTERNAL_URL`: `http://luna-sentia-auth:8000`, where Vita checks
   sessions over `luna_sentia_network`.
-- `LUNAVITA_ALLOWED_EMAILS`: the accounts allowed into Vita, checked
-  after Sentia confirms who is signed in.
+- `LUNAVITA_ALLOWED_EMAILS`: who may use Vita among the people with a Luna account: `*`
+  for everyone, or a comma-separated list. Checked after Sentia confirms who is signed in.
 
 Sentia's auth service must be healthy before Vita can sign anyone in; see
 [Single sign-on](https://github.com/pranjallk1995/Luna_Sentia#single-sign-on) for its setup.
@@ -209,7 +224,7 @@ Open:
 
 - UI: <http://127.0.0.1:18502>
 - Service health: <http://127.0.0.1:18001/health>
-- MCP endpoint: <http://127.0.0.1:18001/mcp>
+- MCP endpoint: <http://127.0.0.1:18001/mcp> (clients sign in; see Connecting an MCP client)
 - Favicon and icons: <http://127.0.0.1:18001/favicon.ico> and `/icons/icon-{48,96,192,512}.png`; the 48 and 96 px icons are also embedded in the MCP `initialize` server info so connector clients such as Claude can show them.
 
 The example keeps these development defaults:
@@ -221,7 +236,7 @@ The example keeps these development defaults:
 | Password | `lunavita-dev` |
 | Database host inside Docker | `luna-sentia-db` |
 
-The Google-account allowlist has no default and must be set in `.env` before
+The API token and Google-account allowlist have no defaults and must be set in `.env` before
 Compose starts the UI.
 
 Docker is not started automatically by repository setup or validation.
@@ -232,7 +247,7 @@ Add the following to the Codex `config.toml` in `.codex` directory in root:
 
 ```toml
 [mcp_servers.lunavita]
-url = "http://127.0.0.1:18001/mcp"
+url = "https://vita-mcp.example.com/mcp"
 enabled = true
 required = false
 startup_timeout_sec = 20
