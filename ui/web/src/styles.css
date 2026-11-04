@@ -857,10 +857,16 @@ a {
 .vt-trend-top small { color: var(--lv-muted); font-size: var(--luna-text-small); font-weight: 400; }
 .vt-trend > .vt-legend:last-child { margin-top: 0.55rem; }
 .vt-plot-box { position: relative; flex: 1 1 auto; min-height: 11rem; }
-.vt-plot-box .vt-plot { position: absolute; inset: 0; height: 100%; }
+.vt-plot-box .vt-plot-wrap { position: absolute; inset: 0; }
+.vt-plot-box .vt-plot { height: 100%; }
+.vt-plot-wrap { position: relative; }
 .vt-plot { display: block; width: 100%; height: 7.5rem; overflow: visible; touch-action: pan-y; }
-.vt-plot-hit { fill: transparent; cursor: help; }
-.vt-plot-day:hover .vt-plot-hit { fill: rgba(255, 255, 255, 0.06); }
+.vt-plot-hit { fill: transparent; }
+.vt-plot-day { cursor: pointer; }
+.vt-plot-day.picked .vt-plot-hit { fill: rgba(255, 255, 255, 0.06); }
+@media (hover: hover) { .vt-plot-day:hover .vt-plot-hit { fill: rgba(255, 255, 255, 0.06); } }
+/* --at is the day's place along the plot; shifting by the same share keeps the tip over the day and inside the plot. */
+.vt-plot-tip { position: absolute; bottom: calc(100% + 0.25rem); left: calc(var(--at) * 100%); z-index: 3; width: max-content; max-width: 100%; padding: 0.3rem 0.5rem; border: 1px solid var(--lv-strong); border-radius: 0.5rem; background: #1c1c1c; font-size: var(--luna-text-small); font-variant-numeric: tabular-nums; transform: translateX(calc(var(--at) * -100%)); pointer-events: none; }
 .vt-plot-bar { fill: var(--lv-text); opacity: 0.85; }
 .vt-plot-bar.over { fill: var(--vt-bad); opacity: 1; }
 .vt-plot-bar.met { fill: var(--vt-good); opacity: 1; }

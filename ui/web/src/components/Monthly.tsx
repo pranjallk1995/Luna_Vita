@@ -1,5 +1,5 @@
 import { Apple, CalendarRange, ChevronLeft, ChevronRight, Droplet, Dumbbell, Flame, PersonStanding, Scale, ThumbsDown, ThumbsUp, Wheat, type LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useAct, useAnalysis, useBodyComposition, useRecommendations, useWorkouts, vita, type Analysis, type AnalysisFood, type DayTotals, type Settings, type WorkoutRecord } from "../api";
 import { PERIODS, average, byDay, fatRange, readings, weightRange, type Reading } from "../body";
@@ -24,27 +24,48 @@ type Slot = { day: string; tip: string; bars: Bar[] };
 function BarPlot({ slots, low, high, target, label }: { slots: Slot[]; low: number; high: number; target?: number; label: string }) {
   const y = (value: number) => HEIGHT - ((value - low) / (high - low)) * HEIGHT;
   const width = SLOT * slots.length;
+  // Touch screens have no hover, so a tap shows what a title shows a mouse.
+  const [picked, setPicked] = useState<string | null>(null);
+  const plot = useRef<HTMLDivElement>(null);
+  const at = slots.findIndex((slot) => slot.day === picked);
+
+  useEffect(() => {
+    if (picked === null) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!plot.current?.contains(event.target as Node)) setPicked(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [picked]);
+
   return (
-    <svg className="vt-plot" viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={label}>
-      {slots.map((slot, index) => {
-        const x = index * SLOT;
-        return (
-          <g className="vt-plot-day" key={slot.day}>
-            <title>{slot.tip}</title>
-            <rect className="vt-plot-hit" x={x} y="0" width={SLOT} height={HEIGHT} />
-            {slot.bars.length ? (
-              slot.bars.map((bar, at) => (
-                <rect className={`vt-plot-bar ${bar.className}`} key={at} x={x + bar.x} y={y(bar.value)} width={bar.width} height={Math.max(HEIGHT - y(bar.value), 0.6)} rx="1" />
-              ))
-            ) : (
-              <rect className="vt-plot-gap" x={x + 4} y={HEIGHT - 1.2} width="2" height="1.2" />
-            )}
-          </g>
-        );
-      })}
-      <line className="vt-plot-base" x1="0" x2={width} y1={HEIGHT} y2={HEIGHT} />
-      {target !== undefined && <line className="vt-plot-target" x1="0" x2={width} y1={y(target)} y2={y(target)} />}
-    </svg>
+    <div className="vt-plot-wrap" ref={plot}>
+      <svg className="vt-plot" viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none" role="img" aria-label={label}>
+        {slots.map((slot, index) => {
+          const x = index * SLOT;
+          return (
+            <g className={`vt-plot-day${index === at ? " picked" : ""}`} key={slot.day} onClick={() => setPicked(slot.day === picked ? null : slot.day)}>
+              <title>{slot.tip}</title>
+              <rect className="vt-plot-hit" x={x} y="0" width={SLOT} height={HEIGHT} />
+              {slot.bars.length ? (
+                slot.bars.map((bar, barAt) => (
+                  <rect className={`vt-plot-bar ${bar.className}`} key={barAt} x={x + bar.x} y={y(bar.value)} width={bar.width} height={Math.max(HEIGHT - y(bar.value), 0.6)} rx="1" />
+                ))
+              ) : (
+                <rect className="vt-plot-gap" x={x + 4} y={HEIGHT - 1.2} width="2" height="1.2" />
+              )}
+            </g>
+          );
+        })}
+        <line className="vt-plot-base" x1="0" x2={width} y1={HEIGHT} y2={HEIGHT} />
+        {target !== undefined && <line className="vt-plot-target" x1="0" x2={width} y1={y(target)} y2={y(target)} />}
+      </svg>
+      {at >= 0 && (
+        <div className="vt-plot-tip" style={{ "--at": (at + 0.5) / slots.length } as CSSProperties}>
+          {slots[at].tip}
+        </div>
+      )}
+    </div>
   );
 }
 
