@@ -8,10 +8,10 @@
 ![Status: usable](https://img.shields.io/badge/Status-usable-2EA043)
 
 <p align="center">
-  <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita" width="900"></a>
+  <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day through its MCP tools" width="900"></a>
 </p>
 
-<p align="center"><em>From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita. Select it for the sharper video.</em></p>
+<p align="center"><em>From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day through its MCP tools. Select it for the sharper video.</em></p>
 
 > **Work in progress:** Luna Vita is a local-first and desktop-first nutrition and body-measurement tracker under active development.
 
