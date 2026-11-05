@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from app.services.analysis import (
     DuplicateFinder,
@@ -21,16 +21,21 @@ from app.core.errors import NotFoundError
 from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
+    BulkUpdate,
     DailyLogUpsert,
     DailyRecommendationsUpsert,
     ExerciseBatch,
     ExerciseEntry,
+    ExerciseBulkUpdate,
     FoodAliasUpsert,
+    FoodBulkUpdate,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    MeasurementBulkUpdate,
     WorkoutBatch,
+    WorkoutBulkUpdate,
     WorkoutRecord,
 )
 from app.services.reports import DailyReport, DailyReportRenderer
@@ -57,6 +62,42 @@ logger = logging.getLogger(__name__)
 def food_catalog(food: FoodRepository, aliases: FoodAliasRepository) -> FoodCatalog:
     """Stored aliases plus every name already used, for resolving canonical names."""
     return FoodCatalog(aliases.mapping(), food.name_counts())
+
+
+# How many records a bulk update's dry run lists.
+BULK_PREVIEW_RECORDS = 50
+
+
+def bulk_update(
+    rows: list[Row],
+    change: BulkUpdate,
+    identity: tuple[str, ...],
+    update: Callable[[list[Any], dict[str, Any]], int],
+    dry_run: bool,
+    name: str | None = None,
+) -> Row:
+    """Apply ``change`` to ``rows``, or with ``dry_run`` show what it would change.
+
+    ``identity`` names the columns that identify a row, its key first; ``name`` is
+    the column saying what the row records, summarised in the result.
+    """
+    if not rows:
+        raise NotFoundError("Nothing matches those filters and dates.")
+    changes = change.changes
+    result = {
+        "dry_run": dry_run,
+        "matched": len(rows),
+        "start_date": change.start_date.isoformat(),
+        "end_date": change.end_date.isoformat(),
+        "changes": changes,
+    }
+    if name:
+        result["names"] = sorted({row[name] for row in rows})
+    if dry_run:
+        shown = (*identity, *((name,) if name else ()), *changes)
+        preview = [{column: row[column] for column in shown} for row in rows[:BULK_PREVIEW_RECORDS]]
+        return {**result, "updated": 0, "current_values": preview}
+    return {**result, "updated": update([row[identity[0]] for row in rows], changes)}
 
 
 class FoodService:
@@ -228,6 +269,15 @@ class MeasurementService:
     def update(self, entry_id: int, entry: HealthMeasurementCreate) -> Row | None:
         return self.measurements.update(entry_id, entry)
 
+    def update_many(self, change: MeasurementBulkUpdate, dry_run: bool = False) -> Row:
+        """Set the same values on matching measurements."""
+        rows = self.measurements.list_between(
+            change.start_date, change.end_date, [change.metric] if change.metric else None
+        )
+        return bulk_update(
+            rows, change, ("id", "measured_at"), self.measurements.update_many, dry_run, name="metric"
+        )
+
     def remove(self, entry_id: int) -> bool:
         return self.measurements.delete(entry_id)
 
@@ -343,6 +393,18 @@ class WorkoutService:
             "records": records,
         }
 
+    def update_many(self, change: WorkoutBulkUpdate, dry_run: bool = False) -> Row:
+        """Set the same values on the workout days already recorded."""
+        rows = [
+            row for row in self.workouts.list_between(change.start_date, change.end_date)
+            if change.only_done is None or row["done"] == change.only_done
+        ]
+
+        def update(days: list[str], changes: dict[str, Any]) -> int:
+            return self.workouts.update_many([date.fromisoformat(day) for day in days], changes)
+
+        return bulk_update(rows, change, ("workout_date",), update, dry_run)
+
     def remove(self, day: date) -> bool:
         return self.workouts.delete(day)
 
@@ -375,6 +437,22 @@ class WorkoutService:
         if row is not None:
             self.mark_done(entry.day, [entry.type])
         return row
+
+    def update_exercises(self, change: ExerciseBulkUpdate, dry_run: bool = False) -> Row:
+        """Set the same values on matching exercises; a new type joins each day's types."""
+        key = FoodName.key(change.exercise) if change.exercise else None
+        rows = [
+            row for row in self.exercises.list_between(change.start_date, change.end_date)
+            if (key is None or FoodName.key(row["exercise"]) == key)
+            and (change.only_type is None or row["type"] == change.only_type)
+        ]
+        result = bulk_update(
+            rows, change, ("id", "workout_date"), self.exercises.update_many, dry_run, name="exercise"
+        )
+        if change.type and not dry_run:
+            for day in sorted({row["workout_date"] for row in rows}):
+                self.mark_done(date.fromisoformat(day), [change.type])
+        return result
 
     def remove_exercise(self, entry_id: int) -> bool:
         return self.exercises.delete(entry_id)
@@ -588,6 +666,20 @@ class AnalysisService:
             "verdict_note": verdict_note,
             "food": self.food_summary(change.new_name, change.start_date, change.end_date),
         }
+
+    def update_entries(self, change: FoodBulkUpdate, dry_run: bool = False) -> Row:
+        """Set the same values on matching food entries."""
+        start, end = change.start_date, change.end_date
+        rows = (
+            self.matching_entries(change.food_name, start, end)
+            if change.food_name
+            else self.food.list_between(start, end)
+        )
+        if change.only_meal_type:
+            rows = [row for row in rows if row["meal_type"] == change.only_meal_type]
+        return bulk_update(
+            rows, change, ("id", "consumed_date"), self.food.update_many, dry_run, name="food_name"
+        )
 
     def remember_alias(self, alias_key: str, canonical_name: str) -> None:
         """Point ``alias_key`` and every alias that led to it at ``canonical_name``."""

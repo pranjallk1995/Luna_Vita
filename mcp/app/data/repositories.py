@@ -6,6 +6,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+from psycopg import sql
+
 from app.core.clock import LocalClock
 from app.data.database import Database
 from app.core.models import (
@@ -62,6 +64,20 @@ class Repository:
         with self.database.cursor() as cursor:
             cursor.execute(sql, params)
             return cursor.fetchone() is not None
+
+    def set_columns(
+        self, table: str, key_column: str, keys: list[Any], changes: dict[str, Any], *, touch: bool = False
+    ) -> int:
+        """Set the same columns on the given rows in one transaction; return how many changed."""
+        assignments = [
+            sql.SQL("{}=%s").format(sql.Identifier(column)) for column in changes
+        ] + ([sql.SQL("updated_at=NOW()")] if touch else [])
+        statement = sql.SQL("UPDATE {} SET {} WHERE {} = ANY(%s)").format(
+            sql.Identifier(table), sql.SQL(", ").join(assignments), sql.Identifier(key_column)
+        )
+        with self.database.cursor() as cursor:
+            cursor.execute(statement, (*changes.values(), keys))
+            return cursor.rowcount
 
 
 class FoodRepository(Repository):
@@ -189,6 +205,9 @@ class FoodRepository(Repository):
             )
             return cursor.rowcount
 
+    def update_many(self, entry_ids: list[int], changes: dict[str, Any]) -> int:
+        return self.set_columns("food_entries", "id", entry_ids, changes)
+
     def daily_totals(self, day: date) -> Row:
         totals = self.fetch_one(
             """
@@ -250,17 +269,20 @@ class MeasurementRepository(Repository):
             (normalized_metric, normalized_metric, self.page_size(limit)),
         )
 
-    def list_between(self, start: date, end: date, metrics: list[str]) -> list[Row]:
-        """Return the given metrics measured on local days ``start``..``end`` inclusive."""
+    def list_between(self, start: date, end: date, metrics: list[str] | None = None) -> list[Row]:
+        """Return measurements on local days ``start``..``end`` inclusive, optionally of some metrics."""
         return self.fetch_all(
             """
             SELECT * FROM health_measurements
             WHERE (measured_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN %s AND %s
-              AND metric = ANY(%s)
+              AND (%s::text[] IS NULL OR metric = ANY(%s))
             ORDER BY measured_at, id
             """,
-            (start, end, metrics),
+            (start, end, metrics, metrics),
         )
+
+    def update_many(self, entry_ids: list[int], changes: dict[str, Any]) -> int:
+        return self.set_columns("health_measurements", "id", entry_ids, changes)
 
     def list_for_day(self, day: date) -> list[Row]:
         """Return measurements belonging to a local calendar day."""
@@ -352,6 +374,9 @@ class WorkoutRepository(Repository):
             (start, end),
         )
 
+    def update_many(self, days: list[date], changes: dict[str, Any]) -> int:
+        return self.set_columns("workouts", "workout_date", days, changes, touch=True)
+
     def delete(self, day: date) -> bool:
         return self.affects_row(
             "DELETE FROM workouts WHERE workout_date=%s RETURNING workout_date", (day,)
@@ -402,6 +427,9 @@ class ExerciseRepository(Repository):
             """,
             (*self.entry_values(entry), entry_id),
         )
+
+    def update_many(self, entry_ids: list[int], changes: dict[str, Any]) -> int:
+        return self.set_columns("workout_exercises", "id", entry_ids, changes, touch=True)
 
     def delete(self, entry_id: int) -> bool:
         return self.affects_row(

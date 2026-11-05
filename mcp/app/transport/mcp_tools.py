@@ -18,12 +18,16 @@ from app.core.models import (
     DailyRecommendationsUpsert,
     ExerciseBatch,
     ExerciseEntry,
+    ExerciseBulkUpdate,
     FoodAliasUpsert,
+    FoodBulkUpdate,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    MeasurementBulkUpdate,
     WorkoutBatch,
+    WorkoutBulkUpdate,
     WorkoutRecord,
     WorkoutType,
 )
@@ -408,6 +412,39 @@ class LunaVitaMCPTools:
             return update_result(measurements.update(entry_id, entry))
 
         @server.tool()
+        def update_health_measurements(
+            start_date: str,
+            end_date: str,
+            metric: str | None = None,
+            value: float | None = None,
+            unit: str | None = None,
+            time_label: str | None = None,
+            notes: str | None = None,
+            dry_run: bool = False,
+        ) -> dict[str, Any]:
+            """Set the same values on every matching body measurement in an inclusive date range.
+
+            This includes weight and body fat, so the body chart follows. metric
+            narrows to one metric; without it every measurement in the range matches.
+            Only the values given change. A blank time_label or notes clears it. value
+            and unit need a metric. The old values cannot be recovered, so first call
+            with dry_run=true, which changes nothing and returns the match count and
+            up to 50 entries' current values, and confirm with the user.
+            """
+            return measurements.update_many(
+                MeasurementBulkUpdate(
+                    start_date=start_date,
+                    end_date=end_date,
+                    metric=metric,
+                    value=value,
+                    unit=unit,
+                    time_label=time_label,
+                    notes=notes,
+                ),
+                dry_run,
+            )
+
+        @server.tool()
         def remove_health_measurement(entry_id: int) -> dict[str, Any]:
             """Remove an entire body-measurement entry by its database id."""
             return {"deleted": measurements.remove(entry_id), "entry_id": entry_id}
@@ -577,6 +614,55 @@ class LunaVitaMCPTools:
                     start_date=optional_date(start_date),
                     end_date=optional_date(end_date),
                 )
+            )
+
+        @server.tool()
+        def update_food_entries(
+            start_date: str,
+            end_date: str,
+            food_name: str | None = None,
+            only_meal_type: str | None = None,
+            quantity: str | None = None,
+            calories: int | None = None,
+            protein_g: float | None = None,
+            carbs_g: float | None = None,
+            fat_g: float | None = None,
+            natural_sugar_g: float | None = None,
+            added_sugar_g: float | None = None,
+            meal_type: str | None = None,
+            time_label: str | None = None,
+            notes: str | None = None,
+            dry_run: bool = False,
+        ) -> dict[str, Any]:
+            """Set the same values on every matching food entry in an inclusive date range.
+
+            food_name matches every spelling of a food, as rename_food does, and
+            only_meal_type narrows to one meal; without them every entry in the range
+            matches. Only the values given change. A blank time_label or notes clears
+            it. Quantity and nutrition need a food_name, because they describe one
+            food. The old values cannot be recovered, so first call with dry_run=true,
+            which changes nothing and returns the match count and up to 50 entries'
+            current values, and confirm with the user. To change a food's name use
+            rename_food, and for its image use update_food_image.
+            """
+            return analysis.update_entries(
+                FoodBulkUpdate(
+                    start_date=start_date,
+                    end_date=end_date,
+                    food_name=food_name,
+                    only_meal_type=only_meal_type,
+                    quantity=quantity,
+                    calories=calories,
+                    protein_g=protein_g,
+                    carbs_g=carbs_g,
+                    fat_g=fat_g,
+                    natural_sugar_g=natural_sugar_g,
+                    added_sugar_g=added_sugar_g,
+                    meal_type=meal_type,
+                    time_label=time_label,
+                    notes=notes,
+                ),
+                dry_run,
             )
 
         @server.tool()
@@ -778,6 +864,39 @@ class LunaVitaMCPTools:
             return tracker.list(start, end)
 
         @server.tool()
+        def update_workouts(
+            start_date: str,
+            end_date: str,
+            only_done: bool | None = None,
+            done: bool | None = None,
+            types: list[WorkoutType] | None = None,
+            notes: str | None = None,
+            dry_run: bool = False,
+        ) -> dict[str, Any]:
+            """Set the same values on every workout day already recorded in an inclusive date range.
+
+            Unrecorded days stay unrecorded; use record_workouts to add them. only_done
+            narrows to done (true) or skipped (false) days. Only the values given
+            change. types replaces each day's types, and needs done=true or
+            only_done=true; an empty list clears them. done=false also clears types.
+            A blank notes clears it. Logged exercises are not changed. The old values
+            cannot be recovered, so first call with dry_run=true, which changes nothing
+            and returns the match count and up to 50 days' current values, and confirm
+            with the user.
+            """
+            return tracker.update_many(
+                WorkoutBulkUpdate(
+                    start_date=start_date,
+                    end_date=end_date,
+                    only_done=only_done,
+                    done=done,
+                    types=types,
+                    notes=notes,
+                ),
+                dry_run,
+            )
+
+        @server.tool()
         def remove_workout(day: str) -> dict[str, Any]:
             """Remove a YYYY-MM-DD day's workout record so it shows as unrecorded.
 
@@ -822,6 +941,47 @@ class LunaVitaMCPTools:
             day is marked done with the exercise's type added.
             """
             return update_result(tracker.update_exercise(entry_id, ExerciseEntry(**exercise)))
+
+        @server.tool()
+        def update_workout_exercises(
+            start_date: str,
+            end_date: str,
+            exercise: str | None = None,
+            only_type: WorkoutType | None = None,
+            sets: int | None = None,
+            reps: int | None = None,
+            weight_kg: float | None = None,
+            duration_min: float | None = None,
+            type: WorkoutType | None = None,
+            notes: str | None = None,
+            dry_run: bool = False,
+        ) -> dict[str, Any]:
+            """Set the same values on every matching logged exercise in an inclusive date range.
+
+            exercise matches its name ignoring case, punctuation, and a trailing plural
+            "s", and only_type narrows to one workout type; without them every exercise
+            in the range matches. Only the values given change. A blank notes clears it.
+            sets, reps, weight_kg, and duration_min need an exercise. A new type marks
+            each affected day done and joins its types, keeping the ones already there.
+            The old values cannot be recovered, so first call with dry_run=true, which
+            changes nothing and returns the match count and up to 50 exercises' current
+            values, and confirm with the user.
+            """
+            return tracker.update_exercises(
+                ExerciseBulkUpdate(
+                    start_date=start_date,
+                    end_date=end_date,
+                    exercise=exercise,
+                    only_type=only_type,
+                    sets=sets,
+                    reps=reps,
+                    weight_kg=weight_kg,
+                    duration_min=duration_min,
+                    type=type,
+                    notes=notes,
+                ),
+                dry_run,
+            )
 
         @server.tool()
         def remove_workout_exercise(entry_id: int) -> dict[str, Any]:

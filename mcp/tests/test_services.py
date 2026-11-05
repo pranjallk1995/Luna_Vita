@@ -14,12 +14,16 @@ from app.core.models import (
     BodyProfileUpdate,
     ExerciseBatch,
     ExerciseEntry,
+    ExerciseBulkUpdate,
     FoodAliasUpsert,
+    FoodBulkUpdate,
     FoodEntryCreate,
     FoodRename,
     FoodVerdictUpsert,
     HealthMeasurementCreate,
+    MeasurementBulkUpdate,
     WorkoutBatch,
+    WorkoutBulkUpdate,
     WorkoutRecord,
     WorkoutType,
 )
@@ -490,6 +494,12 @@ class FakeAnalysisFood:
             row["food_name"] = food_name
         return len(changed)
 
+    def update_many(self, entry_ids: list[int], changes: dict) -> int:
+        changed = [row for row in self.rows if row["id"] in entry_ids]
+        for row in changed:
+            row.update(changes)
+        return len(changed)
+
 
 class FakeVerdicts:
     def __init__(self, rows: dict | None = None) -> None:
@@ -529,7 +539,7 @@ class FakeRanges:
 def food_row(entry_id, name, day="2026-10-15", calories=120, protein=25):
     return {"id": entry_id, "food_name": name, "consumed_date": day, "calories": calories,
             "protein_g": protein, "carbs_g": 3, "fat_g": 1.5,
-            "natural_sugar_g": 0, "added_sugar_g": 0}
+            "natural_sugar_g": 0, "added_sugar_g": 0, "meal_type": "other", "notes": None}
 
 
 class AnalysisFixture(unittest.TestCase):
@@ -571,6 +581,52 @@ class AnalysisServiceTests(AnalysisFixture):
         self.assertEqual(result["food"]["count"], 2)
         self.assertEqual(result["food"]["totals"]["protein_g"], 50)
         self.assertEqual(self.food.rows[2]["food_name"], "ON gold standard whey")
+
+    def test_bulk_update_changes_every_spelling_within_the_range_only(self) -> None:
+        result = self.service.update_entries(FoodBulkUpdate(
+            food_name="on gold standard whey", start_date=date(2026, 10, 1), end_date=date(2026, 10, 31),
+            calories=999, notes="Corrected",
+        ))
+
+        self.assertEqual((result["matched"], result["updated"]), (1, 1))
+        self.assertEqual(result["names"], ["ON Gold Standard Whey"])
+        self.assertEqual(self.food.rows[1]["calories"], 999)
+        self.assertEqual(self.food.rows[1]["notes"], "Corrected")
+        self.assertNotEqual(self.food.rows[2]["calories"], 999)
+        self.assertNotEqual(self.food.rows[0]["calories"], 999)
+
+    def test_bulk_update_can_narrow_to_a_meal_and_clear_a_note(self) -> None:
+        self.food.rows[0].update(meal_type="snack", notes="Old")
+        self.food.rows[1].update(meal_type="lunch", notes="Old")
+
+        result = self.service.update_entries(FoodBulkUpdate(
+            start_date=date(2026, 10, 14), end_date=date(2026, 10, 15),
+            only_meal_type="snack", meal_type="dinner", notes="",
+        ))
+
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual((self.food.rows[0]["meal_type"], self.food.rows[0]["notes"]), ("dinner", None))
+        self.assertEqual((self.food.rows[1]["meal_type"], self.food.rows[1]["notes"]), ("lunch", "Old"))
+
+    def test_bulk_update_dry_run_changes_nothing_and_shows_current_values(self) -> None:
+        before = self.food.rows[1]["calories"]
+
+        result = self.service.update_entries(FoodBulkUpdate(
+            food_name="ON Gold Standard Whey", start_date=date(2026, 10, 15), end_date=date(2026, 10, 15),
+            calories=999,
+        ), dry_run=True)
+
+        self.assertEqual((result["dry_run"], result["matched"], result["updated"]), (True, 1, 0))
+        self.assertEqual(result["current_values"], [{
+            "id": 2, "consumed_date": "2026-10-15", "food_name": "ON Gold Standard Whey", "calories": before,
+        }])
+        self.assertEqual(self.food.rows[1]["calories"], before)
+
+    def test_bulk_update_with_no_match_is_not_found(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.update_entries(FoodBulkUpdate(
+                food_name="Pizza", start_date=date(2026, 10, 1), end_date=date(2026, 10, 31), calories=1,
+            ))
 
     def test_analysis_reflects_rename(self) -> None:
         self.service.rename(FoodRename(current_name="ON Gold Standard Whey", new_name="Whey protein"))
@@ -963,3 +1019,159 @@ class ExerciseLogTests(unittest.TestCase):
         for bad in ({"exercise": "  "}, {"exercise": "Squat", "sets": 0}, {"exercise": "Run", "type": "yoga"}):
             with self.assertRaises(ValidationError):
                 ExerciseEntry(day=date(2026, 10, 21), **bad)
+
+
+class BulkMeasurementRepository:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+
+    def list_between(self, start, end, metrics=None) -> list[dict]:
+        return [
+            row for row in self.rows
+            if start.isoformat() <= row["measured_at"][:10] <= end.isoformat()
+            and (metrics is None or row["metric"] in metrics)
+        ]
+
+    def update_many(self, entry_ids: list[int], changes: dict) -> int:
+        changed = [row for row in self.rows if row["id"] in entry_ids]
+        for row in changed:
+            row.update(changes)
+        return len(changed)
+
+
+class BulkMeasurementTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.rows = [
+            {"id": 1, "metric": "weight", "value": 70, "unit": "kg", "measured_at": "2026-10-01T08:00:00+05:30"},
+            {"id": 2, "metric": "weight", "value": 71, "unit": "kg", "measured_at": "2026-10-02T08:00:00+05:30"},
+            {"id": 3, "metric": "bmi", "value": 22, "unit": "index", "measured_at": "2026-10-02T08:00:00+05:30"},
+            {"id": 4, "metric": "weight", "value": 72, "unit": "kg", "measured_at": "2026-10-09T08:00:00+05:30"},
+        ]
+        self.service = MeasurementService(BulkMeasurementRepository(self.rows))
+        self.days = {"start_date": "2026-10-01", "end_date": "2026-10-02"}
+
+    def test_changes_only_that_metric_within_the_range(self) -> None:
+        result = self.service.update_many(MeasurementBulkUpdate(**self.days, metric="weight", value=69.5))
+
+        self.assertEqual((result["updated"], result["names"]), (2, ["weight"]))
+        self.assertEqual([row["value"] for row in self.rows], [69.5, 69.5, 22, 72])
+
+    def test_notes_can_change_across_every_metric(self) -> None:
+        result = self.service.update_many(MeasurementBulkUpdate(**self.days, notes="New scale"))
+
+        self.assertEqual((result["updated"], result["names"]), (3, ["bmi", "weight"]))
+        self.assertNotIn("notes", self.rows[3])
+
+    def test_dry_run_changes_nothing(self) -> None:
+        result = self.service.update_many(MeasurementBulkUpdate(**self.days, metric="bmi", value=1), dry_run=True)
+
+        self.assertEqual((result["matched"], result["updated"]), (1, 0))
+        self.assertEqual(result["current_values"], [
+            {"id": 3, "measured_at": "2026-10-02T08:00:00+05:30", "metric": "bmi", "value": 22},
+        ])
+        self.assertEqual(self.rows[2]["value"], 22)
+
+    def test_no_match_is_not_found(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.update_many(MeasurementBulkUpdate(**self.days, metric="height", value=1))
+
+
+class BulkWorkoutRepository(FakeWorkoutRepository):
+    def list_between(self, start: date, end: date) -> list[dict]:
+        return [row for row in self.rows if start.isoformat() <= row["workout_date"] <= end.isoformat()]
+
+    def update_many(self, days: list[date], changes: dict) -> int:
+        self.calls.append(("update_many", (days, changes)))
+        changed = [row for row in self.rows if date.fromisoformat(row["workout_date"]) in days]
+        for row in changed:
+            row.update(changes)
+        return len(changed)
+
+
+class BulkExerciseRepository:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+
+    def list_between(self, start: date, end: date) -> list[dict]:
+        return [row for row in self.rows if start.isoformat() <= row["workout_date"] <= end.isoformat()]
+
+    def update_many(self, entry_ids: list[int], changes: dict) -> int:
+        changed = [row for row in self.rows if row["id"] in entry_ids]
+        for row in changed:
+            row.update(changes)
+        return len(changed)
+
+
+class BulkWorkoutTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.workouts = BulkWorkoutRepository([
+            {"workout_date": "2026-10-01", "done": True, "notes": None, "types": ["legs"]},
+            {"workout_date": "2026-10-02", "done": False, "notes": "Sick", "types": []},
+        ])
+        self.exercises = BulkExerciseRepository([
+            {"id": 1, "workout_date": "2026-10-01", "exercise": "Squat", "type": "legs", "reps": 5, "notes": None},
+            {"id": 2, "workout_date": "2026-10-02", "exercise": "squats", "type": None, "reps": 5, "notes": None},
+            {"id": 3, "workout_date": "2026-10-02", "exercise": "Bench press", "type": "chest", "reps": 5, "notes": None},
+        ])
+        self.service = WorkoutService(self.workouts, self.exercises)
+        self.days = {"start_date": "2026-10-01", "end_date": "2026-10-02"}
+
+    def day(self, value: str) -> dict:
+        return next(row for row in self.workouts.rows if row["workout_date"] == value)
+
+    def test_marking_days_skipped_clears_their_types(self) -> None:
+        result = self.service.update_many(WorkoutBulkUpdate(**self.days, done=False))
+
+        self.assertEqual(result["updated"], 2)
+        self.assertEqual((self.day("2026-10-01")["done"], self.day("2026-10-01")["types"]), (False, []))
+
+    def test_only_done_leaves_skipped_days_alone(self) -> None:
+        result = self.service.update_many(WorkoutBulkUpdate(**self.days, only_done=True, types=["back"]))
+
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(self.day("2026-10-01")["types"], ["back"])
+        self.assertEqual(self.day("2026-10-02")["types"], [])
+
+    def test_unrecorded_days_stay_unrecorded(self) -> None:
+        self.service.update_many(WorkoutBulkUpdate(start_date="2026-10-01", end_date="2026-10-31", done=True))
+
+        self.assertEqual(len(self.workouts.rows), 2)
+
+    def test_workout_dry_run_changes_nothing(self) -> None:
+        result = self.service.update_many(WorkoutBulkUpdate(**self.days, notes="x"), dry_run=True)
+
+        self.assertEqual((result["matched"], result["updated"]), (2, 0))
+        self.assertEqual(result["current_values"][1], {"workout_date": "2026-10-02", "notes": "Sick"})
+        self.assertEqual(self.day("2026-10-02")["notes"], "Sick")
+
+    def test_no_recorded_days_is_not_found(self) -> None:
+        with self.assertRaises(NotFoundError):
+            self.service.update_many(WorkoutBulkUpdate(start_date="2026-11-01", end_date="2026-11-02", done=True))
+
+    def test_exercise_name_matches_spellings_but_not_other_exercises(self) -> None:
+        result = self.service.update_exercises(ExerciseBulkUpdate(**self.days, exercise="SQUAT", reps=8))
+
+        self.assertEqual((result["updated"], result["names"]), (2, ["Squat", "squats"]))
+        self.assertEqual([row["reps"] for row in self.exercises.rows], [8, 8, 5])
+        self.assertFalse(self.day("2026-10-02")["done"])
+
+    def test_only_type_narrows_the_exercises(self) -> None:
+        result = self.service.update_exercises(ExerciseBulkUpdate(**self.days, only_type="chest", notes="Light"))
+
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(self.exercises.rows[2]["notes"], "Light")
+
+    def test_new_exercise_type_marks_days_done_and_joins_their_types(self) -> None:
+        self.service.update_exercises(ExerciseBulkUpdate(**self.days, exercise="Squat", type="full_body"))
+
+        self.assertEqual(self.day("2026-10-01")["types"], ["legs", "full_body"])
+        self.assertEqual((self.day("2026-10-02")["done"], self.day("2026-10-02")["types"]), (True, ["full_body"]))
+
+    def test_exercise_dry_run_does_not_touch_the_days(self) -> None:
+        result = self.service.update_exercises(
+            ExerciseBulkUpdate(**self.days, exercise="Squat", type="full_body"), dry_run=True
+        )
+
+        self.assertEqual((result["matched"], result["updated"]), (2, 0))
+        self.assertEqual(self.workouts.calls, [])
+        self.assertEqual(self.exercises.rows[0]["type"], "legs")

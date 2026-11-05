@@ -3,7 +3,7 @@
 import re
 import unicodedata
 from datetime import date, datetime
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -262,6 +262,162 @@ class FoodRename(BaseModel):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError("start_date cannot be after end_date.")
         return self
+
+
+class BulkUpdate(BaseModel):
+    """Set the same values on every matching record in an inclusive date range."""
+
+    # The filter that names one thing, and the fields that only make sense for one thing.
+    SUBJECT: ClassVar[str | None] = None
+    SUBJECT_FIELDS: ClassVar[tuple[str, ...]] = ()
+    OTHER_FIELDS: ClassVar[tuple[str, ...]] = ()
+
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def valid_change(self) -> "BulkUpdate":
+        if self.start_date > self.end_date:
+            raise ValueError("start_date cannot be after end_date.")
+        changes = self.changes
+        if not changes:
+            raise ValueError("Give at least one value to change.")
+        needing = [field for field in self.SUBJECT_FIELDS if field in changes]
+        if needing and not getattr(self, self.SUBJECT):
+            raise ValueError(f"Changing {', '.join(needing)} needs a {self.SUBJECT}.")
+        return self
+
+    @property
+    def changes(self) -> dict[str, Any]:
+        """The columns to set; blank text clears it."""
+        fields = {
+            field: getattr(self, field)
+            for field in (*self.SUBJECT_FIELDS, *self.OTHER_FIELDS)
+            if getattr(self, field) is not None
+        }
+        return {field: None if value == "" else value for field, value in fields.items()}
+
+
+class FoodBulkUpdate(BulkUpdate):
+    """Change food entries, by food and meal."""
+
+    SUBJECT: ClassVar[str] = "food_name"
+    SUBJECT_FIELDS: ClassVar[tuple[str, ...]] = (
+        "quantity", "calories", "protein_g", "carbs_g", "fat_g", "natural_sugar_g", "added_sugar_g",
+    )
+    OTHER_FIELDS: ClassVar[tuple[str, ...]] = ("meal_type", "time_label", "notes")
+
+    food_name: str | None = Field(default=None, min_length=1, max_length=200)
+    only_meal_type: MealType | None = None
+    quantity: str | None = Field(default=None, min_length=1, max_length=300)
+    calories: int | None = Field(default=None, ge=0, le=100_000)
+    protein_g: float | None = Field(default=None, ge=0, le=10_000)
+    carbs_g: float | None = Field(default=None, ge=0, le=10_000)
+    fat_g: float | None = Field(default=None, ge=0, le=10_000)
+    natural_sugar_g: float | None = Field(default=None, ge=0, le=10_000)
+    added_sugar_g: float | None = Field(default=None, ge=0, le=10_000)
+    meal_type: MealType | None = None
+    time_label: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("food_name", "quantity")
+    @classmethod
+    def clean_required_text(cls, value: str | None) -> str | None:
+        return SafeText.clean(value, required=True)
+
+    @field_validator("time_label", "notes")
+    @classmethod
+    def clean_text(cls, value: str | None) -> str | None:
+        return SafeText.clean(value)
+
+
+class MeasurementBulkUpdate(BulkUpdate):
+    """Change body measurements, by metric."""
+
+    SUBJECT: ClassVar[str] = "metric"
+    SUBJECT_FIELDS: ClassVar[tuple[str, ...]] = ("value", "unit")
+    OTHER_FIELDS: ClassVar[tuple[str, ...]] = ("time_label", "notes")
+
+    metric: str | None = Field(default=None, min_length=1, max_length=100)
+    value: float | None = None
+    unit: str | None = Field(default=None, min_length=1, max_length=50)
+    time_label: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("metric")
+    @classmethod
+    def normalize_metric(cls, value: str | None) -> str | None:
+        return SafeText.clean(value, required=True).lower() if value is not None else None
+
+    @field_validator("unit")
+    @classmethod
+    def normalize_unit(cls, value: str | None) -> str | None:
+        return SafeText.clean(value, required=True)
+
+    @field_validator("time_label", "notes")
+    @classmethod
+    def clean_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
+class WorkoutBulkUpdate(BulkUpdate):
+    """Change the workout days already recorded, whether done or skipped."""
+
+    OTHER_FIELDS: ClassVar[tuple[str, ...]] = ("done", "types", "notes")
+
+    only_done: bool | None = None
+    done: bool | None = None
+    types: list[WorkoutType] | None = Field(default=None, max_length=10)
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("notes")
+    @classmethod
+    def clean_notes(cls, value: str | None) -> str | None:
+        return SafeText.clean(value)
+
+    @field_validator("types")
+    @classmethod
+    def unique_types(cls, value: list[str] | None) -> list[str] | None:
+        return list(dict.fromkeys(value)) if value is not None else None
+
+    @model_validator(mode="after")
+    def types_need_done_days(self) -> "WorkoutBulkUpdate":
+        if self.types and not (self.done or (self.done is None and self.only_done)):
+            raise ValueError("Setting workout types needs done=true or only_done=true.")
+        return self
+
+    @property
+    def changes(self) -> dict[str, Any]:
+        """A skipped day has no types, so marking days skipped clears them."""
+        changes = super().changes
+        return {**changes, "types": []} if self.done is False else changes
+
+
+class ExerciseBulkUpdate(BulkUpdate):
+    """Change logged exercises, by name and type."""
+
+    SUBJECT: ClassVar[str] = "exercise"
+    SUBJECT_FIELDS: ClassVar[tuple[str, ...]] = ("sets", "reps", "weight_kg", "duration_min")
+    OTHER_FIELDS: ClassVar[tuple[str, ...]] = ("type", "notes")
+
+    exercise: str | None = Field(default=None, min_length=1, max_length=120)
+    only_type: WorkoutType | None = None
+    sets: int | None = Field(default=None, ge=1, le=100)
+    reps: int | None = Field(default=None, ge=1, le=1_000)
+    weight_kg: float | None = Field(default=None, ge=0, le=1_000)
+    duration_min: float | None = Field(default=None, gt=0, le=1_440)
+    type: WorkoutType | None = None
+    notes: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("exercise")
+    @classmethod
+    def clean_exercise(cls, value: str | None) -> str | None:
+        return SafeText.clean(value, required=True)
+
+    @field_validator("notes")
+    @classmethod
+    def clean_notes(cls, value: str | None) -> str | None:
+        return SafeText.clean(value)
 
 
 class FoodAliasUpsert(BaseModel):

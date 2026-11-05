@@ -10,11 +10,15 @@ from app.core.models import (
     AnalysisRange,
     BodyProfileUpdate,
     DailyRecommendationsUpsert,
+    ExerciseBulkUpdate,
+    FoodBulkUpdate,
     FoodRename,
     FoodVerdictUpsert,
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
+    MeasurementBulkUpdate,
+    WorkoutBulkUpdate,
 )
 
 
@@ -135,6 +139,69 @@ class RequestModelTests(unittest.TestCase):
 
         self.assertEqual(entry.birth_date.isoformat(), "1990-01-02")
         self.assertIsNone(entry.height_cm)
+
+    def test_bulk_update_needs_a_change_ordered_dates_and_a_food_for_nutrition(self) -> None:
+        days = {"start_date": "2026-10-01", "end_date": "2026-10-31"}
+        for values in (
+            days,
+            {**days, "food_name": "Paratha"},
+            {**days, "calories": 100},
+            {**days, "quantity": "1 cup"},
+            {**days, "food_name": "Paratha", "quantity": "  "},
+            {**days, "food_name": "Paratha", "calories": -1},
+            {**days, "meal_type": "brunch"},
+            {**days, "notes": "Good 🍞"},
+            {"start_date": "2026-10-31", "end_date": "2026-10-01", "meal_type": "lunch"},
+        ):
+            with self.subTest(values=values):
+                with self.assertRaises(ValidationError):
+                    FoodBulkUpdate(**values)
+        change = FoodBulkUpdate(**days, food_name="Paratha", calories=0, notes="")
+        self.assertEqual(change.changes, {"calories": 0, "notes": None})
+
+    def test_bulk_updates_of_measurements_and_workouts_refuse_bad_changes(self) -> None:
+        days = {"start_date": "2026-10-01", "end_date": "2026-10-31"}
+        for model, values in (
+            (MeasurementBulkUpdate, days),
+            (MeasurementBulkUpdate, {**days, "value": 70}),
+            (MeasurementBulkUpdate, {**days, "unit": "kg"}),
+            (MeasurementBulkUpdate, {**days, "metric": "weight", "unit": "  "}),
+            (MeasurementBulkUpdate, {"start_date": "2026-10-31", "end_date": "2026-10-01", "notes": "x"}),
+            (WorkoutBulkUpdate, days),
+            (WorkoutBulkUpdate, {**days, "only_done": True}),
+            (WorkoutBulkUpdate, {**days, "types": ["legs"]}),
+            (WorkoutBulkUpdate, {**days, "types": ["legs"], "done": False}),
+            (WorkoutBulkUpdate, {**days, "types": ["legs"], "only_done": False}),
+            (WorkoutBulkUpdate, {**days, "done": True, "types": ["naps"]}),
+            (ExerciseBulkUpdate, days),
+            (ExerciseBulkUpdate, {**days, "reps": 10}),
+            (ExerciseBulkUpdate, {**days, "exercise": "Squat", "sets": 0}),
+            (ExerciseBulkUpdate, {**days, "type": "naps"}),
+        ):
+            with self.subTest(model=model.__name__, values=values):
+                with self.assertRaises(ValidationError):
+                    model(**values)
+
+    def test_bulk_update_changes_keep_zero_and_false_and_clear_blanks(self) -> None:
+        days = {"start_date": "2026-10-01", "end_date": "2026-10-31"}
+        self.assertEqual(
+            MeasurementBulkUpdate(**days, metric=" Weight ", value=0, notes="").changes,
+            {"value": 0, "notes": None},
+        )
+        self.assertEqual(MeasurementBulkUpdate(**days, metric=" Weight ", value=1).metric, "weight")
+        self.assertEqual(
+            WorkoutBulkUpdate(**days, done=False, notes="").changes,
+            {"done": False, "notes": None, "types": []},
+        )
+        self.assertEqual(
+            WorkoutBulkUpdate(**days, only_done=True, types=["legs", "legs"]).changes,
+            {"types": ["legs"]},
+        )
+        self.assertEqual(WorkoutBulkUpdate(**days, only_done=True, types=[]).changes, {"types": []})
+        self.assertEqual(
+            ExerciseBulkUpdate(**days, exercise="Squat", weight_kg=0, type="legs").changes,
+            {"weight_kg": 0, "type": "legs"},
+        )
 
     def test_rename_requires_a_real_change_and_ordered_dates(self) -> None:
         for values in (

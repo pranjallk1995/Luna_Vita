@@ -5,7 +5,7 @@
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Luna Sentia required](https://img.shields.io/badge/Luna_Sentia-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL in Luna Sentia](https://img.shields.io/badge/PostgreSQL-in_Luna_Sentia-4169E1?logo=postgresql&logoColor=white)
-![Status: v1.0](https://img.shields.io/badge/Status-v1.0-2EA043)
+![Status: v1.1](https://img.shields.io/badge/Status-v1.1-2EA043)
 
 <p align="center">
   <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day and logging a meal through its MCP tools" width="900"></a>
@@ -287,6 +287,7 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `log_consumed_food` — store food described conversationally after the active model infers missing nutrition and finds its image in Luna Visia, falling back to the placeholder image.
 - `get_food_log` — list food entries, optionally over an inclusive date range.
 - `update_food` — replace an existing food entry.
+- `update_food_entries` — set the same values on every matching food entry in a date range, by food and meal, with a `dry_run` preview. Quantity and nutrition need a food name.
 - `set_food_image` — set or replace one entry's image with a Luna Visia image, or the food placeholder when none fits.
 - `update_food_image` — store a generated or attached image in Luna Visia and show it on every entry of that food, now and later.
 - `remove_food` — delete a food entry, optionally guarded by its expected date.
@@ -296,9 +297,15 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `record_health_measurement` — store weight, BMI, BMR, water ratio, or another measurement.
 - `get_health_measurements` — list recent measurements, optionally filtered by metric.
 - `update_health_measurement` — replace an entire measurement entry by its database ID.
+- `update_health_measurements` — set the same values on every measurement in a date range, optionally of one metric, with a `dry_run` preview. Value and unit need a metric.
 - `remove_health_measurement` — delete an entire measurement entry by its database ID.
 - `get_daily_nutrition_summary` — return daily totals in kcal and grams.
 - `get_current_log_pdf` — generate and return today's complete log as a PDF.
+
+### Workouts
+
+- `update_workouts` — set the same values on every workout day already recorded in a date range, with a `dry_run` preview. Marking days skipped clears their types.
+- `update_workout_exercises` — set the same values on every logged exercise in a date range, by name and type, with a `dry_run` preview. Sets, reps, weight, and duration need an exercise name.
 
 ### Monthly analysis
 
