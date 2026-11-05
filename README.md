@@ -106,6 +106,14 @@ Morning and night weigh-ins support:
 
 Weight and Morning/Night are required. Measured time is optional and controlled by a toggle. The daily viewer shows the latest morning and night values side by side. Separate controls delete all morning or all night measurements for the selected date.
 
+### Bulk corrections
+
+Assistants can correct many records at once across a range of dates: food entries by food and meal, body measurements by metric, workout days by done or skipped, and logged exercises by name and type.
+
+- Only the values given change, and only records inside the range.
+- Values that describe one thing, such as calories, a weight, or an exercise's reps, need a food, metric, or exercise name.
+- Overwritten values can't be recovered, so each tool has a `dry_run` preview, and assistants are told to confirm with you first.
+
 ### Responsive interface
 
 - Luna Visia-inspired dark, monochrome styling and Luna Vita branding.
