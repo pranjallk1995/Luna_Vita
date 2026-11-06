@@ -904,11 +904,31 @@ a {
 .vt-body-grid .vt-legend { margin-top: 0.55rem; }
 
 .vt-scroll-box { position: relative; flex: 1 1 auto; min-height: 24rem; }
-.vt-month-foods { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--lv-strong) transparent; }
-.vt-month-foods .vt-food-labels { position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--lv-border); background: #1b1b1b; }
-.vt-month-foods .vt-food-labels + .vt-food-row { border-top: 0; }
-.vt-month-foods .vt-food-row { grid-template-columns: 2.4rem 3.75rem minmax(0, 1fr) 3.6rem 3rem 3rem 2.8rem; }
-.vt-count { color: var(--lv-muted); font-size: var(--luna-text-small); font-variant-numeric: tabular-nums; }
+/* What you had: a collage where the foods had most often take the most room. */
+.vt-collage-wrap { position: absolute; inset: 0; overflow-y: auto; padding: 0.45rem; border: 1px solid var(--lv-border); border-radius: 12px; background: var(--lv-surface); overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--lv-strong) transparent; }
+.vt-collage { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.75rem, 1fr)); grid-auto-rows: 6.75rem; grid-auto-flow: dense; gap: 0.35rem; }
+.vt-tile-photo { position: relative; display: grid; place-items: center; min-width: 0; padding: 0; overflow: hidden; border: 0; border-radius: 0.5rem; background: var(--lv-control); color: var(--lv-muted); font: inherit; text-align: left; cursor: zoom-in; }
+.vt-tile-photo.wide { grid-column: span 2; }
+.vt-tile-photo.hero { grid-column: span 2; grid-row: span 2; }
+.vt-tile-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 160ms ease; }
+.vt-tile-photo::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.78)); pointer-events: none; }
+.vt-tile-photo.empty::after { display: none; }
+.vt-tile-photo.empty svg { margin-bottom: 1.1rem; }
+.vt-tile-name { position: absolute; right: 0.45rem; bottom: 0.4rem; left: 0.45rem; z-index: 1; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: #fff; font-size: 0.7rem; font-weight: 500; line-height: 1.25; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.vt-tile-photo.empty .vt-tile-name { color: var(--lv-text); text-align: center; text-shadow: none; }
+.vt-tile-photo.hero .vt-tile-name { right: 0.7rem; bottom: 0.6rem; left: 0.7rem; font-size: 0.9rem; }
+.vt-tile-count { position: absolute; top: 0.35rem; left: 0.35rem; z-index: 1; padding: 0.05rem 0.4rem; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.66rem; font-variant-numeric: tabular-nums; backdrop-filter: blur(4px); }
+.vt-tile-photo.hero .vt-tile-count { top: 0.55rem; left: 0.55rem; font-size: 0.78rem; }
+.vt-tile-verdict { position: absolute; top: 0.35rem; right: 0.35rem; z-index: 1; display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 50%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+.vt-tile-verdict.prefer { color: var(--vt-good); }
+.vt-tile-verdict.avoid { color: var(--vt-bad); }
+.vt-tile-photo:focus-visible { outline-offset: -2px; }
+@media (hover: hover) { .vt-tile-photo:hover img { transform: scale(1.03); } }
+.vt-tile-detail { margin: 0.75rem 0 0.5rem; color: var(--lv-muted); }
+.vt-tile-detail strong { color: var(--lv-text); font-weight: 600; }
+.vt-tile-macros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; margin-bottom: 0.6rem; }
+.vt-tile-macros span { display: grid; gap: 0.1rem; padding: 0.5rem 0.6rem; border: 1px solid var(--lv-border); border-radius: 0.5rem; color: var(--lv-muted); font-size: var(--luna-text-small); }
+.vt-tile-macros b { color: var(--lv-text); font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .vt-verdict { display: inline-block; margin-left: 0.35rem; padding: 0 0.35rem; border-radius: 999px; font-size: 0.62rem; font-style: normal; vertical-align: 1px; }
 .vt-verdict.prefer { background: rgba(74, 222, 128, 0.14); color: var(--vt-good); }
 .vt-verdict.avoid { background: rgba(251, 113, 133, 0.13); color: var(--vt-bad); }
@@ -986,8 +1006,8 @@ a {
   .vt-num-label { display: block; color: var(--lv-muted); font-size: 0.64rem; font-weight: 400; }
   .vt-food-total { grid-template-areas: "name name name" "nums nums nums"; }
   .vt-food-total .vt-food-photo, .vt-food-total .vt-food-actions { display: none; }
-  .vt-month-foods .vt-food-row { grid-template-columns: 3.75rem minmax(0, 1fr) auto; grid-template-areas: "photo name count" "nums nums nums"; }
-  .vt-month-foods .vt-count { grid-area: count; align-self: start; padding-top: 0.1rem; }
+  .vt-collage { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 6rem; }
+  .vt-tile-macros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   /* A logged food is its name, its details and one line of numbers; the actions wait behind ⋯. */
   .vt-food-log .vt-food-row { grid-template-columns: 3rem minmax(0, 1fr) auto; grid-template-areas: "photo name more" "photo nums more" "actions actions actions"; gap: 0.2rem 0.65rem; align-items: start; padding: 0.6rem 0.4rem 0.6rem 0.65rem; }

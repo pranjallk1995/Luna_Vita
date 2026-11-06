@@ -1,13 +1,14 @@
-import { Apple, CalendarRange, ChevronLeft, ChevronRight, Droplet, Dumbbell, Flame, PersonStanding, Scale, ThumbsDown, ThumbsUp, Wheat, type LucideIcon } from "lucide-react";
+import { Apple, CalendarRange, ChevronLeft, ChevronRight, Droplet, Dumbbell, Flame, PersonStanding, Scale, ThumbsDown, ThumbsUp, Utensils, Wheat, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
-import { useAct, useAnalysis, useBodyComposition, useRecommendations, useWorkouts, vita, type Analysis, type AnalysisFood, type DayTotals, type Settings, type WorkoutRecord } from "../api";
+import { photoSource, useAct, useAnalysis, useBodyComposition, useRecommendations, useWorkouts, vita, type Analysis, type AnalysisFood, type DayTotals, type Settings, type WorkoutRecord } from "../api";
 import { PERIODS, average, byDay, fatRange, readings, weightRange, type Reading } from "../body";
 import { dayLabel, daysBetween, today } from "../clock";
 import { messageOf } from "../lib";
 import { NUTRIENTS, number, type Nutrient } from "../nutrition";
 import { WORKOUT_TYPES, calendarSpan, cellLabel, monthLabel, monthWeeks, monthsBetween, statusOf } from "../workouts";
-import { FoodPhoto } from "./FoodPhoto";
+import { Dialog } from "./Dialog";
 import { SectionHead, SummaryTiles, targetsOf } from "./shared";
 
 const SLOT = 10; // viewBox units per day
@@ -344,62 +345,89 @@ function Body({ start, end, settings }: { start: string; end: string; settings: 
 
 const VERDICT_LABELS: Record<string, string> = { prefer: "Prefer", avoid: "Avoid" };
 
-/** Every food in the range, most frequent first, in a list that scrolls inside its card. */
+type TileSize = "hero" | "wide" | "small";
+
+/** Tiles grow with how often a food was had; a food without a photo stays small. */
+function tileSize(food: AnalysisFood, most: number, rank: number): TileSize {
+  if (!photoSource(food.image_url)) return "small";
+  const ratio = food.count / most;
+  if (rank === 0 || ratio >= 0.6) return "hero";
+  if (ratio >= 0.3) return "wide";
+  return "small";
+}
+
+/** One food in the collage; a tap opens its photo large with what it added up to. */
+function CollageTile({ food, size, span }: { food: AnalysisFood; size: TileSize; span: string }) {
+  const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const url = photoSource(food.image_url, size === "hero");
+  const verdict = VERDICT_LABELS[food.verdict.kind];
+  const times = `${food.count}× on ${food.days} day${food.days === 1 ? "" : "s"}`;
+  return (
+    <>
+      <button className={`vt-tile-photo ${size}${url && !failed ? "" : " empty"}`} type="button" title={`${food.name} · ${times}`} aria-label={`${food.name}, ${times}${verdict ? `, ${verdict.toLowerCase()}` : ""}`} onClick={() => setOpen(true)}>
+        {url && !failed ? <img src={url} alt="" width={size === "small" ? 108 : 216} height={size === "wide" ? 108 : size === "hero" ? 216 : 108} loading="lazy" decoding="async" onError={() => setFailed(true)} /> : <Utensils size={18} aria-hidden="true" />}
+        <span className="vt-tile-count">{food.count}×</span>
+        {verdict && (
+          <span className={`vt-tile-verdict ${food.verdict.kind}`} aria-hidden="true">
+            {food.verdict.kind === "prefer" ? <ThumbsUp size={11} /> : <ThumbsDown size={11} />}
+          </span>
+        )}
+        <span className="vt-tile-name">{food.name}</span>
+      </button>
+      {open &&
+        createPortal(
+          <Dialog title={food.name} size="large" onClose={() => setOpen(false)}>
+            {url && !failed && <img className="vt-photo-large" src={photoSource(food.image_url, true)} alt={food.name} decoding="async" />}
+            <p className="vt-tile-detail">
+              <strong>{times}</strong> {span}
+              {verdict && (
+                <em className={`vt-verdict ${food.verdict.kind}`}>
+                  {verdict}
+                  {food.verdict.source === "override" ? ` · ${OVERRIDE_LABEL.toLowerCase()}` : ""}
+                </em>
+              )}
+            </p>
+            <div className="vt-tile-macros">
+              {(
+                [
+                  ["Calories", `${number(food.totals.calories)} kcal`],
+                  ["Protein", `${number(food.totals.protein_g, 1)} g`],
+                  ["Carbs", `${number(food.totals.carbs_g, 1)} g`],
+                  ["Fat", `${number(food.totals.fat_g, 1)} g`],
+                ] as const
+              ).map(([label, value]) => (
+                <span key={label}>
+                  {label}
+                  <b>{value}</b>
+                </span>
+              ))}
+            </div>
+            {food.verdict.reason && <p className="vt-empty-note">{food.verdict.reason}</p>}
+          </Dialog>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+/** Every food in the range as a photo collage, the most frequent biggest, scrolling inside its card. */
 function Foods({ foods, span }: { foods: AnalysisFood[]; span: string }) {
+  const most = Math.max(...foods.map((food) => food.count), 1);
   return (
     <section className="vt-stretch-col" aria-labelledby="foods-title">
       <SectionHead title="What you had" id="foods-title">
         <span className="vt-head-note">
-          {foods.length} foods, most frequent first, with totals {span}
+          {foods.length} foods {span}, bigger the more often you had them
         </span>
       </SectionHead>
       <div className="vt-scroll-box">
-        <div className="vt-food vt-month-foods" tabIndex={0} role="region" aria-label="Foods eaten in this range">
-          <div className="vt-food-row vt-food-labels" aria-hidden="true">
-            <span>Times</span>
-            <span />
-            <span>Food</span>
-            <span className="vt-num">kcal</span>
-            <span className="vt-num">Protein</span>
-            <span className="vt-num">Carbs</span>
-            <span className="vt-num">Fat</span>
+        <div className="vt-collage-wrap" tabIndex={0} role="region" aria-label="Foods eaten in this range">
+          <div className="vt-collage">
+            {foods.map((food, rank) => (
+              <CollageTile key={food.name} food={food} size={tileSize(food, most, rank)} span={span} />
+            ))}
           </div>
-          {foods.map((food) => {
-            const verdict = VERDICT_LABELS[food.verdict.kind];
-            return (
-              <div className="vt-food-row" key={food.name} title={`${food.name}: ${Math.round(food.protein_share * 100)}% of calories from protein`}>
-                <span className="vt-count">{food.count}×</span>
-                <FoodPhoto source={food.image_url} name={food.name} className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
-                <div className="vt-food-name">
-                  <strong>{food.name}</strong>
-                  <span>
-                    {food.days} day{food.days === 1 ? "" : "s"}
-                    {verdict && (
-                      <em className={`vt-verdict ${food.verdict.kind}`}>
-                        {verdict}
-                        {food.verdict.source === "override" ? ` · ${OVERRIDE_LABEL.toLowerCase()}` : ""}
-                      </em>
-                    )}
-                  </span>
-                </div>
-                <div className="vt-food-nums">
-                  {(
-                    [
-                      ["kcal", number(food.totals.calories)],
-                      ["Protein", number(food.totals.protein_g, 1)],
-                      ["Carbs", number(food.totals.carbs_g, 1)],
-                      ["Fat", number(food.totals.fat_g, 1)],
-                    ] as const
-                  ).map(([label, value]) => (
-                    <div className="vt-num" key={label}>
-                      <span className="vt-num-label">{label}</span>
-                      {value}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
     </section>
