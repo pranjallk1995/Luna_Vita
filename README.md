@@ -5,7 +5,7 @@
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Luna Sentia required](https://img.shields.io/badge/Luna_Sentia-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL in Luna Sentia](https://img.shields.io/badge/PostgreSQL-in_Luna_Sentia-4169E1?logo=postgresql&logoColor=white)
-![Status: v1.1](https://img.shields.io/badge/Status-v1.1-2EA043)
+![Status: v1.3](https://img.shields.io/badge/Status-v1.3-2EA043)
 
 <p align="center">
   <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day and logging a meal through its MCP tools" width="900"></a>
@@ -43,7 +43,7 @@ A food can have its own image, shown on every entry of that food, past and futur
 
 > Generate and update the image for schezuan rice.
 
-A model that can generate images (for example ChatGPT) creates a photo of the dish and passes it to `update_food_image` in one call. Luna Vita sends the image to Luna Visia, which stores, captions, and tags it (`food`, `luna vita`, the food's name), then links Visia's stable public URL to the food and updates its existing entries. If Visia cannot store the image, nothing in Vita changes. Visia returns the image it already has when it gets the same bytes again, so a retried call never makes a duplicate. A model that cannot generate images passes a Visia `public_url` instead. Entries logged with the placeholder include an `image_hint` that asks the model to generate one. Renames and aliases carry the image to the new name. Storing images needs `LUNAVISIA_COMPANION_TOKEN`, set to the same value here and in Luna Visia; without it, only existing Visia images can be linked.
+A model that can generate images (for example ChatGPT) creates a photo of the dish and passes it to `update_food_image` in one call. Luna Vita sends the image to Luna Visia, which stores, captions, and tags it (`food`, `luna vita`, the food's name), then links Visia's stable public URL to the food and updates its existing entries. If Visia cannot store the image, nothing in Vita changes. Visia returns the image it already has when it gets the same bytes again, so a retried call never makes a duplicate. A model that cannot generate images passes a Visia `public_url` instead. Every Visia image Vita uses, the placeholder included, is tagged `luna vita` and `food` in Visia, and Luna Vibia's cover art (tagged `luna vibia` or `cover art`, with a song title written on it) is refused. Entries logged with the placeholder include an `image_hint` that asks the model to generate one. Renames and aliases carry the image to the new name. Storing images needs `LUNAVISIA_COMPANION_TOKEN`, set to the same value here and in Luna Visia; without it, only existing Visia images can be linked.
 
 Inference happens in the active AI conversation. Luna Vita stores the supplied structured values and does not require a separate API key for this workflow.
 
@@ -298,6 +298,8 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `update_food_entries` — set the same values on every matching food entry in a date range, by food and meal, with a `dry_run` preview. Quantity and nutrition need a food name.
 - `set_food_image` — set or replace one entry's image with a Luna Visia image, or the food placeholder when none fits.
 - `update_food_image` — store a generated or attached image in Luna Visia and show it on every entry of that food, now and later.
+- `update_food_images` — give up to 50 foods their image at once, each entry reported under `updated` or `failed`.
+- `search_food_images` — find foods by name or alias, by whether they have their own image, or by the Visia image they use.
 - `remove_food` — delete a food entry, optionally guarded by its expected date.
 
 ### Measurements and summaries

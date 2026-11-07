@@ -3,7 +3,7 @@
 import logging
 import re
 from datetime import date, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import anyio
 from mcp.server.fastmcp import FastMCP
@@ -48,6 +48,29 @@ def log_image_failure(tool: str, subject: str, source: dict[str, Any], error: Ex
     given = [field for field, value in source.items() if value not in (None, "")]
     message = LINK.sub("<link>", str(error))
     logger.warning("%s failed for %r (given: %s): %s: %s", tool, subject, given, type(error).__name__, message)
+
+
+class FoodImageUpdate(BaseModel):
+    """One food's image within a batch."""
+
+    food_name: str
+    image_url: str
+
+
+FoodImageUpdates = Annotated[
+    list[FoodImageUpdate],
+    WithJsonSchema(
+        {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"food_name": {"type": "string"}, "image_url": {"type": "string"}},
+                "required": ["food_name", "image_url"],
+            },
+            "description": "One entry per food: its name and a Luna Visia public_url or image URL.",
+        }
+    ),
+]
 
 
 class FileReference(BaseModel):
@@ -276,9 +299,12 @@ class LunaVitaMCPTools:
             Always search Luna Visia for a representative image of the food first
             and pass the public_url it returns (an immutable
             .../api/public/images/<image-id> URL); it is checked against Luna
-            Visia and rejected if not found. If no image fits, omit image_url to
-            use the Luna Vita food placeholder stored in Luna Visia. To change the
-            image of a food on all its entries, use update_food_image instead.
+            Visia, tagged "luna vita" there, and rejected if not found or if it is
+            Luna Vibia cover art (tagged "luna vibia" or "cover art"), which shows
+            a song title. Search with exclude_tags=["luna vibia", "cover art"]. If
+            no image fits, omit image_url to use the Luna Vita food placeholder
+            stored in Luna Visia. To change the image of a food on all its
+            entries, use update_food_image instead.
             """
             return update_result(food.set_image(entry_id, image_url))
 
@@ -293,7 +319,7 @@ class LunaVitaMCPTools:
 
             Use this when the user asks to generate, add, or change a food's image,
             or when a logged entry returns an image_hint. In one call the image is
-            stored in Luna Visia (captioned, tagged "food") and linked to the food
+            stored in Luna Visia (captioned, tagged "food" and "luna vita") and linked to the food
             under every spelling and alias; nothing is linked if storing fails.
 
             If you can generate images, first create an appetizing, realistic photo
@@ -302,8 +328,11 @@ class LunaVitaMCPTools:
             - file: the image you generated or the user attached (ChatGPT supplies it).
             - image_url: a public HTTPS image URL, or an image data URL.
             - content_base64: Base64 image bytes; only practical for small images.
-            If you cannot generate images, search Luna Visia instead and pass the
-            public_url it returns as image_url. Retrying with the same image is safe.
+            If you cannot generate images, search Luna Visia instead (with
+            exclude_tags=["luna vibia", "cover art"]: Luna Vibia covers carry song
+            titles and are refused) and pass the public_url it returns as
+            image_url. Retrying with the same image is safe. For many foods at
+            once use update_food_images.
             If passing a file fails, give it to Luna Visia's upload_image instead,
             then call this with the public_url it returns as image_url.
             """
@@ -317,6 +346,37 @@ class LunaVitaMCPTools:
             except Exception as error:
                 log_image_failure("update_food_image", food_name, source, error)
                 raise
+
+        @server.tool()
+        async def update_food_images(images: FoodImageUpdates) -> dict[str, Any]:
+            """Give up to 50 foods their image at once, each shown on all that food's entries.
+
+            Each entry is a food name and an image_url: a Luna Visia public_url
+            (linked and tagged "luna vita") or a public HTTPS image to store in
+            Visia, as update_food_image takes it. Luna Vibia cover art is refused.
+            Entries are independent: successes are listed under "updated" and
+            per-food errors under "failed". Find the foods with search_food_images.
+            """
+            pairs = [(image.food_name, image.image_url) for image in images]
+            return await anyio.to_thread.run_sync(food.update_images, pairs)
+
+        @server.tool()
+        def search_food_images(
+            query: str | None = None,
+            image: Literal["any", "own", "none"] = "any",
+            image_url: str | None = None,
+        ) -> dict[str, Any]:
+            """Find foods by their image, to review or fix food images in bulk.
+
+            - query: part of the food's name or one of its aliases.
+            - image: "own" (the food has its own image), "none" (it shows the
+              placeholder or an entry photo), or "any".
+            - image_url: a Luna Visia public_url; lists the foods using that image.
+            Each result has the canonical food_name, its entry count, image_url,
+            and image kind; image_counts counts the matches by kind. Fix many at
+            once with update_food_images.
+            """
+            return food.search_images(query, image, image_url)
 
         @server.tool()
         def remove_food(

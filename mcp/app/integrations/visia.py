@@ -33,6 +33,10 @@ class VisiaImageCatalog:
         "Search Luna Visia for a matching image and pass the public_url it returns; "
         "if none fits, omit image_url to use the Luna Vita food placeholder image."
     )
+    # Every Visia image Vita uses carries these, so Visia shows which images are food.
+    APP_TAGS = ("luna vita", "food")
+    # Luna Vibia's covers show a song title in text, so Vita never uses them.
+    FOREIGN_TAGS = ("luna vibia", "cover art")
 
     def __init__(
         self,
@@ -128,22 +132,66 @@ class VisiaImageCatalog:
             ) from error
 
     def resolve(self, image_url: str) -> str:
-        """Return Visia's canonical public URL for the image ``image_url`` names."""
-        return self.resolve_id(self.image_id(image_url))
+        """Return Visia's canonical public URL for the image ``image_url`` names, tagging it as food."""
+        return self.claim(self.find(self.image_id(image_url)))
+
+    def claim(self, image: dict) -> str:
+        """Tag a visible Visia image as one of Vita's and return its public URL.
+
+        Luna Vibia's covers are refused: they carry a song title in text. Tagging
+        fails loudly, so no food shows an image Visia does not mark as Vita's.
+        """
+        tags = image.get("tags") or []
+        if any(tag in tags for tag in self.FOREIGN_TAGS):
+            raise ValueError(
+                f"Luna Visia image {image.get('name') or image.get('image_id')!r} is Luna Vibia cover "
+                f"art, with a song title written on it, so Luna Vita cannot use it. {self.SEARCH_HINT}"
+            )
+        if not all(tag in tags for tag in self.APP_TAGS):
+            self.tag([str(image["image_id"])], list(self.APP_TAGS))
+        return image["public_url"]
+
+    def tag(self, image_ids: list[str], tags: list[str]) -> dict[str, Any]:
+        """Add ``tags`` to Visia images by ID; raise unless every image was tagged."""
+        if not self.companion_token:
+            raise VisiaUnavailableError(
+                "Tagging food images in Luna Visia is off: set LUNAVISIA_COMPANION_TOKEN to the "
+                "same value in Luna Vita and Luna Visia."
+            )
+        try:
+            response = httpx.post(
+                f"{self.api_url}/api/companion/images/tags",
+                json={"image_ids": image_ids, "tags": tags},
+                headers={"Authorization": f"Bearer {self.companion_token}", tenancy.USER_HEADER: tenancy.current()},
+                timeout=self.timeout,
+            )
+        except httpx.TransportError as error:
+            raise VisiaUnavailableError(f"Luna Visia could not tag the food image: {error}") from error
+        if response.status_code == 401:
+            raise VisiaUnavailableError(
+                "Luna Visia rejected Luna Vita's LUNAVISIA_COMPANION_TOKEN; set the same value in both apps."
+            )
+        if response.status_code >= 400:
+            raise VisiaUnavailableError(f"Luna Visia could not tag the food image: {self.error_detail(response)}")
+        result = response.json()
+        if result.get("failed"):
+            raise ValueError(f"Luna Visia could not tag the food image: {result['failed'][0].get('error')}")
+        return result
 
     def placeholder_url(self) -> str:
         """The public URL of the food placeholder image in Visia."""
         try:
             with tenancy.acting_as(tenancy.OWNER):  # One shared image, kept in the owner's gallery.
-                return self.resolve_id(self.placeholder_image_id)
+                return self.claim(self.find(self.placeholder_image_id))
         except NotFoundError as error:
             raise NotFoundError(
                 f"The Luna Vita food placeholder image ({self.placeholder_image_id}) is missing "
                 "from Luna Visia; restore it or set LUNAVITA_PLACEHOLDER_IMAGE_ID."
             ) from error
 
-    def resolve_id(self, image_id: str) -> str:
+    def find(self, image_id: str) -> dict:
+        """The visible Visia image with this ID, with its name, tags, and public URL."""
         for image in self.images():
             if str(image.get("image_id", "")).lower() == image_id and not image.get("hidden"):
-                return image["public_url"]
+                return image
         raise NotFoundError(f"No visible Luna Visia image has ID {image_id}. {self.SEARCH_HINT}")

@@ -473,6 +473,9 @@ class FoodImageRepository(Repository):
     def get(self, food_key: str) -> Row | None:
         return self.fetch_one("SELECT * FROM food_images WHERE food_key=%s", (food_key,))
 
+    def list(self) -> list[Row]:
+        return self.fetch_all("SELECT * FROM food_images ORDER BY food_name")
+
     def upsert(self, food_key: str, food_name: str, image_url: str) -> Row:
         return self.fetch_one(
             """

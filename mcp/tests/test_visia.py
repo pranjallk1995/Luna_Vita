@@ -11,12 +11,17 @@ from app.integrations.visia import VisiaImageCatalog, VisiaUnavailableError
 IMAGE_ID = "2d77a066-d097-4b1b-9682-c9eb41538b26"
 HIDDEN_ID = "11111111-2222-3333-4444-555555555555"
 PLACEHOLDER_ID = "b7adf6ae-30b3-4750-8381-5dc6ab393de6"
+UNTAGGED_ID = "33333333-4444-5555-6666-777777777777"
+COVER_ID = "44444444-5555-6666-7777-888888888888"
 PUBLIC = "https://visia.example/api/public/images/"
 CATALOG = {
     "images": [
-        {"image_id": IMAGE_ID, "public_url": PUBLIC + IMAGE_ID, "hidden": False},
+        {"image_id": IMAGE_ID, "public_url": PUBLIC + IMAGE_ID, "hidden": False, "tags": ["luna vita", "food"]},
         {"image_id": HIDDEN_ID, "public_url": PUBLIC + HIDDEN_ID, "hidden": True},
-        {"image_id": PLACEHOLDER_ID, "public_url": PUBLIC + PLACEHOLDER_ID, "hidden": False},
+        {"image_id": PLACEHOLDER_ID, "public_url": PUBLIC + PLACEHOLDER_ID, "hidden": False, "tags": ["luna vita", "food"]},
+        {"image_id": UNTAGGED_ID, "public_url": PUBLIC + UNTAGGED_ID, "hidden": False, "tags": ["dish"]},
+        {"image_id": COVER_ID, "public_url": PUBLIC + COVER_ID, "hidden": False, "name": "song_cover.png",
+         "tags": ["cover art", "luna vibia"]},
     ]
 }
 
@@ -75,6 +80,45 @@ class VisiaImageCatalogTests(unittest.TestCase):
                 with patch("app.integrations.visia.httpx.get", side_effect=side_effect, return_value=return_value):
                     with self.assertRaises(VisiaUnavailableError):
                         self.catalog.resolve(PUBLIC + IMAGE_ID)
+
+
+class VisiaTaggingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.catalog = VisiaImageCatalog("http://visia/", PLACEHOLDER_ID, companion_token="t" * 32)
+
+    def tagged(self, status=200, payload=None):
+        request = httpx.Request("POST", "http://visia/api/companion/images/tags")
+        return httpx.Response(status, json=payload or {"tagged": [{}], "failed": []}, request=request)
+
+    def test_untagged_images_get_the_app_tags(self) -> None:
+        with patch("app.integrations.visia.httpx.get", return_value=respond()), \
+                patch("app.integrations.visia.httpx.post", return_value=self.tagged()) as post:
+            self.assertEqual(self.catalog.resolve(PUBLIC + UNTAGGED_ID), PUBLIC + UNTAGGED_ID)
+        self.assertEqual(post.call_args.args[0], "http://visia/api/companion/images/tags")
+        self.assertEqual(post.call_args.kwargs["json"], {"image_ids": [UNTAGGED_ID], "tags": ["luna vita", "food"]})
+
+    def test_tagged_images_need_no_call(self) -> None:
+        with patch("app.integrations.visia.httpx.get", return_value=respond()), \
+                patch("app.integrations.visia.httpx.post") as post:
+            self.catalog.resolve(PUBLIC + IMAGE_ID)
+        post.assert_not_called()
+
+    def test_vibia_covers_are_refused(self) -> None:
+        with patch("app.integrations.visia.httpx.get", return_value=respond()), \
+                patch("app.integrations.visia.httpx.post") as post:
+            with self.assertRaisesRegex(ValueError, "Luna Vibia cover art"):
+                self.catalog.resolve(PUBLIC + COVER_ID)
+        post.assert_not_called()
+
+    def test_a_failed_tag_fails_the_link(self) -> None:
+        failed = self.tagged(payload={"tagged": [], "failed": [{"error": "hidden"}]})
+        with patch("app.integrations.visia.httpx.get", return_value=respond()), \
+                patch("app.integrations.visia.httpx.post", return_value=failed):
+            with self.assertRaisesRegex(ValueError, "hidden"):
+                self.catalog.resolve(PUBLIC + UNTAGGED_ID)
+        with patch("app.integrations.visia.httpx.get", return_value=respond()):
+            with self.assertRaisesRegex(VisiaUnavailableError, "LUNAVISIA_COMPANION_TOKEN"):
+                VisiaImageCatalog("http://visia/", PLACEHOLDER_ID).resolve(PUBLIC + UNTAGGED_ID)
 
 
 def stored(status=201, payload=None):

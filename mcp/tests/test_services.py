@@ -177,6 +177,10 @@ class FakeImageCatalog:
     def is_visia_url(image_url: str) -> bool:
         return "/api/public/images/" in image_url
 
+    @staticmethod
+    def image_id(image_url: str) -> str:
+        return image_url.rstrip("/").rsplit("/", 1)[1]
+
     def store(self, name: str, tags: list[str], source: dict) -> dict:
         if self.store_error:
             raise self.store_error
@@ -200,6 +204,9 @@ class FakeFoodImages:
 
     def get(self, food_key: str) -> dict | None:
         return self.rows.get(food_key)
+
+    def list(self) -> list[dict]:
+        return list(self.rows.values())
 
     def upsert(self, food_key: str, food_name: str, image_url: str) -> dict:
         self.rows[food_key] = {"food_key": food_key, "food_name": food_name, "image_url": image_url}
@@ -282,6 +289,28 @@ class FoodImageTests(unittest.TestCase):
         self.assertIn("update_food_image", saved["image_hint"])
         self.assertIn("update_food_image", logged["image_hint"])
         self.assertNotIn("image_hint", logged["entry"])
+
+
+class FoodImageBulkTests(FoodImageTests):
+    def test_bulk_images_apply_each_food_on_its_own(self) -> None:
+        result = self.service.update_images(
+            [("Paratha", FakeImageCatalog.CANONICAL), ("Schezuan Rice", "https://visia.example/api/public/images/gone"), ("", "x")]
+        )
+        self.assertEqual((result["updated_count"], result["failed_count"]), (1, 2))
+        self.assertEqual(result["updated"][0]["food_name"], "Paratha")
+        with self.assertRaisesRegex(ValueError, "at most 50"):
+            self.service.update_images([("Paratha", FakeImageCatalog.CANONICAL)] * 51)
+
+    def test_search_images_by_kind_name_and_image(self) -> None:
+        self.service.update_image("Paratha", {"image_url": FakeImageCatalog.CANONICAL})
+        own = self.service.search_images(image="own")
+        self.assertEqual([food["food_name"] for food in own["foods"]], ["Paratha"])
+        self.assertEqual(own["image_counts"], {"own": 1, "none": 0})
+        self.assertEqual([food["food_name"] for food in self.service.search_images("szechuan")["foods"]], ["Schezuan Rice"])
+        by_image = self.service.search_images(image_url=FakeImageCatalog.CANONICAL)
+        self.assertEqual(by_image["count"], 1)
+        with self.assertRaisesRegex(ValueError, "image must be one of"):
+            self.service.search_images(image="blank")
 
 
 class FoodServiceTests(unittest.TestCase):

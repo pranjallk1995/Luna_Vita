@@ -227,6 +227,53 @@ class FoodService:
             "message": f"Every '{name}' entry, and every one logged from now on, shows this image.",
         }
 
+    BATCH_MAX_FOODS = 50
+    IMAGE_KINDS = ("any", "own", "none")
+
+    def update_images(self, images: list[tuple[str, str]]) -> dict[str, Any]:
+        """Give many foods their image at once, each on its own, as update_image does."""
+        if not images:
+            raise ValueError("Provide at least one food image.")
+        if len(images) > self.BATCH_MAX_FOODS:
+            raise ValueError(f"Change at most {self.BATCH_MAX_FOODS} food images at a time.")
+        updated, failed = [], []
+        for food_name, image_url in images:
+            try:
+                result = self.update_image(food_name, {"image_url": image_url})
+            except (ValueError, NotFoundError, VisiaUnavailableError) as error:
+                failed.append({"food_name": food_name, "error": str(error)})
+                continue
+            updated.append({key: result[key] for key in ("food_name", "image_url", "entries_updated")})
+        return {"updated_count": len(updated), "failed_count": len(failed), "updated": updated, "failed": failed}
+
+    def search_images(
+        self, query: str | None = None, image: str = "any", image_url: str | None = None
+    ) -> dict[str, Any]:
+        """Canonical foods with the image each shows, filtered by name, kind, or Visia image.
+
+        Reads only Vita's own records, so it works while Visia is down.
+        """
+        if image not in self.IMAGE_KINDS:
+            raise ValueError(f"image must be one of {', '.join(self.IMAGE_KINDS)}.")
+        catalog = food_catalog(self.food, self.aliases)
+        own = {row["food_key"]: row["image_url"] for row in self.food_images.list()}
+        wanted_id = self.images.image_id(image_url) if image_url and image_url.strip() else None
+        needle = FoodName.key(query) if query else ""
+        foods = []
+        for food in catalog.names():
+            url = own.get(catalog.key(food["name"]))
+            kind = "own" if url else "none"
+            if image != "any" and kind != image:
+                continue
+            if wanted_id and not (url and self.images.is_visia_url(url) and self.images.image_id(url) == wanted_id):
+                continue
+            spellings = [food["name"], *food["aliases"]]
+            if needle and not any(needle in FoodName.key(spelling) for spelling in spellings):
+                continue
+            foods.append({"food_name": food["name"], "entries": food["entries"], "image_url": url, "image": kind})
+        counts = {kind: sum(1 for food in foods if food["image"] == kind) for kind in ("own", "none")}
+        return {"count": len(foods), "image_counts": counts, "foods": foods}
+
     def list(
         self, start: date | None = None, end: date | None = None, limit: int = 100
     ) -> list[Row]:
