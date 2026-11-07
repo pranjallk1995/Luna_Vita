@@ -38,6 +38,24 @@ from app.services.application import LunaVitaService
 # as {download_url, file_id}.
 FILE_PARAMS_META = {"openai/fileParams": ["file"]}
 
+# Read by MCP clients when they connect, before any tool is chosen.
+# The food is logged before its image is generated: generating an image can end the
+# client's turn, and nothing should wait on it.
+SERVER_INSTRUCTIONS = (
+    "Every food in Luna Vita shows an image from Luna Visia. When the user reports "
+    "food, log it straight away, before generating anything: search Luna Visia for "
+    "an image of the food (with exclude_tags=[\"luna vibia\", \"cover art\"]) and pass "
+    "its public_url as image_url, or omit image_url when none fits. Use "
+    "log_consumed_foods for several foods at once. When a result has an image_hint, "
+    "the food has no image in Luna Visia: tell the user it is logged, then generate "
+    "an appetizing, realistic photo of the dish, plated, with no text, landscape "
+    "with a 3:2 aspect ratio (4.5 x 3, e.g. 1536x1024). Pass it to update_food_image, "
+    "which stores it in Luna Visia and shows it on every entry of that food. For "
+    "several foods, generate one image per food. If your turn ends before an image "
+    "is set, finish it with update_food_image on the user's next message, without "
+    "logging the food again."
+)
+
 
 logger = logging.getLogger(__name__)
 LINK = re.compile(r"https?://\S+")
@@ -67,7 +85,10 @@ FoodImageUpdates = Annotated[
                 "properties": {"food_name": {"type": "string"}, "image_url": {"type": "string"}},
                 "required": ["food_name", "image_url"],
             },
-            "description": "One entry per food: its name and a Luna Visia public_url or image URL.",
+            "description": (
+                "One entry per food: its name and a Luna Visia public_url, a public HTTPS "
+                "image URL, or a data URL of an image you generated."
+            ),
         }
     ),
 ]
@@ -162,7 +183,10 @@ class LunaVitaMCPTools:
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
             image, omit image_url: the entry then shows the food's own image (see
-            update_food_image), or else the Luna Vita food placeholder. Never
+            update_food_image), or else the Luna Vita food placeholder, and the
+            result carries an image_hint. Then generate an appetizing, realistic
+            photo of the dish (plated, no text, landscape 3:2, e.g. 1536x1024) and
+            pass it to update_food_image, after telling the user it is logged. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             """
@@ -217,7 +241,10 @@ class LunaVitaMCPTools:
             and pass the public_url it returns as image_url (an immutable
             .../api/public/images/<image-id> URL). If that search finds no suitable
             image, omit image_url: the entry then shows the food's own image (see
-            update_food_image), or else the Luna Vita food placeholder. Never
+            update_food_image), or else the Luna Vita food placeholder, and the
+            result carries an image_hint. Then generate an appetizing, realistic
+            photo of the dish (plated, no text, landscape 3:2, e.g. 1536x1024) and
+            pass it to update_food_image, after telling the user it is logged. Never
             invent a URL or pass a filename-based URL or data URI; a supplied URL is
             checked against Luna Visia and the entry is rejected if it is not found.
             Use the current date/time when the user says "now"; otherwise preserve
@@ -239,6 +266,26 @@ class LunaVitaMCPTools:
                     consumed_date=consumed_date,
                 ),
             )
+
+        @server.tool()
+        def log_consumed_foods(description: str, foods: list[dict]) -> dict[str, Any]:
+            """Log up to 50 foods the user reported in one message, e.g. a whole meal or day.
+
+            ``description`` is the user's message. Each item takes log_consumed_food's
+            fields: {"food_name", "quantity", "calories", "protein_g", "carbs_g",
+            "fat_g", "natural_sugar_g", "added_sugar_g"}, plus optional "image_url",
+            "meal_type", "consumed_at", "consumed_date", and "time_label". Estimate
+            each food's nutrition for its complete quantity, reuse names from
+            list_food_names, and search Luna Visia for each food's image first, as
+            log_consumed_food describes.
+            Each item saves on its own: successes are under "saved" and per-item
+            errors under "failed" (with its index). "foods_needing_images" lists
+            the foods with no image in Luna Visia, once each. Tell the user they
+            are logged, then generate one appetizing, realistic photo per food
+            (plated, no text, landscape 3:2, e.g. 1536x1024) and pass each to
+            update_food_image.
+            """
+            return food.log_consumed_many(description, foods)
 
         @server.tool()
         def get_food_log(
@@ -352,8 +399,10 @@ class LunaVitaMCPTools:
             """Give up to 50 foods their image at once, each shown on all that food's entries.
 
             Each entry is a food name and an image_url: a Luna Visia public_url
-            (linked and tagged "luna vita") or a public HTTPS image to store in
-            Visia, as update_food_image takes it. Luna Vibia cover art is refused.
+            (linked and tagged "luna vita"), or a public HTTPS image or a data URL
+            of an image you generated, stored in Visia as update_food_image does.
+            Generated images are 3:2 photos of the dish, as update_food_image
+            describes. Luna Vibia cover art is refused.
             Entries are independent: successes are listed under "updated" and
             per-food errors under "failed". Find the foods with search_food_images.
             """

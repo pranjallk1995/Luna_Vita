@@ -6,7 +6,7 @@ from app.core.config import AppConfig
 from app.data.database import Database
 from app.transport.luna_mcp import LunaMCP
 from app.transport.http_routes import LunaVitaHTTPRoutes
-from app.transport.mcp_tools import LunaVitaMCPTools
+from app.transport.mcp_tools import SERVER_INSTRUCTIONS, LunaVitaMCPTools
 from app.data.repositories import (
     AnalysisRangeRepository,
     DailyLogRepository,
@@ -51,6 +51,7 @@ class LunaVitaApplication:
             public_url=config.mcp_public_url or f"http://localhost:{config.port}",
             api_token=config.api_token,
             icons=self.branding.mcp_icons(),
+            instructions=SERVER_INSTRUCTIONS,
             host=config.host,
             port=config.port,
             stateless_http=True,

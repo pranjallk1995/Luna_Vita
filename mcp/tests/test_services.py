@@ -290,6 +290,51 @@ class FoodImageTests(unittest.TestCase):
         self.assertIn("update_food_image", logged["image_hint"])
         self.assertNotIn("image_hint", logged["entry"])
 
+    def test_image_hint_asks_for_a_landscape_photo_after_logging(self) -> None:
+        hint = self.service.record_with_visia_image(apple())["image_hint"]
+        for expected in ("3:2", "1536x1024", "no text", "update_food_image", "logged"):
+            self.assertIn(expected, hint)
+
+
+class FoodLogBulkTests(FoodImageTests):
+    """Several foods from one chat message, each saved on its own."""
+
+    @staticmethod
+    def item(name: str, **extra: Any) -> dict[str, Any]:
+        return {**apple().model_dump(exclude_none=True), "food_name": name, **extra}
+
+    def test_each_food_saves_and_foods_without_an_image_are_listed_once(self) -> None:
+        self.images.upsert(FoodName.key("Paratha"), "Paratha", FakeImageCatalog.STORED)
+        result = self.service.log_consumed_many(
+            "2 parathas, dal, and dal again",
+            [self.item("Paratha"), self.item("Dal"), self.item("dal", quantity="1 more bowl")],
+        )
+        self.assertEqual((result["saved_count"], result["failed_count"]), (3, 0))
+        self.assertEqual(result["foods_needing_images"], ["Dal"])
+        self.assertIn("'Dal'", result["image_hint"])
+        self.assertIn("1536x1024", result["image_hint"])
+        self.assertTrue(all(entry["notes"].startswith("AI-estimated from chat") for entry in result["saved"]))
+        self.assertTrue(all("image_hint" not in entry for entry in result["saved"]))
+
+    def test_a_bad_item_fails_alone(self) -> None:
+        result = self.service.log_consumed_many(
+            "an apple and a mystery",
+            [self.item("Apple"), {"food_name": "Mystery"}, self.item("Pear", image_url="https://visia.example/api/public/images/gone")],
+        )
+        self.assertEqual((result["saved_count"], result["failed_count"]), (1, 2))
+        self.assertEqual([(item["index"], item["food_name"]) for item in result["failed"]], [(1, "Mystery"), (2, "Pear")])
+
+    def test_no_hint_when_every_food_has_an_image(self) -> None:
+        result = self.service.log_consumed_many("an apple", [self.item("Apple", image_url=FakeImageCatalog.CANONICAL)])
+        self.assertNotIn("image_hint", result)
+        self.assertNotIn("foods_needing_images", result)
+
+    def test_batch_size_is_bounded(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least one"):
+            self.service.log_consumed_many("nothing", [])
+        with self.assertRaisesRegex(ValueError, "at most 50"):
+            self.service.log_consumed_many("a feast", [self.item("Apple")] * 51)
+
 
 class FoodImageBulkTests(FoodImageTests):
     def test_bulk_images_apply_each_food_on_its_own(self) -> None:

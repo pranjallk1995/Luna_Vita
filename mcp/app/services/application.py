@@ -113,11 +113,21 @@ class FoodService:
 
     NOTE_MAX_LENGTH = 2_000
     IMAGE_TAGS = ["food", "luna vita"]
+    IMAGE_STYLE = (
+        "an appetizing, realistic photo of the dish, plated, with no text, landscape "
+        "with a 3:2 aspect ratio (4.5 x 3, e.g. 1536x1024)"
+    )
     IMAGE_HINT = (
-        "'{name}' has no image of its own yet. If you can "
-        "generate images, create an appetizing landscape photo of the dish (3:2, "
-        "4.5 x 3) and pass it to "
-        "update_food_image; it is stored in Luna Visia and shown on every '{name}' entry."
+        "'{name}' has no image in Luna Visia yet. Tell the user it is logged, then "
+        f"generate {IMAGE_STYLE}, and pass it to update_food_image; it is stored in "
+        "Luna Visia and shown on every '{name}' entry. If you cannot generate images, "
+        "the entry keeps the Luna Vita food placeholder."
+    )
+    BULK_IMAGE_HINT = (
+        "These foods have no image in Luna Visia yet: {names}. Tell the user they are "
+        f"logged, then generate {IMAGE_STYLE} for each, and pass each to "
+        "update_food_image; they are stored in Luna Visia and shown on every entry of "
+        "that food. If you cannot generate images, the entries keep the Luna Vita food placeholder."
     )
 
     def __init__(
@@ -194,6 +204,44 @@ class FoodService:
             ),
         }
         return {**result, "image_hint": hint} if hint else result
+
+    BATCH_MAX_ENTRIES = 50
+
+    def log_consumed_many(self, description: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        """Save several LLM-estimated entries from one chat message, each on its own.
+
+        A failing entry is reported under "failed" and the rest still save. Foods
+        left without an image in Luna Visia are listed once, with one hint asking
+        for a generated image of each.
+        """
+        if not entries:
+            raise ValueError("Provide at least one food.")
+        if len(entries) > self.BATCH_MAX_ENTRIES:
+            raise ValueError(f"Log at most {self.BATCH_MAX_ENTRIES} foods at a time.")
+        saved, failed, needing = [], [], {}
+        for index, raw in enumerate(entries):
+            try:
+                result = self.log_consumed(description, FoodEntryCreate.model_validate(raw))
+            except (ValueError, NotFoundError, VisiaUnavailableError) as error:
+                name = raw.get("food_name") if isinstance(raw, dict) else None
+                failed.append({"index": index, "food_name": name, "error": str(error)})
+                continue
+            saved.append(result["entry"])
+            if "image_hint" in result:
+                name = result["entry"]["food_name"]
+                needing.setdefault(FoodName.key(name), name)
+        outcome: dict[str, Any] = {
+            "saved_count": len(saved),
+            "failed_count": len(failed),
+            "saved": saved,
+            "failed": failed,
+            "message": f"{len(saved)} estimated entries were saved to LunaVita. Values remain editable.",
+        }
+        if needing:
+            names = list(needing.values())
+            outcome["foods_needing_images"] = names
+            outcome["image_hint"] = self.BULK_IMAGE_HINT.format(names=", ".join(f"'{name}'" for name in names))
+        return outcome
 
     def update_image(self, food_name: str, source: dict[str, Any]) -> Row:
         """Give a food one image, shown on all its entries now and logged later.
