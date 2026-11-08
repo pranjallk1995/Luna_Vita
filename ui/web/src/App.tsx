@@ -104,6 +104,7 @@ function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Setti
       ) : (
         <Monthly day={day} settings={settings} />
       )}
+      <footer className="lv-footer">Luna Vita · v{settings.version}</footer>
     </main>
   );
 }

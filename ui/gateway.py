@@ -134,6 +134,7 @@ class UIGateway:
     @staticmethod
     def settings() -> dict[str, Any]:
         return {
+            "version": UIConfig.VERSION,
             "time_zone": UIConfig.TIME_ZONE,
             "utc_offset": UIConfig.UTC_OFFSET,
             "food_photo_size": UIConfig.FOOD_PHOTO_SIZE,
@@ -192,7 +193,7 @@ class UIGateway:
 
     @staticmethod
     async def health(request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+        return JSONResponse({"status": "ok", "version": UIConfig.VERSION})
 
     def application(self) -> Starlette:
         app = Starlette(

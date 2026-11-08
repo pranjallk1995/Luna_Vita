@@ -8,6 +8,7 @@ import { post, put, remove, request } from "./http";
 import { messageOf } from "./lib";
 
 export type Settings = {
+  version: string;
   time_zone: string;
   utc_offset: string;
   food_photo_size: [number, number];
