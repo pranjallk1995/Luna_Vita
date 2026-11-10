@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 class AppConfig:
     """Immutable backend settings loaded from environment variables."""
 
+    # Hosts where MCP_PUBLIC_URL may be plain HTTP: a local start without a tunnel.
+    LOCAL_HOSTS: ClassVar[frozenset[str]] = frozenset({"localhost", "127.0.0.1"})
     ASSET_DIR: ClassVar[Path] = Path(__file__).resolve().parent.parent / "assets"
     # Calendar days, "today", and logged times all resolve in this timezone.
     TIMEZONE: ClassVar[ZoneInfo] = ZoneInfo("Asia/Kolkata")
@@ -59,8 +61,9 @@ class AppConfig:
         mcp_public_url = os.getenv("MCP_PUBLIC_URL", "").strip().rstrip("/")
         if mcp_public_url:
             parsed_public_url = urlparse(mcp_public_url)
-            if parsed_public_url.scheme != "https" or not parsed_public_url.netloc:
-                raise RuntimeError("MCP_PUBLIC_URL must be a valid HTTPS URL.")
+            local = parsed_public_url.scheme == "http" and parsed_public_url.hostname in cls.LOCAL_HOSTS
+            if not (parsed_public_url.scheme == "https" or local) or not parsed_public_url.netloc:
+                raise RuntimeError("MCP_PUBLIC_URL must be an HTTPS URL, or HTTP on localhost.")
         return cls(
             mcp_public_url=mcp_public_url,
             database_url=database_url,
