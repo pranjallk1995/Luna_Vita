@@ -5,20 +5,20 @@ services:
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
-      LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19090}
+      LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19001}
       LUNA_SSO_INTERNAL_URL: ${LUNA_SSO_INTERNAL_URL:-http://luna-sentia-auth:8000}
       LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:-lunavita-dev-token-for-localhost-only}
       DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-sentia-db:5432/lunavita
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVISIA_COMPANION_TOKEN: ${LUNAVISIA_COMPANION_TOKEN:-}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-858eafb0-73ad-4717-8095-8cef43c62d3c}
-      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18001}
-      UI_PUBLIC_URL: ${UI_PUBLIC_URL:-http://localhost:18502}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18005}
+      UI_PUBLIC_URL: ${UI_PUBLIC_URL:-http://localhost:18506}
       TZ: Asia/Kolkata
     expose:
       - "8000"
     ports:
-      - "127.0.0.1:18001:8000"
+      - "127.0.0.1:18005:8000"
     develop:
       watch:
         - action: sync+restart
@@ -44,14 +44,14 @@ services:
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
-      LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19090}
+      LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19001}
       LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:-lunavita-dev-token-for-localhost-only}
       LUNA_SSO_INTERNAL_URL: ${LUNA_SSO_INTERNAL_URL:-http://luna-sentia-auth:8000}
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
       LUNAVITA_ALLOWED_EMAILS: ${LUNAVITA_ALLOWED_EMAILS:-}
       TZ: Asia/Kolkata
     ports:
-      - "127.0.0.1:18502:8501"
+      - "127.0.0.1:18506:8501"
     develop:
       watch:
         # The gateway restarts on Python changes; the browser app is built into the image.
