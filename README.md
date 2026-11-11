@@ -5,7 +5,7 @@
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Luna Sentia required](https://img.shields.io/badge/Luna_Sentia-required-6C5CE7?logo=docker&logoColor=white)
 ![PostgreSQL in Luna Sentia](https://img.shields.io/badge/PostgreSQL-in_Luna_Sentia-4169E1?logo=postgresql&logoColor=white)
-![Status: v1.4](https://img.shields.io/badge/Status-v1.4-2EA043)
+![Status: v1.5](https://img.shields.io/badge/Status-v1.5-2EA043)
 
 <p align="center">
   <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day and logging a meal through its MCP tools" width="900"></a>
