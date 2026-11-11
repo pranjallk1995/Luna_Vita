@@ -7,7 +7,7 @@ services:
     environment:
       LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19090}
       LUNA_SSO_INTERNAL_URL: ${LUNA_SSO_INTERNAL_URL:-http://luna-sentia-auth:8000}
-      LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:?Set LUNAVITA_API_TOKEN to a random value of at least 32 characters}
+      LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:-lunavita-dev-token-for-localhost-only}
       DATABASE_URL: postgresql://lunavita:${POSTGRES_PASSWORD:-lunavita-dev}@luna-sentia-db:5432/lunavita
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVISIA_COMPANION_TOKEN: ${LUNAVISIA_COMPANION_TOKEN:-}
@@ -45,10 +45,10 @@ services:
     restart: unless-stopped
     environment:
       LUNA_SSO_URL: ${LUNA_SSO_URL:-http://localhost:19090}
-      LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:?Set LUNAVITA_API_TOKEN to a random value of at least 32 characters}
+      LUNAVITA_API_TOKEN: ${LUNAVITA_API_TOKEN:-lunavita-dev-token-for-localhost-only}
       LUNA_SSO_INTERNAL_URL: ${LUNA_SSO_INTERNAL_URL:-http://luna-sentia-auth:8000}
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
-      LUNAVITA_ALLOWED_EMAILS: ${LUNAVITA_ALLOWED_EMAILS:?Set LUNAVITA_ALLOWED_EMAILS to the Google accounts allowed to access Vita}
+      LUNAVITA_ALLOWED_EMAILS: ${LUNAVITA_ALLOWED_EMAILS:-}
       TZ: Asia/Kolkata
     ports:
       - "127.0.0.1:18502:8501"
