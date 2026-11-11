@@ -232,7 +232,7 @@ LUNAVITA_API_TOKEN=replace-with-a-random-value-of-at-least-32-characters
 `LUNAVITA_API_TOKEN` is a shared secret between the UI and the MCP server. Generate your own with `openssl rand -hex 32`.
 
 `*` allows everyone with a Luna account; otherwise separate accounts with commas. Keep `LUNAVISIA_API_URL` on the shared
-Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18005`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
+Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18006`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
 different existing Visia image as its fallback.
 
 ### Sign-in
@@ -260,9 +260,9 @@ docker compose up --build
 Open:
 
 - UI: <http://127.0.0.1:18506>
-- Service health: <http://127.0.0.1:18005/health>
-- MCP endpoint: <http://127.0.0.1:18005/mcp> (clients sign in; see Connecting an MCP client)
-- Favicon and icons: <http://127.0.0.1:18005/favicon.ico> and `/icons/icon-{48,96,192,512}.png`; the 48 and 96 px icons are also embedded in the MCP `initialize` server info so connector clients such as Claude can show them.
+- Service health: <http://127.0.0.1:18006/health>
+- MCP endpoint: <http://127.0.0.1:18006/mcp> (clients sign in; see Connecting an MCP client)
+- Favicon and icons: <http://127.0.0.1:18006/favicon.ico> and `/icons/icon-{48,96,192,512}.png`; the 48 and 96 px icons are also embedded in the MCP `initialize` server info so connector clients such as Claude can show them.
 
 The example keeps these development defaults:
 

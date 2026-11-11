@@ -1,7 +1,7 @@
 services:
   mcp:
     build: ./mcp
-    image: ghcr.io/pranjallk1995/luna-vita-mcp:${LUNA_IMAGE_TAG:-v1.5.0}
+    image: ghcr.io/pranjallk1995/luna-vita-mcp:${LUNA_IMAGE_TAG:-v1.5.1}
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
@@ -12,13 +12,13 @@ services:
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVISIA_COMPANION_TOKEN: ${LUNAVISIA_COMPANION_TOKEN:-}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-858eafb0-73ad-4717-8095-8cef43c62d3c}
-      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18005}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18006}
       UI_PUBLIC_URL: ${UI_PUBLIC_URL:-http://localhost:18506}
       TZ: Asia/Kolkata
     expose:
       - "8000"
     ports:
-      - "127.0.0.1:18005:8000"
+      - "127.0.0.1:18006:8000"
     develop:
       watch:
         - action: sync+restart
@@ -40,7 +40,7 @@ services:
 
   ui:
     build: ./ui
-    image: ghcr.io/pranjallk1995/luna-vita-ui:${LUNA_IMAGE_TAG:-v1.5.0}
+    image: ghcr.io/pranjallk1995/luna-vita-ui:${LUNA_IMAGE_TAG:-v1.5.1}
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
