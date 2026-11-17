@@ -108,6 +108,17 @@ Morning and night weigh-ins support:
 
 Weight and Morning/Night are required. Measured time is optional and controlled by a toggle. The daily viewer shows the latest morning and night values side by side. Separate controls delete all morning or all night measurements for the selected date.
 
+### Water
+
+The daily view's Water card tracks what you drink against a daily goal (3 L until you set your own):
+
+- One tap adds 250, 500, or 750 ml; any other amount up to 5 L goes in the box below them.
+- A bar fills toward the goal and turns green once it is reached; the line above it says how much is left.
+- Each drink is listed with its time and can be deleted, with Undo. Drinks added to a past day keep that day, without a time.
+- Select "left" (or "Goal reached") to change the goal, between 500 ml and 10 L.
+
+An assistant logs water the same way: "I just had a bottle of water" becomes `log_water`, which answers with the day's total and what is left.
+
 ### Bulk corrections
 
 Assistants can correct many records at once across a range of dates: food entries by food and meal, body measurements by metric, workout days by done or skipped, and logged exercises by name and type.
@@ -370,6 +381,14 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `update_workouts` — set the same values on every workout day already recorded in a date range, with a `dry_run` preview. Marking days skipped clears their types.
 - `update_workout_exercises` — set the same values on every logged exercise in a date range, by name and type, with a `dry_run` preview. Sets, reps, weight, and duration need an exercise name.
 
+### Water
+
+- `log_water` — log a drink in ml (a glass is about 250 ml), today by default, with an optional day, time, and note; returns the day's total, goal, and what is left.
+- `get_water_intake` — one day's drinks, total, goal, and what is left.
+- `get_water_history` — each day's total between two dates (30 days by default), with days logged, days the goal was reached, and the average.
+- `set_water_goal` — the daily goal in ml (500 to 10000; 3000 until set).
+- `delete_water_entry` — delete one drink by its id.
+
 ### Monthly analysis
 
 - `get_food_analysis` - return the Monthly Tracking data: counts, macro totals, verdicts, top contributors, and prefer/avoid lists. Without dates it returns exactly what the tab shows; with dates it analyses that range or month without changing the tab.
@@ -400,6 +419,10 @@ Stores the consumed date and timestamp, optional display-time label, food/supple
 ### `health_measurements`
 
 Stores one metric per row with its value, unit, timestamp, Morning/Night label, and optional notes. Grouped body-measurement submissions therefore remain independently queryable.
+
+### `water_entries` and `water_goal`
+
+`water_entries` stores one row per drink: its amount in ml, its local day, when it was drunk if known, and an optional note. `water_goal` holds the single daily goal in ml.
 
 ### `daily_recommendations`
 

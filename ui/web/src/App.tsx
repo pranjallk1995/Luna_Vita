@@ -8,6 +8,7 @@ import { Brand, ForbiddenPage, SignInPage, UnreachablePage } from "./components/
 import { Measurements } from "./components/Measurements";
 import { Monthly } from "./components/Monthly";
 import { DayHeading, Summary } from "./components/Summary";
+import { Water } from "./components/Water";
 import { Workout } from "./components/Workout";
 import { useSession } from "./http";
 import { remember, remembered } from "./lib";
@@ -96,6 +97,7 @@ function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Setti
               <EnergySplit day={day} />
               <div className="vt-rail">
                 <Workout day={day} />
+                <Water day={day} settings={settings} />
                 <Measurements day={day} settings={settings} />
               </div>
             </aside>

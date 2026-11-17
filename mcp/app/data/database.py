@@ -113,6 +113,25 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
 CREATE INDEX IF NOT EXISTS workout_exercises_date_idx
     ON workout_exercises (workout_date, id);
 
+-- Water drunk, one row per drink, on a local calendar day; drank_at is when, if known.
+CREATE TABLE IF NOT EXISTS water_entries (
+    id BIGSERIAL PRIMARY KEY,
+    drank_on DATE NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date,
+    drank_at TIMESTAMPTZ,
+    amount_ml INTEGER NOT NULL CHECK (amount_ml > 0 AND amount_ml <= 5000),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS water_entries_day_idx
+    ON water_entries (drank_on, id);
+
+CREATE TABLE IF NOT EXISTS water_goal (
+    goal_id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (goal_id = 1),
+    goal_ml INTEGER NOT NULL CHECK (goal_ml >= 500 AND goal_ml <= 10000),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS food_verdicts (
     food_key TEXT PRIMARY KEY CHECK (length(trim(food_key)) > 0),
     food_name TEXT NOT NULL CHECK (length(trim(food_name)) > 0),

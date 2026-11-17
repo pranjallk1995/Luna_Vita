@@ -110,6 +110,34 @@ class HealthMeasurementBatchCreate(BaseModel):
     measurements: list[HealthMeasurementCreate] = Field(min_length=1, max_length=20)
 
 
+class WaterEntryCreate(BaseModel):
+    """One drink of water: how much, on which local day, and when if known."""
+
+    amount_ml: int = Field(gt=0, le=5_000)
+    drank_on: date | None = None
+    drank_at: datetime | None = None
+    notes: str | None = Field(default=None, max_length=500)
+
+    @field_validator("drank_at")
+    @classmethod
+    def localize_time(cls, value: datetime | None) -> datetime | None:
+        return LocalClock.localize(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def day_matches_time(self) -> "WaterEntryCreate":
+        if self.drank_on is None:
+            self.drank_on = self.drank_at.date() if self.drank_at else LocalClock.today()
+        elif self.drank_at is not None and self.drank_at.date() != self.drank_on:
+            raise ValueError("drank_at must fall on drank_on.")
+        return self
+
+
+class WaterGoalUpdate(BaseModel):
+    """The daily water goal, in millilitres."""
+
+    goal_ml: int = Field(ge=500, le=10_000)
+
+
 class WorkoutRecord(BaseModel):
     """Whether the day's workout was done, what it trained, and an optional note."""
 

@@ -17,6 +17,7 @@ from app.data.repositories import (
     MeasurementRepository,
     RecommendationRepository,
     VerdictRepository,
+    WaterRepository,
     WorkoutRepository,
 )
 from app.services.application import (
@@ -28,6 +29,7 @@ from app.services.application import (
     MeasurementService,
     ProfileService,
     ReportService,
+    WaterService,
     WorkoutService,
 )
 from app.services.averages import RunningAverages
@@ -93,6 +95,7 @@ class LunaVitaApplication:
                 WorkoutRepository(self.database), ExerciseRepository(self.database)
             ),
             averages=RunningAverages(food_entries, measurement_entries, recommendations),
+            water=WaterService(WaterRepository(self.database)),
         )
 
     def remove_user(self, user_id: str) -> None:

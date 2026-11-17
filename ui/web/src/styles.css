@@ -825,6 +825,17 @@ a {
 .vt-card .vt-segments { margin-bottom: 0.6rem; padding: 0; border: 0; background: none; }
 .vt-card .vt-pills { margin-bottom: 0.6rem; }
 
+.vt-water-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.45rem; }
+.vt-water-head strong { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vt-water-head small { color: var(--lv-muted); font-size: var(--luna-text-small); font-weight: 400; letter-spacing: 0; }
+.vt-water-head .vt-link-button { font-size: var(--luna-text-small); }
+.vt-water-bar { height: 0.55rem; margin-bottom: 0.65rem; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, 0.1); }
+.vt-water-bar i { display: block; height: 100%; border-radius: inherit; background: var(--lv-text); transition: width 180ms ease; }
+.vt-water-reached i { background: var(--vt-good); }
+.vt-water-custom { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem; margin-bottom: 0.6rem; }
+.vt-water-drinks { margin-bottom: 0; }
+.vt-water-drinks li { grid-template-columns: minmax(0, 1fr) auto; }
+
 .vt-weigh { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.6rem; }
 .vt-weigh > div { position: relative; padding: 0.45rem 0.6rem; border-radius: 0.5rem; background: var(--lv-control); }
 .vt-weigh span { display: block; color: var(--lv-muted); font-size: var(--luna-text-small); }

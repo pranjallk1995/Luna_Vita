@@ -16,6 +16,7 @@ from app.core.models import (
     ExerciseEntry,
     FoodEntryCreate,
     HealthMeasurementCreate,
+    WaterEntryCreate,
 )
 
 from app.core.config import AppConfig
@@ -312,6 +313,60 @@ class MeasurementRepository(Repository):
         return self.affects_row(
             "DELETE FROM health_measurements WHERE id=%s RETURNING id",
             (entry_id,),
+        )
+
+
+class WaterRepository(Repository):
+    """Water drunk, one row per drink, and the single daily goal."""
+
+    def add(self, entry: WaterEntryCreate) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO water_entries (drank_on, drank_at, amount_ml, notes)
+            VALUES (%s, %s, %s, %s)
+            RETURNING *
+            """,
+            (entry.drank_on, entry.drank_at, entry.amount_ml, entry.notes),
+        )
+
+    def list_between(self, start: date, end: date) -> list[Row]:
+        """Drinks on local days ``start``..``end`` inclusive, in the order they were drunk."""
+        return self.fetch_all(
+            """
+            SELECT * FROM water_entries
+            WHERE drank_on BETWEEN %s AND %s
+            ORDER BY drank_on, COALESCE(drank_at, created_at), id
+            """,
+            (start, end),
+        )
+
+    def daily_totals(self, start: date, end: date) -> list[Row]:
+        return self.fetch_all(
+            """
+            SELECT drank_on, SUM(amount_ml)::int AS total_ml, COUNT(*)::int AS drinks
+            FROM water_entries
+            WHERE drank_on BETWEEN %s AND %s
+            GROUP BY drank_on
+            ORDER BY drank_on
+            """,
+            (start, end),
+        )
+
+    def delete(self, entry_id: int) -> bool:
+        return self.affects_row("DELETE FROM water_entries WHERE id=%s RETURNING id", (entry_id,))
+
+    def goal(self) -> int | None:
+        row = self.fetch_one("SELECT goal_ml FROM water_goal WHERE goal_id=1")
+        return int(row["goal_ml"]) if row else None
+
+    def set_goal(self, goal_ml: int) -> Row:
+        return self.fetch_one(
+            """
+            INSERT INTO water_goal (goal_id, goal_ml) VALUES (1, %s)
+            ON CONFLICT (goal_id) DO UPDATE SET goal_ml=EXCLUDED.goal_ml, updated_at=NOW()
+            RETURNING goal_ml, updated_at
+            """,
+            (goal_ml,),
         )
 
 

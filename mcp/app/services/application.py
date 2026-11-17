@@ -34,6 +34,7 @@ from app.core.models import (
     FoodVerdictUpsert,
     HealthMeasurementCreate,
     MeasurementBulkUpdate,
+    WaterEntryCreate,
     WorkoutBatch,
     WorkoutBulkUpdate,
     WorkoutRecord,
@@ -50,6 +51,7 @@ from app.data.repositories import (
     RecommendationRepository,
     Row,
     VerdictRepository,
+    WaterRepository,
     WorkoutRepository,
 )
 from app.integrations.visia import VisiaImageCatalog, VisiaUnavailableError
@@ -843,6 +845,72 @@ class AnalysisService:
         return True
 
 
+class WaterService:
+    """Water drunk through the day, against a daily goal."""
+
+    DEFAULT_GOAL_ML = 3_000
+    DEFAULT_HISTORY_DAYS = 30
+
+    def __init__(self, water: WaterRepository) -> None:
+        self.water = water
+
+    def goal(self) -> int:
+        stored = self.water.goal()
+        return self.DEFAULT_GOAL_ML if stored is None else stored
+
+    def record(self, entry: WaterEntryCreate) -> Row:
+        """Save a drink and return it with its day's progress; one logged today without a time is now."""
+        if entry.drank_at is None and entry.drank_on == LocalClock.today():
+            entry = entry.model_copy(update={"drank_at": LocalClock.now()})
+        saved = self.water.add(entry)
+        return {"entry": saved, **self.day(entry.drank_on)}
+
+    def day(self, day: date) -> Row:
+        """A day's drinks, total, goal, and how much is left."""
+        entries = self.water.list_between(day, day)
+        total = sum(int(entry["amount_ml"]) for entry in entries)
+        goal = self.goal()
+        return {
+            "date": day.isoformat(),
+            "goal_ml": goal,
+            "total_ml": total,
+            "remaining_ml": max(goal - total, 0),
+            "percent": round(100 * total / goal),
+            "entries": entries,
+        }
+
+    def history(self, start: date | None = None, end: date | None = None) -> Row:
+        """Each day's total between two local days (inclusive; defaults to the last 30 days)."""
+        end = end or LocalClock.today()
+        start = start or end - timedelta(days=self.DEFAULT_HISTORY_DAYS - 1)
+        if end < start:
+            raise ValueError("end must be on or after start")
+        goal = self.goal()
+        totals = {row["drank_on"]: row for row in self.water.daily_totals(start, end)}
+        days = []
+        for offset in range((end - start).days + 1):
+            day = (start + timedelta(days=offset)).isoformat()
+            row = totals.get(day, {"total_ml": 0, "drinks": 0})
+            days.append({"date": day, "total_ml": row["total_ml"], "drinks": row["drinks"],
+                         "reached": row["total_ml"] >= goal})
+        logged = [day for day in days if day["drinks"]]
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "goal_ml": goal,
+            "days_logged": len(logged),
+            "days_reached": sum(day["reached"] for day in days),
+            "average_ml": round(sum(day["total_ml"] for day in logged) / len(logged)) if logged else 0,
+            "days": days,
+        }
+
+    def set_goal(self, goal_ml: int) -> Row:
+        return self.water.set_goal(goal_ml)
+
+    def remove(self, entry_id: int) -> bool:
+        return self.water.delete(entry_id)
+
+
 class LunaVitaService:
     """Facade grouping every Luna Vita use case for the transport adapters."""
 
@@ -857,6 +925,7 @@ class LunaVitaService:
         analysis: AnalysisService,
         workouts: WorkoutService,
         averages: RunningAverages,
+        water: WaterService,
     ) -> None:
         self.food = food
         self.measurements = measurements
@@ -867,3 +936,4 @@ class LunaVitaService:
         self.analysis = analysis
         self.workouts = workouts
         self.averages = averages
+        self.water = water

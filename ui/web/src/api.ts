@@ -62,6 +62,10 @@ export type Exercise = {
   notes?: string | null;
 };
 
+export type WaterEntry = { id: number; drank_on: string; drank_at?: string | null; amount_ml: number; notes?: string | null };
+
+export type WaterDay = { date: string; goal_ml: number; total_ml: number; remaining_ml: number; percent: number; entries: WaterEntry[] };
+
 export type Totals = Record<string, number>;
 
 export type AnalysisFood = {
@@ -126,6 +130,9 @@ export const useWorkouts = (start: string, end: string) =>
 export const useExercises = (day: string) =>
   useQuery({ queryKey: ["exercises", day], queryFn: () => request<Exercise[]>(`/api/workouts/exercises?${range(day, day)}`) });
 
+export const useWater = (day: string) =>
+  useQuery({ queryKey: ["water", day], queryFn: () => request<WaterDay>(`/api/water/${day}`) });
+
 export const vita = {
   createFood: (payload: unknown) => post<FoodEntry>("/api/food", payload),
   updateFood: (id: number, payload: unknown) => put(`/api/food/${id}`, payload),
@@ -140,6 +147,10 @@ export const vita = {
   addExercises: (exercises: unknown[]) => post("/api/workouts/exercises", { exercises }),
   updateExercise: (id: number, payload: unknown) => put(`/api/workouts/exercises/${id}`, payload),
   deleteExercise: (id: number) => remove(`/api/workouts/exercises/${id}`),
+  addWater: (payload: { amount_ml: number; drank_on: string; drank_at?: string | null; notes?: string | null }) =>
+    post("/api/water", payload),
+  deleteWater: (id: number) => remove(`/api/water/${id}`),
+  setWaterGoal: (goal_ml: number) => put("/api/water/goal", { goal_ml }),
 };
 
 /** Run a change, then refresh everything it may affect; a refusal becomes a toast, and the result says which. */

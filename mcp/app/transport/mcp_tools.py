@@ -26,6 +26,8 @@ from app.core.models import (
     FoodVerdictUpsert,
     HealthMeasurementCreate,
     MeasurementBulkUpdate,
+    WaterEntryCreate,
+    WaterGoalUpdate,
     WorkoutBatch,
     WorkoutBulkUpdate,
     WorkoutRecord,
@@ -137,6 +139,7 @@ class LunaVitaMCPTools:
         self._register_profile_tools()
         self._register_analysis_tools()
         self._register_workout_tools()
+        self._register_water_tools()
         self._register_average_tools()
 
     @staticmethod
@@ -897,6 +900,46 @@ class LunaVitaMCPTools:
             end = optional_date(end_date) or LocalClock.today()
             start = optional_date(start_date) or end - timedelta(days=29)
             return averages.series(window_days, start, end)
+
+    def _register_water_tools(self) -> None:
+        server, water = self.server, self.service.water
+        optional_date = self.optional_date
+
+        @server.tool()
+        def log_water(
+            amount_ml: int, day: str | None = None, drank_at: str | None = None, notes: str | None = None
+        ) -> dict[str, Any]:
+            """Log water the user drank, in millilitres: a glass is about 250 ml, a bottle 500 to 1000 ml.
+
+            day is YYYY-MM-DD (default today); drank_at is an ISO time on that day when known (default
+            now for today). Returns the saved entry with the day's total, goal, and what is left.
+            """
+            return water.record(WaterEntryCreate(
+                amount_ml=amount_ml, drank_on=optional_date(day), drank_at=drank_at, notes=notes
+            ))
+
+        @server.tool()
+        def get_water_intake(day: str | None = None) -> dict[str, Any]:
+            """One day's water: every drink, the total in ml, the daily goal, and what is left (default today)."""
+            return water.day(optional_date(day) or LocalClock.today())
+
+        @server.tool()
+        def get_water_history(start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+            """Each day's water total between two YYYY-MM-DD dates (inclusive; defaults to the last 30 days),
+            with the goal, how many days reached it, and the average on days that were logged."""
+            return water.history(optional_date(start_date), optional_date(end_date))
+
+        @server.tool()
+        def set_water_goal(goal_ml: int) -> dict[str, Any]:
+            """Set the daily water goal in millilitres (500 to 10000; 3000 until set)."""
+            return water.set_goal(WaterGoalUpdate(goal_ml=goal_ml).goal_ml)
+
+        @server.tool()
+        def delete_water_entry(entry_id: int) -> dict[str, Any]:
+            """Delete one logged drink by its id, from get_water_intake."""
+            if not water.remove(entry_id):
+                raise ValueError(f"No water entry has id {entry_id}.")
+            return {"deleted": entry_id}
 
     def _register_workout_tools(self) -> None:
         server, tracker = self.server, self.service.workouts

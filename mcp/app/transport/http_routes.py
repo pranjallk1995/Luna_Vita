@@ -20,6 +20,8 @@ from app.core.models import (
     FoodEntryCreate,
     HealthMeasurementBatchCreate,
     HealthMeasurementCreate,
+    WaterEntryCreate,
+    WaterGoalUpdate,
     WorkoutBatch,
     WorkoutRecord,
 )
@@ -152,6 +154,7 @@ class LunaVitaHTTPRoutes:
         self._register_measurements()
         self._register_days()
         self._register_workouts()
+        self._register_water()
 
     async def health(self, request: Request) -> dict:
         return {"status": "ok", "service": "luna-vita"}
@@ -266,6 +269,30 @@ class LunaVitaHTTPRoutes:
         self.route("GET", "/api/days/{day}", read_day)
         self.route("PUT", "/api/days/{day}", save_day)
         self.route("GET", "/api/reports/daily/{day}", daily_report)
+
+    def _register_water(self) -> None:
+        water = self.service.water
+
+        async def read_day(request: Request):
+            return water.day(self.path_day(request))
+
+        async def history(request: Request):
+            return water.history(self.query_date(request, "start"), self.query_date(request, "end"))
+
+        async def create(request: Request):
+            return water.record(await self.payload(request, WaterEntryCreate))
+
+        async def delete(request: Request):
+            self.found(water.remove(self.path_id(request)), "Water entry not found")
+
+        async def set_goal(request: Request):
+            return water.set_goal((await self.payload(request, WaterGoalUpdate)).goal_ml)
+
+        self.route("GET", "/api/water", history)
+        self.route("POST", "/api/water", create, 201)
+        self.route("PUT", "/api/water/goal", set_goal)
+        self.route("GET", "/api/water/{day}", read_day)
+        self.route("DELETE", "/api/water/{entry_id}", delete, NO_CONTENT)
 
     def _register_workouts(self) -> None:
         workouts = self.service.workouts

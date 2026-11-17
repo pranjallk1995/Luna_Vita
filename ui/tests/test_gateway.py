@@ -88,12 +88,15 @@ class ProxyTests(GatewayTestCase):
             ("GET", "/api/workouts/exercises?start=2026-01-01&end=2026-01-01"),
             ("POST", "/api/workouts/exercises"),
             ("PUT", "/api/workouts/exercises/9"),
+            ("GET", "/api/water/2026-01-01"),
+            ("POST", "/api/water"),
+            ("PUT", "/api/water/goal"),
         ):
             self.assertEqual(self.client.request(method, path).status_code, 200, path)
 
     def test_deleting_passes_the_empty_answer_through(self):
         self.sign_in()
-        for path in ("/api/food/3", "/api/measurements/4", "/api/workouts/2026-01-01", "/api/workouts/exercises/9", "/api/analysis/range"):
+        for path in ("/api/food/3", "/api/measurements/4", "/api/workouts/2026-01-01", "/api/workouts/exercises/9", "/api/analysis/range", "/api/water/7"):
             self.assertEqual(self.client.delete(path).status_code, 204, path)
 
     def test_query_reaches_the_backend(self):
@@ -115,6 +118,8 @@ class ProxyTests(GatewayTestCase):
             ("PUT", "/api/measurements/3"),
             ("GET", "/api/workouts/summary"),
             ("PUT", "/api/workouts/not-a-day"),
+            ("GET", "/api/water"),
+            ("GET", "/api/water/not-a-day"),
         ):
             self.assertEqual(self.client.request(method, path).status_code, 404, path)
         self.assertEqual(self.backend_requests, [])

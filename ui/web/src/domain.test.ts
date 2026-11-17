@@ -4,6 +4,7 @@ import { average, byDay, fatRange, formatMetric, measurementPayloads, measuremen
 import { addDays, combine, daysBetween, dayLabel, moment } from "./clock";
 import { byTime, copyOf, displayTime, entryErrors, foodErrors, numberError, parseClock, payloadOf, recentFoods, resolveTime, textError, type FoodDraft } from "./food";
 import { NUTRIENTS, energySplit, floorStatus, limitStatus, macroPercentages, percentage, standing } from "./nutrition";
+import { drinkAmount, drinkTime, formatMl, goalAmount, progressOf } from "./water";
 import { calendarSpan, exerciseErrors, exercisePayload, monthWeeks, monthsBetween, statusOf } from "./workouts";
 
 const IST = { time_zone: "Asia/Kolkata", utc_offset: "+05:30" };
@@ -261,3 +262,37 @@ describe("food actions", () => {
 function draftRow(): FoodDraft {
   return { id: 1, remove: false, time: "7:30 PM", food_name: "Apple", quantity: "1", calories: "95", protein_g: "0.5", carbs_g: "25", fat_g: "0.3", natural_sugar_g: "19", added_sugar_g: "0", notes: "" };
 }
+
+describe("water", () => {
+  const zone = { time_zone: "Asia/Kolkata", utc_offset: "+05:30" };
+
+  it("shows amounts in ml, and in litres from a litre up when asked", () => {
+    expect(formatMl(250)).toBe("250 ml");
+    expect(formatMl(1250)).toBe("1,250 ml");
+    expect(formatMl(1250, true)).toBe("1.25 L");
+    expect(formatMl(3000, true)).toBe("3 L");
+    expect(formatMl(750, true)).toBe("750 ml");
+  });
+
+  it("fills the bar up to the goal and says when it is reached", () => {
+    expect(progressOf(750, 3000)).toEqual({ width: 25, reached: false });
+    expect(progressOf(3500, 3000)).toEqual({ width: 100, reached: true });
+    expect(progressOf(100, 0)).toEqual({ width: 0, reached: false });
+  });
+
+  it("accepts whole millilitres within limits", () => {
+    expect(drinkAmount("330")).toBe(330);
+    expect(drinkAmount("")).toMatch(/whole millilitres/);
+    expect(drinkAmount("2.5")).toMatch(/whole millilitres/);
+    expect(drinkAmount("-1")).toMatch(/whole millilitres/);
+    expect(drinkAmount("6000")).toMatch(/at most/);
+    expect(goalAmount("2500")).toBe(2500);
+    expect(goalAmount("100")).toMatch(/between/);
+  });
+
+  it("gives a drink's time in the app's zone, or nothing for an untimed one", () => {
+    expect(drinkTime("2026-11-16T03:35:00+00:00", zone)).toBe("9:05 AM");
+    expect(drinkTime("2026-11-16T21:10:00+05:30", zone)).toBe("9:10 PM");
+    expect(drinkTime(null, zone)).toBe("");
+  });
+});

@@ -49,6 +49,10 @@ PROXIED_ROUTES = tuple(
         ("POST", r"/api/workouts/exercises"),
         ("PUT", rf"/api/workouts/exercises/{ID}"),
         ("DELETE", rf"/api/workouts/exercises/{ID}"),
+        ("GET", rf"/api/water/{DAY}"),
+        ("POST", r"/api/water"),
+        ("PUT", r"/api/water/goal"),
+        ("DELETE", rf"/api/water/{ID}"),
         ("GET", rf"/api/reports/daily/{DAY}"),
     )
 )
