@@ -1,7 +1,7 @@
 services:
   mcp:
     build: ./mcp
-    image: ghcr.io/pranjallk1995/luna-vita-mcp:${LUNA_IMAGE_TAG:-v2.0.0}
+    image: ghcr.io/pranjallk1995/luna-vita-mcp:${LUNA_IMAGE_TAG:-v2.1.0}
     working_dir: /workspace/mcp
     restart: unless-stopped
     environment:
@@ -12,6 +12,9 @@ services:
       LUNAVISIA_API_URL: ${LUNAVISIA_API_URL:-http://luna-visia-mcp:8000}
       LUNAVISIA_COMPANION_TOKEN: ${LUNAVISIA_COMPANION_TOKEN:-lunavisia-companion-dev-token-for-localhost-only}
       LUNAVITA_PLACEHOLDER_IMAGE_ID: ${LUNAVITA_PLACEHOLDER_IMAGE_ID:-858eafb0-73ad-4717-8095-8cef43c62d3c}
+      # Health reports: lab report PDFs stored and read by Luna Lexia, read here with its private token.
+      LUNALEXIA_API_URL: ${LUNALEXIA_API_URL:-http://luna-lexia-mcp:8000}
+      LUNALEXIA_API_TOKEN: ${LUNALEXIA_API_TOKEN:-lunalexia-dev-token-for-localhost-only}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:18006}
       UI_PUBLIC_URL: ${UI_PUBLIC_URL:-http://localhost:18506}
       TZ: Asia/Kolkata
@@ -40,7 +43,7 @@ services:
 
   ui:
     build: ./ui
-    image: ghcr.io/pranjallk1995/luna-vita-ui:${LUNA_IMAGE_TAG:-v2.0.0}
+    image: ghcr.io/pranjallk1995/luna-vita-ui:${LUNA_IMAGE_TAG:-v2.1.0}
     working_dir: /workspace/ui
     restart: unless-stopped
     environment:
@@ -49,6 +52,8 @@ services:
       LUNA_SSO_INTERNAL_URL: ${LUNA_SSO_INTERNAL_URL:-http://luna-sentia-auth:8000}
       LUNAVITA_API_URL: http://luna-vita-mcp:8000
       LUNAVITA_ALLOWED_EMAILS: ${LUNAVITA_ALLOWED_EMAILS:-}
+      # Where the Health reports page links to add a report.
+      LUNALEXIA_UI_URL: ${LUNALEXIA_UI_URL:-http://localhost:18501}
       TZ: Asia/Kolkata
     ports:
       - "127.0.0.1:18506:8501"
