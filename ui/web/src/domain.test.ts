@@ -4,7 +4,7 @@ import { average, byDay, fatRange, formatMetric, measurementPayloads, measuremen
 import { addDays, combine, daysBetween, dayLabel, moment } from "./clock";
 import { byTime, copyOf, displayTime, entryErrors, foodErrors, numberError, parseClock, payloadOf, recentFoods, resolveTime, textError, type FoodDraft } from "./food";
 import { NUTRIENTS, energySplit, floorStatus, limitStatus, macroPercentages, percentage, standing } from "./nutrition";
-import { byPanel, change, isOutOfRange, matching, rangeText, reportDay, resultText, seriesOf, type LabResult } from "./health";
+import { byPanel, change, countsOf, isOutOfRange, matching, rangeText, reportDay, resultText, seriesOf, reportsIn, snapshot, trendOf, windowed, within, type HealthReport, type LabResult } from "./health";
 import { drinkAmount, drinkTime, formatMl, goalAmount, progressOf } from "./water";
 import { calendarSpan, exerciseErrors, exercisePayload, monthWeeks, monthsBetween, statusOf } from "./workouts";
 
@@ -331,5 +331,47 @@ describe("health reports", () => {
     expect(seriesOf(ldl, "2026-04-18").map((point) => point.value)).toEqual([170, 153]);
     expect(reportDay("2026-04-18")).toBe("18 Apr 2026");
     expect(reportDay(null)).toBe("Undated");
+  });
+});
+
+describe("health report snapshots", () => {
+  const lab = (test_name: string, value: number, history: { date: string; value: number }[] = []): LabResult =>
+    ({ test_name, value, unit: "mg/dL", status: "normal", history });
+  const report = (document_id: string, date: string, results: LabResult[]): HealthReport =>
+    ({ document_id, name: document_id, date, collection_date: date, pending_tests: [], review_flags: [], results, counts: countsOf(results) });
+  const october = report("oct", "2025-10-04", [lab("Cholesterol - LDL", 170), lab("Cholesterol- VLDL", 21)]);
+  const april = report("apr", "2026-04-18", [lab("Cholesterol - LDL", 153, [{ date: "2025-10-04", value: 170 }]), lab("HbA1c", 5.1)]);
+  const reports = [april, october];
+
+  it("shows every test detected up to the chosen report, older ones marked", () => {
+    const rows = snapshot(reports, april);
+    expect(rows.map((row) => row.test_name)).toEqual(["Cholesterol - LDL", "HbA1c", "Cholesterol- VLDL"]);
+    expect(rows[2].from_report).toEqual({ document_id: "oct", date: "2025-10-04" });
+    expect(rows[0].from_report).toBeUndefined();
+  });
+
+  it("leaves out reports after the chosen one", () => {
+    expect(snapshot(reports, october).map((row) => row.test_name)).toEqual(["Cholesterol - LDL", "Cholesterol- VLDL"]);
+  });
+
+  it("ends a trend at the chosen report, within the window", () => {
+    const [ldl, , vldl] = snapshot(reports, april);
+    expect(trendOf(ldl, april, "5").map((point) => point.value)).toEqual([170, 153]);
+    expect(trendOf(vldl, april, "5")).toEqual([{ date: "2025-10-04", value: 21, unit: "mg/dL", status: "normal" }]);
+    const points = Array.from({ length: 8 }, (_, index) => ({ date: `2020-0${index + 1}-01`, value: index }));
+    expect(windowed(points, "5").map((point) => point.value)).toEqual([3, 4, 5, 6, 7]);
+    expect(windowed(points, "all")).toHaveLength(8);
+  });
+
+  it("keeps only reports and values collected in a date range", () => {
+    const range = { from: "2026-01-01", to: "2026-12-31" };
+    expect(reportsIn(reports, "range", range)).toEqual([april]);
+    expect(reportsIn(reports, "5", range)).toEqual(reports);
+    expect(within(null, {})).toBe(false);
+    const [ldl] = snapshot(reportsIn(reports, "range", range), april);
+    expect(trendOf(ldl, april, "range", range).map((point) => point.value)).toEqual([153]);
+    expect(trendOf(ldl, april, "range", { to: "2026-04-18" }).map((point) => point.value)).toEqual([170, 153]);
+    // A range leaves out the older report's tests too.
+    expect(snapshot(reportsIn(reports, "range", range), april).map((row) => row.test_name)).toEqual(["Cholesterol - LDL", "HbA1c"]);
   });
 });

@@ -16,6 +16,8 @@ export type LabResult = {
   method?: string | null;
   status: ResultStatus;
   history: HistoryPoint[];
+  /** Set on a snapshot row whose latest value comes from an older report than the one chosen. */
+  from_report?: { document_id: string; date?: string | null } | null;
 };
 
 export type HealthReport = {
@@ -101,6 +103,71 @@ export function change(result: LabResult): { previous: HistoryPoint; delta: numb
 /** Every dated value of a result, its own report's last, for a small trend line. */
 export const seriesOf = (result: LabResult, date?: string | null): HistoryPoint[] =>
   result.value != null && date ? [...result.history, { date, value: result.value, unit: result.unit, status: result.status }] : result.history;
+
+/** The trend windows offered: the last few reports, every report, or a range of collection dates. */
+export const TREND_WINDOWS = ["3", "5", "10", "all", "range"] as const;
+export type TrendWindow = (typeof TREND_WINDOWS)[number];
+export const DEFAULT_TREND_WINDOW: TrendWindow = "5";
+
+/** Collection dates from and to, as ISO days; either end may be open. */
+export type DateRange = { from?: string | null; to?: string | null };
+
+/** Whether an ISO day lies in the range; an undated report lies in no range. */
+export const within = (day: string | null | undefined, range: DateRange): boolean =>
+  !!day && (!range.from || day >= range.from) && (!range.to || day <= range.to);
+
+/** The values of a series that fit the window: the last few, or those dated in the range. */
+export const windowed = (points: HistoryPoint[], window: TrendWindow, range: DateRange = {}): HistoryPoint[] =>
+  window === "all" ? points : window === "range" ? points.filter((point) => within(point.date, range)) : points.slice(-Number(window));
+
+/** The reports the view covers: those collected in the range, or all of them. */
+export const reportsIn = (reports: HealthReport[], window: TrendWindow, range: DateRange): HealthReport[] =>
+  window === "range" ? reports.filter((report) => within(report.date, range)) : reports;
+
+/** A test name without case, spacing, punctuation, or a plural "s"; matches Luna Vita's and Lexia's own merging. */
+export const testKey = (name?: string | null): string => (name ?? "").toLowerCase().replace(/[^0-9a-z]+/g, "").replace(/s$/, "");
+
+/** The day a report stands for: its sample collection, else its report date. */
+export const reportDate = (report: HealthReport): string | null | undefined => report.collection_date || report.date;
+
+/**
+ * Every test detected up to the chosen report, each at its latest value as of then.
+ *
+ * The chosen report's own results come first, in its order; a test it does not have
+ * follows with its value from the newest older report that has it, marked with that
+ * report. Reports dated after the chosen one are left out, so trends end at it.
+ */
+export function snapshot(reports: HealthReport[], chosen: HealthReport): LabResult[] {
+  const day = chosen.date ?? "";
+  const older = reports
+    .filter((report) => report !== chosen && (report.date ?? "") <= day)
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const rows = [...chosen.results];
+  const seen = new Set(rows.map((result) => testKey(result.test_name)));
+  for (const report of older) {
+    for (const result of report.results) {
+      const key = testKey(result.test_name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ ...result, from_report: { document_id: report.document_id, date: report.date } });
+    }
+  }
+  return rows;
+}
+
+/** A result's series as of the chosen report: its value on its own report's day, within the window. */
+export const trendOf = (result: LabResult, chosen: HealthReport, window: TrendWindow, range: DateRange = {}): HistoryPoint[] =>
+  windowed(seriesOf(result, result.from_report ? result.from_report.date : chosen.date), window, range);
+
+/** How many results of each status a list holds. */
+export function countsOf(results: LabResult[]): HealthReport["counts"] {
+  const counts = { tests: results.length, low: 0, high: 0, abnormal: 0, normal: 0, unknown: 0, out_of_range: 0 };
+  for (const result of results) {
+    counts[result.status] += 1;
+    if (isOutOfRange(result.status)) counts.out_of_range += 1;
+  }
+  return counts;
+}
 
 /** "18 Apr 2026" from an ISO day. */
 export function reportDay(day?: string | null): string {

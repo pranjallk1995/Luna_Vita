@@ -3,22 +3,58 @@ import { useMemo, useState } from "react";
 
 import { healthReportFile, useHealthReports, type Settings } from "../api";
 import {
+  DEFAULT_TREND_WINDOW,
   STATUS_LABELS,
+  TREND_WINDOWS,
   byPanel,
   change,
+  countsOf,
   isOutOfRange,
   matching,
   rangeText,
+  reportDate,
   reportDay,
+  reportsIn,
   resultText,
-  seriesOf,
+  snapshot,
+  trendOf,
   type HealthReport,
   type HistoryPoint,
+  type DateRange,
   type LabResult,
+  type TrendWindow,
 } from "../health";
 import { ApiError } from "../http";
+import { remember, remembered } from "../lib";
 import { Dialog } from "./Dialog";
+import { PdfPages } from "./PdfPages";
 import { SectionHead } from "./shared";
+
+const TREND_WINDOW_KEY = "luna-vita.health-trend-window";
+const RANGE_KEY = "luna-vita.health-date-range";
+const WINDOW_LABELS: Record<TrendWindow, string> = {
+  "3": "Last 3 reports", "5": "Last 5 reports", "10": "Last 10 reports", all: "All reports", range: "Date range",
+};
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The remembered date range, when it is two valid days. */
+function rememberedRange(): DateRange {
+  try {
+    const [from, to] = (localStorage.getItem(RANGE_KEY) ?? "").split("/");
+    return { from: ISO_DAY.test(from ?? "") ? from : null, to: ISO_DAY.test(to ?? "") ? to : null };
+  } catch {
+    return {};
+  }
+}
+
+/** What the trends cover, in words, for the caption. */
+function periodText(window: TrendWindow, range: DateRange): string {
+  if (window !== "range") return `${WINDOW_LABELS[window].toLowerCase()} up to this one`;
+  if (range.from && range.to) return `values collected ${reportDay(range.from)} to ${reportDay(range.to)}`;
+  if (range.from) return `values collected from ${reportDay(range.from)}`;
+  if (range.to) return `values collected up to ${reportDay(range.to)}`;
+  return "every value";
+}
 
 const FILTERS = [
   ["all", "All results"],
@@ -76,8 +112,7 @@ function Change({ result }: { result: LabResult }) {
   );
 }
 
-function TrendDialog({ result, report, onClose }: { result: LabResult; report: HealthReport; onClose: () => void }) {
-  const points = seriesOf(result, report.date);
+function TrendDialog({ result, points, onClose }: { result: LabResult; points: HistoryPoint[]; onClose: () => void }) {
   return (
     <Dialog title={result.test_name} size="large" onClose={onClose}>
       <div className="vt-lab-trend-head">
@@ -88,9 +123,10 @@ function TrendDialog({ result, report, onClose }: { result: LabResult; report: H
       {points.length > 1 ? (
         <TrendLine points={points} low={result.reference_low} high={result.reference_high} large />
       ) : (
-        <p className="vt-lab-muted">This is the only report with this test so far; its trend appears once another report has it.</p>
+        <p className="vt-lab-muted">Only one value of this test falls in the trend window; its trend appears once another report has it.</p>
       )}
-      <p className="vt-caption">The shaded band is the reference interval of this report. Earlier values come from older reports in Luna Lexia, or from the trends column a report prints.</p>
+      {result.from_report && <p className="vt-caption">The chosen report does not have this test; its latest value is from the report of {reportDay(result.from_report.date)}.</p>}
+      <p className="vt-caption">The shaded band is the reference interval of the latest value's report. Earlier values come from older reports in Luna Lexia, or from the trends column a report prints.</p>
     </Dialog>
   );
 }
@@ -99,7 +135,7 @@ function PdfDialog({ report, onClose }: { report: HealthReport; onClose: () => v
   const source = healthReportFile(report.document_id);
   return (
     <Dialog title={report.title || report.name} size="large" onClose={onClose}>
-      <iframe className="vt-lab-pdf" src={source} title={`${report.title || report.name} (PDF)`} />
+      <PdfPages source={source} title={`${report.title || report.name} (PDF)`} />
       <a className="lv-button vt-lab-open" href={source} target="_blank" rel="noopener">
         <ExternalLink size={15} />
         Open in a new tab
@@ -108,12 +144,15 @@ function PdfDialog({ report, onClose }: { report: HealthReport; onClose: () => v
   );
 }
 
-function ReportDetails({ report }: { report: HealthReport }) {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>(report.counts.out_of_range ? "flagged" : "all");
+function ReportDetails({ report, reports, window, range }: { report: HealthReport; reports: HealthReport[]; window: TrendWindow; range: DateRange }) {
+  const rows = useMemo(() => snapshot(reports, report), [reports, report]);
+  const counts = useMemo(() => countsOf(rows), [rows]);
+  const earlier = rows.filter((result) => result.from_report).length;
+  const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>(counts.out_of_range ? "flagged" : "all");
   const [query, setQuery] = useState("");
   const [trend, setTrend] = useState<LabResult | null>(null);
   const [pdf, setPdf] = useState(false);
-  const shown = useMemo(() => byPanel(matching(report.results, query, filter === "flagged"), true), [report, query, filter]);
+  const shown = useMemo(() => byPanel(matching(rows, query, filter === "flagged"), true), [rows, query, filter]);
   const facts = [
     report.lab_name,
     report.collection_date && `Collected ${reportDay(report.collection_date)}`,
@@ -141,12 +180,12 @@ function ReportDetails({ report }: { report: HealthReport }) {
         <div className="vt-lab-counts">
           {(
             [
-              ["Tests", report.counts.tests, ""],
-              ["In range", report.counts.normal, "normal"],
-              ["Low", report.counts.low, "low"],
-              ["High", report.counts.high, "high"],
-              ["Abnormal", report.counts.abnormal, "abnormal"],
-              ["No range", report.counts.unknown, "unknown"],
+              ["Tests", counts.tests, ""],
+              ["In range", counts.normal, "normal"],
+              ["Low", counts.low, "low"],
+              ["High", counts.high, "high"],
+              ["Abnormal", counts.abnormal, "abnormal"],
+              ["No range", counts.unknown, "unknown"],
             ] as const
           )
             .filter(([label, count]) => count > 0 || label === "Tests" || label === "In range")
@@ -167,6 +206,11 @@ function ReportDetails({ report }: { report: HealthReport }) {
               </ul>
             </div>
           </div>
+        )}
+        {earlier > 0 && (
+          <p className="vt-caption">
+            {earlier === 1 ? "1 test is" : `${earlier} tests are`} not in this report; {earlier === 1 ? "its" : "their"} latest value from an earlier report is shown, dated beside it.
+          </p>
         )}
         {report.pending_tests.length > 0 && <p className="vt-caption">Pending: {report.pending_tests.join(", ")}</p>}
       </section>
@@ -217,11 +261,14 @@ function ReportDetails({ report }: { report: HealthReport }) {
                             {result.test_name}
                           </button>
                         </td>
-                        <td className="lv-number">{resultText(result)}</td>
+                        <td className="lv-number">
+                          {resultText(result)}
+                          {result.from_report && <small className="vt-lab-from">{reportDay(result.from_report.date)}</small>}
+                        </td>
                         <td className="vt-lab-range">{rangeText(result)}</td>
                         <td><StatusBadge status={result.status} /></td>
                         <td><Change result={result} /></td>
-                        <td><TrendLine points={seriesOf(result, report.date)} low={result.reference_low} high={result.reference_high} /></td>
+                        <td><TrendLine points={trendOf(result, report, window, range)} low={result.reference_low} high={result.reference_high} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -232,10 +279,10 @@ function ReportDetails({ report }: { report: HealthReport }) {
         </div>
       )}
       <p className="vt-caption">
-        Read by Luna Lexia from the report's PDF. Status compares each result with the interval this report prints; it is
+        Read by Luna Lexia from the reports' PDFs. Trends show {periodText(window, range)}. Status compares each result with the interval this report prints; it is
         not a diagnosis, so discuss results with your doctor.
       </p>
-      {trend && <TrendDialog result={trend} report={report} onClose={() => setTrend(null)} />}
+      {trend && <TrendDialog result={trend} points={trendOf(trend, report, window, range)} onClose={() => setTrend(null)} />}
       {pdf && <PdfDialog report={report} onClose={() => setPdf(false)} />}
     </>
   );
@@ -245,8 +292,22 @@ function ReportDetails({ report }: { report: HealthReport }) {
 export function HealthReports({ settings }: { settings: Settings }) {
   const { data, error, isPending, refetch } = useHealthReports();
   const [chosen, setChosen] = useState<string | null>(null);
-  const reports = data?.reports ?? [];
+  const [window, setWindow] = useState<TrendWindow>(() => remembered(TREND_WINDOW_KEY, TREND_WINDOWS, DEFAULT_TREND_WINDOW));
+  const [range, setRange] = useState<DateRange>(rememberedRange);
+  const all = data?.reports ?? [];
+  const reports = useMemo(() => reportsIn(all, window, range), [all, window, range]);
   const report = reports.find((candidate) => candidate.document_id === chosen) ?? reports[0];
+  const dates = all.map((candidate) => candidate.date).filter((day): day is string => !!day).sort();
+  const chooseWindow = (value: TrendWindow) => {
+    setWindow(value);
+    remember(TREND_WINDOW_KEY, value);
+    // A first date range spans every dated report.
+    if (value === "range" && !range.from && !range.to) chooseRange({ from: dates[0] ?? null, to: dates.at(-1) ?? null });
+  };
+  const chooseRange = (next: DateRange) => {
+    setRange(next);
+    remember(RANGE_KEY, `${next.from ?? ""}/${next.to ?? ""}`);
+  };
   const lexia = settings.lexia_ui_url;
 
   return (
@@ -269,7 +330,7 @@ export function HealthReports({ settings }: { settings: Settings }) {
         </div>
       ) : isPending ? (
         <p className="vt-empty-note">Reading your reports from Luna Lexia…</p>
-      ) : reports.length === 0 ? (
+      ) : all.length === 0 ? (
         <div className="vt-empty">
           <FlaskConical size={28} />
           <strong>No health reports yet</strong>
@@ -277,19 +338,46 @@ export function HealthReports({ settings }: { settings: Settings }) {
         </div>
       ) : (
         <>
-          {reports.length > 1 && (
-            <div className="vt-chips vt-lab-picker" role="group" aria-label="Report">
-              {reports.map((candidate) => (
-                <button className="vt-chip" type="button" key={candidate.document_id} aria-pressed={candidate === report}
-                  onClick={() => setChosen(candidate.document_id)}>
-                  {reportDay(candidate.date)}
-                  {candidate.lab_name ? ` · ${candidate.lab_name}` : ""}
-                  {candidate.counts.out_of_range > 0 ? ` · ${candidate.counts.out_of_range} out of range` : ""}
-                </button>
-              ))}
-            </div>
+          <div className="vt-card vt-lab-period">
+            <label className="vt-lab-picker">
+              <span>
+                {window === "range" ? `${reports.length} of ${all.length}` : reports.length} {(window === "range" ? all.length : reports.length) === 1 ? "report" : "reports"} detected
+                {window === "range" ? " in this period" : ""} · collected on
+              </span>
+              <select className="lv-select" value={report?.document_id ?? ""} disabled={!reports.length}
+                onChange={(event) => setChosen(event.target.value)} aria-label="Report, by collection date">
+                {reports.length === 0 && <option value="">No report</option>}
+                {reports.map((candidate) => (
+                  <option key={candidate.document_id} value={candidate.document_id}>{reportDay(reportDate(candidate))}</option>
+                ))}
+              </select>
+            </label>
+            <label className="vt-lab-window">
+              <span>Trend</span>
+              <select className="lv-select" value={window} onChange={(event) => chooseWindow(event.target.value as TrendWindow)} aria-label="Trend period">
+                {TREND_WINDOWS.map((value) => <option key={value} value={value}>{WINDOW_LABELS[value]}</option>)}
+              </select>
+            </label>
+            {window === "range" && (
+              <div className="vt-lab-range-pick" role="group" aria-label="Collection dates">
+                <label>
+                  <span>From</span>
+                  <input className="lv-input" type="date" value={range.from ?? ""} max={range.to ?? undefined}
+                    onChange={(event) => chooseRange({ ...range, from: event.target.value || null })} />
+                </label>
+                <label>
+                  <span>To</span>
+                  <input className="lv-input" type="date" value={range.to ?? ""} min={range.from ?? undefined}
+                    onChange={(event) => chooseRange({ ...range, to: event.target.value || null })} />
+                </label>
+              </div>
+            )}
+          </div>
+          {report ? (
+            <ReportDetails key={report.document_id} report={report} reports={reports} window={window} range={range} />
+          ) : (
+            <p className="vt-empty-note">No report was collected in this period. Widen the dates to see its tests.</p>
           )}
-          {report && <ReportDetails key={report.document_id} report={report} />}
         </>
       )}
     </section>
