@@ -1124,8 +1124,8 @@ a {
 .vt-pdf-page { width: 100%; border: 1px solid var(--lv-border); border-radius: 0.4rem; overflow: hidden; background: #fff; }
 .vt-pdf-page canvas { display: block; width: 100%; height: 100%; }
 .vt-pdf-note { margin: 0 0 0.75rem; }
-.vt-lab-period { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.5rem; padding: 0.75rem 0.9rem; }
-.vt-lab-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.vt-lab-period { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; padding: 0.6rem 0.9rem; }
+.vt-lab-field { display: flex; align-items: center; gap: 0.55rem; }
 .vt-lab-field-label { color: var(--lv-muted); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .vt-lab-field .lv-select { width: auto; min-width: 10rem; color: var(--lv-text); }
 .vt-lab-stepper { display: flex; align-items: center; gap: 0.25rem; }
@@ -1133,7 +1133,7 @@ a {
 .vt-lab-stepper .lv-icon-button { color: var(--lv-text); }
 .vt-lab-stepper .lv-icon-button:disabled { color: var(--lv-muted); opacity: 0.4; cursor: default; }
 .vt-lab-period-count {
-  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.45rem auto;
+  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0 auto;
   color: var(--lv-muted); font-size: var(--luna-text-small); white-space: nowrap;
 }
 .vt-lab-range-pick { display: flex; flex-wrap: wrap; gap: 0.6rem; }
