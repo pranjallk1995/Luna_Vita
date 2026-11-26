@@ -1113,3 +1113,11 @@ a {
   .vt-lab-picker { flex-wrap: wrap; }
   .vt-lab-picker .vt-chip { flex: 1 1 100%; }
 }
+
+/* "Add image" on a food without its own photo: the placeholder, dimmed, under a plus */
+.vt-photo-add { position: relative; display: grid; place-items: center; padding: 0; overflow: hidden; border: 1px dashed var(--lv-strong); color: var(--lv-text); cursor: pointer; }
+.vt-photo-add img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.35; }
+.vt-photo-add-mark { position: relative; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: rgba(0, 0, 0, 0.55); }
+.vt-photo-add:hover, .vt-photo-add:focus-visible { border-color: var(--lv-text); }
+.vt-photo-add:hover img { opacity: 0.55; }
+.vt-photo-add[aria-busy="true"] { cursor: progress; }

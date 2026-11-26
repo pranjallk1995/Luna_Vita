@@ -184,6 +184,19 @@ class LunaVitaHTTPRoutes:
         async def delete(request: Request):
             self.found(food.remove(self.path_id(request)), missing)
 
+        async def store_image(request: Request):
+            payload = await request.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("food_name"), str):
+                raise ValueError("Send the food_name and the image as content_base64.")
+            source = {"content_base64": payload.get("content_base64")}
+            return await anyio.to_thread.run_sync(food.update_image, payload["food_name"], source)
+
+        async def placeholder(request: Request):
+            return {"image_url": await anyio.to_thread.run_sync(food.placeholder)}
+
+        # The UI's "Add image": stored in Luna Visia, then shown on every entry of the food.
+        self.route("POST", "/api/food-images", store_image, 201)
+        self.route("GET", "/api/food-images/placeholder", placeholder)
         self.route("POST", "/api/food", create, 201)
         self.route("GET", "/api/food", read)
         self.route("PUT", "/api/food/{entry_id}", replace)

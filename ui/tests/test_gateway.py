@@ -112,6 +112,16 @@ class ProxyTests(GatewayTestCase):
         self.assertEqual(response.headers["content-type"], "application/pdf")
         self.assertEqual(response.content, b"%PDF")
 
+    def test_food_images_are_forwarded_with_time_to_be_stored(self):
+        self.sign_in()
+        response = self.client.post("/api/food-images", json={"food_name": "Poha", "content_base64": "AAAA"})
+        self.assertEqual(response.status_code, 200)
+        forwarded = self.backend_requests[-1]
+        self.assertEqual((forwarded.method, forwarded.url.path), ("POST", "/api/food-images"))
+        self.assertEqual(forwarded.extensions["timeout"]["read"], UIConfig.IMAGE_STORE_TIMEOUT_SECONDS)
+        self.assertEqual(self.client.get("/api/food-images/placeholder").status_code, 200)
+        self.assertEqual(self.backend_requests[-1].extensions["timeout"]["read"], UIConfig.API_TIMEOUT_SECONDS)
+
     def test_health_reports_and_their_pdfs_are_forwarded(self):
         self.sign_in()
         for path in ("/api/health-reports?out_of_range=true", "/api/health-reports/trend?test=ldl"):

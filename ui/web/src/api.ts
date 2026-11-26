@@ -18,6 +18,7 @@ export type Settings = {
   max_food_rows: number;
   max_measurement_rows: number;
   lexia_ui_url: string;
+  food_image_size: [number, number];
 };
 
 export type FoodEntry = {
@@ -135,6 +136,10 @@ export const useExercises = (day: string) =>
 export const useWater = (day: string) =>
   useQuery({ queryKey: ["water", day], queryFn: () => request<WaterDay>(`/api/water/${day}`) });
 
+/** The image a food shows when it has none of its own, so the page can offer to add one. */
+export const useFoodPlaceholder = () =>
+  useQuery({ queryKey: ["food-placeholder"], queryFn: () => request<{ image_url: string | null }>("/api/food-images/placeholder"), staleTime: Infinity });
+
 /** Lab reports read live from Luna Lexia; a 503 means Lexia is off or away. */
 export const useHealthReports = () =>
   useQuery({ queryKey: ["health-reports"], queryFn: () => request<HealthReports>("/api/health-reports"), retry: 1, staleTime: 60_000 });
@@ -160,6 +165,9 @@ export const vita = {
     post("/api/water", payload),
   deleteWater: (id: number) => remove(`/api/water/${id}`),
   setWaterGoal: (goal_ml: number) => put("/api/water/goal", { goal_ml }),
+  /** Store a photo in Luna Visia as this food's image, shown on all its entries. */
+  addFoodImage: (food_name: string, dataUrl: string) =>
+    post("/api/food-images", { food_name, content_base64: dataUrl.slice(dataUrl.indexOf(",") + 1) }),
 };
 
 /** Run a change, then refresh everything it may affect; a refusal becomes a toast, and the result says which. */

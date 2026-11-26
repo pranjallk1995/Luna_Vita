@@ -1,13 +1,13 @@
 import { CopyPlus, Download, Ellipsis, Pencil, Plus, Trash2, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { fittedPhoto, useAct, useFood, useFoodBetween, useSummary, vita, type FoodEntry, type Settings } from "../api";
+import { fittedPhoto, useAct, useFood, useFoodBetween, useFoodPlaceholder, useSummary, vita, type FoodEntry, type Settings } from "../api";
 import { addDays, combine, currentClock, today } from "../clock";
 import { NOT_RECORDED, byTime, copyOf, displayTime, draftOf, entryErrors, payloadOf, recentFoods, type FoodDraft } from "../food";
 import { messageOf } from "../lib";
 import { energySplit, number } from "../nutrition";
 import { Dialog } from "./Dialog";
-import { FoodPhoto } from "./FoodPhoto";
+import { AddFoodImage, FoodPhoto } from "./FoodPhoto";
 import { SectionHead } from "./shared";
 import { useToast } from "./Toasts";
 
@@ -259,6 +259,8 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
   // Phones keep a food's actions behind its ⋯ button; wider screens always show them.
   const [menu, setMenu] = useState<number | null>(null);
   const rows = useMemo(() => byTime(data ?? [], settings), [data, settings]);
+  // Foods still showing the shared placeholder (or nothing) offer to add their own photo.
+  const placeholder = useFoodPlaceholder().data?.image_url;
 
   // A different day closes the editor; App has already asked before discarding changes.
   useEffect(() => {
@@ -356,7 +358,11 @@ export function FoodLog({ day, settings, onDirtyChange }: { day: string; setting
                 <div key={row.id}>
                   <div className="vt-food-row">
                     <span className="vt-food-time">{time}</span>
-                    <FoodPhoto source={row.image_url} name={row.food_name} className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                    {!row.image_url || row.image_url === placeholder ? (
+                      <AddFoodImage source={row.image_url} name={row.food_name} settings={settings} className="vt-food-photo" />
+                    ) : (
+                      <FoodPhoto source={row.image_url} name={row.food_name} className="vt-food-photo" emptyClass="vt-food-photo vt-food-photo-empty" />
+                    )}
                     <div className="vt-food-name">
                       <strong title={row.food_name}>{row.food_name}</strong>
                       <span title={row.quantity}>

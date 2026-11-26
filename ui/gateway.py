@@ -55,6 +55,8 @@ PROXIED_ROUTES = tuple(
         ("PUT", r"/api/water/goal"),
         ("DELETE", rf"/api/water/{ID}"),
         ("GET", rf"/api/reports/daily/{DAY}"),
+        ("POST", r"/api/food-images"),
+        ("GET", r"/api/food-images/placeholder"),
         ("GET", r"/api/health-reports"),
         ("GET", r"/api/health-reports/trend"),
         ("GET", rf"/api/health-reports/{UUID}/file"),
@@ -62,6 +64,8 @@ PROXIED_ROUTES = tuple(
 )
 # A health report's PDF opens inside the page's viewer, so this page alone may frame it.
 FRAMED_PDF = re.compile(rf"/api/health-reports/{UUID}/file")
+# Storing an image waits for Luna Visia to caption it, so these calls may take minutes.
+SLOW_ROUTES = frozenset({("POST", "/api/food-images")})
 # Backend headers passed on to the browser besides the content type.
 PASSED_HEADERS = ("content-disposition",)
 UNAVAILABLE = "Luna Vita's backend is unavailable. Please try again."
@@ -155,6 +159,7 @@ class UIGateway:
             "max_food_rows": UIConfig.MAX_FOOD_ROWS,
             "max_measurement_rows": UIConfig.MAX_MEASUREMENT_ROWS,
             "lexia_ui_url": UIConfig.LEXIA_UI_URL,
+            "food_image_size": UIConfig.FOOD_IMAGE_UPLOAD_SIZE,
         }
 
     # Food photos
@@ -192,6 +197,7 @@ class UIGateway:
                 params=request.query_params,
                 content=body,
                 headers={"Content-Type": request.headers.get("content-type", "application/json")},
+                timeout=UIConfig.IMAGE_STORE_TIMEOUT_SECONDS if (request.method, path) in SLOW_ROUTES else UIConfig.API_TIMEOUT_SECONDS,
             )
         except httpx.HTTPError:
             return JSONResponse({"error": UNAVAILABLE}, status_code=502)

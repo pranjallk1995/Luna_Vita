@@ -41,6 +41,8 @@ class UIConfig:
     # The built React app; the Dockerfile puts it here.
     STATIC_DIR: ClassVar[Path] = UI_ROOT / "static"
     API_TIMEOUT_SECONDS: ClassVar[float] = 10.0
+    # "Add image" waits while Luna Visia stores and captions the picture (up to three tries).
+    IMAGE_STORE_TIMEOUT_SECONDS: ClassVar[float] = 960.0
     # A food photo reaches the backend inside its entry, already fitted by the browser.
     MAX_REQUEST_BYTES: ClassVar[int] = 4 * 1024 * 1024
     # Calendar days and logged times all resolve in this zone, as in the backend.
@@ -49,6 +51,8 @@ class UIConfig:
     # 3:2 photos in the food table and the Monthly gallery.
     FOOD_PHOTO_SIZE: ClassVar[tuple[int, int]] = (360, 240)
     FOOD_PHOTO_LARGE_SIZE: ClassVar[tuple[int, int]] = (1280, 1280)
+    # A food image added from the page goes to Luna Visia at this 3:2 size.
+    FOOD_IMAGE_UPLOAD_SIZE: ClassVar[tuple[int, int]] = (1536, 1024)
     FOOD_PHOTO_QUALITY: ClassVar[int] = 85
     FOOD_PHOTO_CACHE_ENTRIES: ClassVar[int] = 256
     FOOD_PHOTO_TIMEOUT_SECONDS: ClassVar[float] = 10.0

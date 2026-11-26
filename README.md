@@ -39,6 +39,8 @@ The model should infer the complete-quantity values for kcal, protein, carbohydr
 
 ### Generated food images
 
+On the page, a food still showing the placeholder (or no photo) has a **+** on its photo: choose a picture and Vita stores it in Luna Visia, captioned and tagged like a generated one, and shows it on every entry of that food. Storing waits while Visia captions it, up to a minute or so.
+
 A food can have its own image, shown on every entry of that food, past and future, under any of its spellings and aliases. Ask for one in chat:
 
 > Generate and update the image for schezuan rice.
