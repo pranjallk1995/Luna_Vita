@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, FileText, FlaskConical, Info, Search, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, ExternalLink, FileText, FlaskConical, Info, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { healthReportFile, useHealthReports, type Settings } from "../api";
@@ -331,6 +331,8 @@ export function HealthReports({ settings }: { settings: Settings }) {
   const all = data?.reports ?? [];
   const reports = useMemo(() => reportsIn(all, window, range), [all, window, range]);
   const report = reports.find((candidate) => candidate.document_id === chosen) ?? reports[0];
+  // Reports come newest first: older is further down the list.
+  const index = report ? reports.indexOf(report) : -1;
   const dates = all.map((candidate) => candidate.date).filter((day): day is string => !!day).sort();
   const chooseWindow = (value: TrendWindow) => {
     setWindow(value);
@@ -373,21 +375,28 @@ export function HealthReports({ settings }: { settings: Settings }) {
       ) : (
         <>
           <div className="vt-card vt-lab-period">
-            <label className="vt-lab-picker">
-              <span>
-                {window === "range" ? `${reports.length} of ${all.length}` : reports.length} {(window === "range" ? all.length : reports.length) === 1 ? "report" : "reports"} detected
-                {window === "range" ? " in this period" : ""} · collected on
-              </span>
-              <select className="lv-select" value={report?.document_id ?? ""} disabled={!reports.length}
-                onChange={(event) => setChosen(event.target.value)} aria-label="Report, by collection date">
-                {reports.length === 0 && <option value="">No report</option>}
-                {reports.map((candidate) => (
-                  <option key={candidate.document_id} value={candidate.document_id}>{reportDay(reportDate(candidate))}</option>
-                ))}
-              </select>
-            </label>
-            <label className="vt-lab-window">
-              <span>Trend</span>
+            <div className="vt-lab-field">
+              <span className="vt-lab-field-label">Report</span>
+              <div className="vt-lab-stepper">
+                <button className="lv-icon-button" type="button" aria-label="Older report" title="Older report"
+                  disabled={!report || index >= reports.length - 1} onClick={() => setChosen(reports[index + 1].document_id)}>
+                  <ChevronLeft size={16} />
+                </button>
+                <select className="lv-select" value={report?.document_id ?? ""} disabled={!reports.length}
+                  onChange={(event) => setChosen(event.target.value)} aria-label="Report, by collection date">
+                  {reports.length === 0 && <option value="">No report</option>}
+                  {reports.map((candidate) => (
+                    <option key={candidate.document_id} value={candidate.document_id}>{reportDay(reportDate(candidate))}</option>
+                  ))}
+                </select>
+                <button className="lv-icon-button" type="button" aria-label="Newer report" title="Newer report"
+                  disabled={!report || index <= 0} onClick={() => setChosen(reports[index - 1].document_id)}>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+            <label className="vt-lab-field">
+              <span className="vt-lab-field-label">Trend over</span>
               <select className="lv-select" value={window} onChange={(event) => chooseWindow(event.target.value as TrendWindow)} aria-label="Trend period">
                 {TREND_WINDOWS.map((value) => <option key={value} value={value}>{WINDOW_LABELS[value]}</option>)}
               </select>
@@ -406,6 +415,11 @@ export function HealthReports({ settings }: { settings: Settings }) {
                 </label>
               </div>
             )}
+            <p className="vt-lab-period-count">
+              <FlaskConical size={14} aria-hidden="true" />
+              {window === "range" ? `${reports.length} of ${all.length}` : all.length} {all.length === 1 ? "report" : "reports"}
+              {window === "range" ? " in this period" : ""}
+            </p>
           </div>
           {report ? (
             <ReportDetails key={report.document_id} report={report} reports={reports} window={window} range={range} />
