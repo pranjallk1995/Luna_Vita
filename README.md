@@ -8,10 +8,10 @@
 ![Status: v2.0](https://img.shields.io/badge/Status-v2.0-2EA043)
 
 <p align="center">
-  <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day and logging a meal through its MCP tools" width="900"></a>
+  <a href="docs/assets/luna-vita-showcase.mp4"><img src="docs/assets/luna-vita-showcase.webp" alt="From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then lab reports from Luna Lexia with their ranges, PDFs, and trends, then asking a chat assistant about the day and logging a meal through its MCP tools" width="900"></a>
 </p>
 
-<p align="center"><em>From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then asking a chat assistant about the day and logging a meal through its MCP tools. Select it for the sharper video.</em></p>
+<p align="center"><em>From Google sign-in through Luna Unia to daily and monthly tracking in Luna Vita, then the Health Reports tab: lab reports Luna Lexia read, an older one opening on what was out of range, its PDF, and one test's trend across reports (the reports are sample documents with fictional data). Then a chat assistant answers about the day and logs a meal through Vita's MCP tools. Select it for the sharper video.</em></p>
 
 > Luna Vita is a local-first and desktop-first nutrition and body-measurement tracker.
 
@@ -127,9 +127,17 @@ The **Health Reports** tab shows your lab reports (blood tests, full-body check-
 [Luna Lexia](https://github.com/pranjallk1995/Luna_Lexia). Upload a report's PDF to Lexia,
 which reads it into its `health_report` schema; it appears here at once:
 
-- Each report's lab, collection date, package, and how many results are in range, low, high, or abnormal.
-- Its results by panel (blood count, lipids, liver, kidney, thyroid, vitamins, hormones, urine), out-of-range ones first, each against the range its report prints, with how it moved since the last report and a small trend line.
-- Select a test for its trend across every report, with the reference band; **View PDF** opens the report itself.
+<p align="center">
+  <img src="docs/assets/luna-vita-health-reports.png" alt="Luna Vita's Health Reports tab: a sample full-body check-up with every test in range, each panel listing results against their reference intervals, the change since the previous report, and a trend line" width="1200">
+</p>
+
+- **Report** picks a report by the day its sample was collected (the arrows step to the one before or after); it opens on the newest.
+- Each report shows its lab, collection and report dates, package, patient, and how many results are in range, low, high, or abnormal.
+- Its results are grouped by panel (blood count, lipids, liver, kidney, thyroid, vitamins, hormones, urine), each against the range its report prints, with how it moved since the previous report and a small trend line. A report with results out of range opens on **Out of range**; **All results** shows the rest.
+- **Find a test** searches every panel. Each panel folds away, and **Collapse all** folds them all.
+- **Trend over** sets the trends' period: the last 3, 5, or 10 reports, all of them, or a **Date range** of collection dates.
+- Select a test for its trend over that period, with the reference band, and what the test measures, once Luna Lexia has explained it. Hovering the test's name shows the same explanation.
+- **View PDF** opens the report itself, drawn on the page so it opens on phones too.
 - A report Lexia marked for review shows Lexia's reasons, so you can check those values against the PDF.
 
 Nothing is copied into Vita's database: the backend reads Lexia over `luna_sentia_network`
