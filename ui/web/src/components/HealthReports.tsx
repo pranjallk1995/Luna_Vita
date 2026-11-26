@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, ExternalLink, FileText, FlaskConical, Info, Search, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, FileText, FlaskConical, Info, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { healthReportFile, useHealthReports, type Settings } from "../api";
@@ -159,6 +159,16 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
   const [query, setQuery] = useState("");
   const [trend, setTrend] = useState<LabResult | null>(null);
   const [pdf, setPdf] = useState(false);
+  // Every panel starts open; a collapsed one opens again while a search is typed, so no match stays hidden.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const isOpen = (panel: string) => Boolean(query.trim()) || !collapsed.has(panel);
+  const toggle = (panel: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(panel)) next.delete(panel);
+      else next.add(panel);
+      return next;
+    });
   const shown = useMemo(() => byPanel(matching(rows, query, filter === "flagged"), true), [rows, query, filter]);
   const facts = [
     report.lab_name,
@@ -230,6 +240,16 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
             </button>
           ))}
         </div>
+        {shown.length > 1 && (
+          <button
+            className="lv-button"
+            type="button"
+            onClick={() => setCollapsed(collapsed.size ? new Set() : new Set(shown.map(([panel]) => panel)))}
+          >
+            {collapsed.size ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+            {collapsed.size ? "Expand all" : "Collapse all"}
+          </button>
+        )}
         <label className="vt-lab-search">
           <Search size={15} aria-hidden="true" />
           <input className="lv-input" type="search" placeholder="Find a test" aria-label="Find a test" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -241,13 +261,19 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
       ) : (
         <div className="vt-lab-panels">
           {shown.map(([panel, results]) => (
-            <section className="vt-card vt-lab-panel" key={panel} aria-label={panel}>
+            <section className={`vt-card vt-lab-panel${isOpen(panel) ? "" : " vt-lab-panel-closed"}`} key={panel} aria-label={panel}>
               <h3>
-                {panel}
-                {results.some((result) => isOutOfRange(result.status)) && (
-                  <span className="vt-lab-muted"> · {results.filter((result) => isOutOfRange(result.status)).length} out of range</span>
-                )}
+                <button className="vt-lab-panel-toggle" type="button" aria-expanded={isOpen(panel)} onClick={() => toggle(panel)}>
+                  <ChevronDown size={15} aria-hidden="true" />
+                  {panel}
+                  <span className="vt-lab-muted">
+                    {" "}· {results.length} {results.length === 1 ? "test" : "tests"}
+                    {results.some((result) => isOutOfRange(result.status)) &&
+                      ` · ${results.filter((result) => isOutOfRange(result.status)).length} out of range`}
+                  </span>
+                </button>
               </h3>
+              {isOpen(panel) && (
               <div className="lv-table-scroll">
                 <table className="lv-table vt-lab-table">
                   <thead>
@@ -281,6 +307,7 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
                   </tbody>
                 </table>
               </div>
+              )}
             </section>
           ))}
         </div>
