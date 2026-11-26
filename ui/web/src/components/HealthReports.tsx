@@ -240,6 +240,10 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
             </button>
           ))}
         </div>
+        <label className="vt-lab-search">
+          <Search size={15} aria-hidden="true" />
+          <input className="lv-input" type="search" placeholder="Find a test" aria-label="Find a test" value={query} onChange={(event) => setQuery(event.target.value)} />
+        </label>
         {shown.length > 1 && (
           <button
             className="lv-button"
@@ -250,10 +254,6 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
             {collapsed.size ? "Expand all" : "Collapse all"}
           </button>
         )}
-        <label className="vt-lab-search">
-          <Search size={15} aria-hidden="true" />
-          <input className="lv-input" type="search" placeholder="Find a test" aria-label="Find a test" value={query} onChange={(event) => setQuery(event.target.value)} />
-        </label>
       </div>
 
       {shown.length === 0 ? (
