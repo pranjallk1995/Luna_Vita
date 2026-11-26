@@ -37,11 +37,14 @@ DOCUMENTS = [
 class FakeLexia:
     """Answers like Lexia's /api/metadata and public document routes, recording what was asked."""
 
-    def __init__(self, documents=DOCUMENTS, status=200):
+    def __init__(self, documents=DOCUMENTS, status=200, lab_tests=None):
         self.documents, self.status, self.requests = documents, status, []
+        self.lab_tests = lab_tests
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        if request.url.path == "/api/lab-tests":
+            return httpx.Response(404, json={"error": "Not found"}) if self.lab_tests is None else httpx.Response(200, json={"tests": self.lab_tests})
         if request.url.path.startswith("/api/public/documents/"):
             return httpx.Response(200, content=b"%PDF-1.7", headers={"content-type": "application/pdf"})
         return httpx.Response(self.status, json={"documents": self.documents})
@@ -106,6 +109,21 @@ class HealthReportServiceTests(unittest.TestCase):
         self.assertEqual(trend["reference_high"], 99.9)
         with self.assertRaises(ValueError):
             reports.trend("ferritin")
+
+    def test_each_result_carries_what_its_test_measures(self):
+        explained = {"cholesterolldl": {"test_name": "LDL", "about": "The cholesterol that builds up in arteries.", "source": "assistant"},
+                     "hemoglobin": {"test_name": "Hemoglobin", "about": "  ", "source": "model"}}
+        reports, fake = service(FakeLexia(lab_tests=explained))
+        april = reports.reports()["reports"][0]
+        about = {result["test_name"]: result["about"] for result in april["results"]}
+        self.assertEqual(about["Cholesterol - LDL"], "The cholesterol that builds up in arteries.")
+        self.assertIsNone(about["Hemoglobin"])
+        self.assertEqual(reports.trend("ldl")["about"], "The cholesterol that builds up in arteries.")
+        self.assertEqual(fake.requests[1].url.path, "/api/lab-tests")
+
+    def test_a_lexia_without_explanations_still_serves_reports(self):
+        reports, _ = service()
+        self.assertTrue(all(result["about"] is None for report in reports.reports()["reports"] for result in report["results"]))
 
     def test_only_this_persons_reports_are_served_as_files(self):
         reports, fake = service()

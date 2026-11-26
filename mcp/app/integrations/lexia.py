@@ -82,6 +82,23 @@ class LexiaHealthReports:
         report["results"] = [dict(result) for result in details.get("results") or [] if result.get("test_name")]
         return report
 
+    def lab_tests(self) -> dict[str, str]:
+        """What each lab test measures, by test key, as Lexia explains them; empty when it cannot say.
+
+        The explanations only add to the reports, so a Lexia without them (before 2.4.0),
+        or one that fails to answer, leaves them out instead of failing the reports.
+        """
+        try:
+            response = self._get("/api/lab-tests")
+            tests = response.json().get("tests") or {}
+        except (LexiaUnavailableError, ValueError, AttributeError):
+            return {}
+        return {
+            key: entry["about"]
+            for key, entry in tests.items()
+            if isinstance(entry, dict) and isinstance(entry.get("about"), str) and entry["about"].strip()
+        }
+
     def file(self, document_id: str) -> tuple[bytes, str, str]:
         """The original PDF of one of this person's health reports: bytes, media type, and filename."""
         if not DOCUMENT_ID.fullmatch(document_id or ""):

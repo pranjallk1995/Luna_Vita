@@ -1155,7 +1155,8 @@ class LunaVitaMCPTools:
             Returns up to ``limit`` reports, newest first, each with its lab, collection
             date, package, review_flags, and results: panel, test_name, value or
             value_text, unit, reference_range, status (low, high, abnormal, normal, or
-            unknown), and history, the test's earlier dated values. test_name keeps only
+            unknown), about (what the test measures, from Luna Lexia, or null), and
+            history, the test's earlier dated values. test_name keeps only
             matching tests (case and punctuation ignored, e.g. "ldl" or "hba1c");
             only_out_of_range keeps only low, high, and abnormal results. Results come from
             Lexia's reading of each PDF: treat a report with review_flags as unconfirmed,
@@ -1172,7 +1173,8 @@ class LunaVitaMCPTools:
 
             Matches test_name ignoring case and punctuation, the exact name first, else
             the shortest name containing it ("cholesterol" picks "Cholesterol - Total";
-            other_matches lists the rest). Each point has its date, value, unit, and
-            status; points from an earlier value a report printed have no document_id.
+            other_matches lists the rest). about says what the test measures. Each point
+            has its date, value, unit, and status; points from an earlier value a report
+            printed have no document_id.
             """
             return reports.trend(test_name)

@@ -16,6 +16,8 @@ export type LabResult = {
   method?: string | null;
   status: ResultStatus;
   history: HistoryPoint[];
+  /** What the test measures, as Luna Lexia explains it; null until it is explained. */
+  about?: string | null;
   /** Set on a snapshot row whose latest value comes from an older report than the one chosen. */
   from_report?: { document_id: string; date?: string | null } | null;
 };

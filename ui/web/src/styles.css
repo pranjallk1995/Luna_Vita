@@ -1103,6 +1103,10 @@ a {
 .vt-lab-dot { fill: var(--lv-text); }
 .vt-lab-label { fill: var(--lv-text); font-size: 11px; font-variant-numeric: tabular-nums; }
 .vt-lab-date { fill: var(--lv-muted); font-size: 10px; }
+.vt-lab-about { display: flex; gap: 0.55rem; margin-bottom: 0.85rem; padding: 0.65rem 0.8rem; border: 1px solid var(--lv-border); border-radius: 0.6rem; background: var(--lv-control); line-height: 1.5; }
+.vt-lab-about svg { flex: none; margin-top: 0.2rem; color: var(--lv-muted); }
+.vt-lab-about p { margin: 0; }
+.vt-lab-about-missing { color: var(--lv-muted); font-size: var(--luna-text-small); }
 .vt-lab-trend-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
 .vt-lab-trend-head strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 .vt-pdf { display: grid; gap: 0.6rem; max-height: min(75vh, 52rem); margin-bottom: 0.75rem; overflow-y: auto; overscroll-behavior: contain; }

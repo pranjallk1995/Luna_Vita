@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, ExternalLink, FileText, FlaskConical, Search, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ExternalLink, FileText, FlaskConical, Info, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { healthReportFile, useHealthReports, type Settings } from "../api";
@@ -115,6 +115,13 @@ function Change({ result }: { result: LabResult }) {
 function TrendDialog({ result, points, onClose }: { result: LabResult; points: HistoryPoint[]; onClose: () => void }) {
   return (
     <Dialog title={result.test_name} size="large" onClose={onClose}>
+      <div className={result.about ? "vt-lab-about" : "vt-lab-about vt-lab-about-missing"}>
+        <Info size={15} aria-hidden="true" />
+        <p>
+          {result.about ??
+            "No explanation of this test yet. Luna Lexia writes one shortly after a report with it is uploaded, or ask Claude to explain your lab tests."}
+        </p>
+      </div>
       <div className="vt-lab-trend-head">
         <strong>{resultText(result)}</strong>
         <StatusBadge status={result.status} />
@@ -257,7 +264,7 @@ function ReportDetails({ report, reports, window, range }: { report: HealthRepor
                     {results.map((result, index) => (
                       <tr key={`${result.test_name}-${index}`} className={isOutOfRange(result.status) ? "vt-lab-flagged" : undefined}>
                         <td>
-                          <button className="vt-link-button" type="button" onClick={() => setTrend(result)} title="Show its trend">
+                          <button className="vt-link-button" type="button" onClick={() => setTrend(result)} title={result.about ?? "Show its trend"}>
                             {result.test_name}
                           </button>
                         </td>

@@ -53,10 +53,12 @@ class HealthReportService:
         """Every report, newest first, each result with its status and its earlier values."""
         reports = self.lexia.reports()
         history = self.history(reports)
+        about = self.lexia.lab_tests() if reports else {}
         wanted = test_key(test_name) if test_name else ""
         for report in reports:
             for result in report["results"]:
                 result["status"] = status_of(result)
+                result["about"] = about.get(test_key(result["test_name"]))
                 result["history"] = [
                     point for point in history.get(test_key(result["test_name"]), [])
                     if point["document_id"] != report["document_id"] and (point["date"] or "") < (report["date"] or "")
@@ -108,6 +110,7 @@ class HealthReportService:
         )
         return {
             "test_name": names[chosen],
+            "about": self.lexia.lab_tests().get(chosen),
             "unit": latest.get("unit"),
             "reference_range": latest.get("reference_range"),
             "reference_low": latest.get("reference_low"),
