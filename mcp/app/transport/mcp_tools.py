@@ -141,6 +141,7 @@ class LunaVitaMCPTools:
         self._register_workout_tools()
         self._register_water_tools()
         self._register_average_tools()
+        self._register_health_report_tools()
 
     @staticmethod
     def optional_date(value: str | None) -> date | None:
@@ -1139,3 +1140,39 @@ class LunaVitaMCPTools:
         def remove_workout_exercise(entry_id: int) -> dict[str, Any]:
             """Delete one logged exercise by its id; the day's done status and types are unchanged."""
             return {"deleted": tracker.remove_exercise(entry_id), "entry_id": entry_id}
+
+    def _register_health_report_tools(self) -> None:
+        server, reports = self.server, self.service.health_reports
+        if reports is None:
+            return
+
+        @server.tool()
+        def get_health_reports(
+            test_name: str | None = None, only_out_of_range: bool = False, limit: int = 3
+        ) -> dict[str, Any]:
+            """Read the user's lab test reports (blood tests, full-body check-ups) from Luna Lexia.
+
+            Returns up to ``limit`` reports, newest first, each with its lab, collection
+            date, package, review_flags, and results: panel, test_name, value or
+            value_text, unit, reference_range, status (low, high, abnormal, normal, or
+            unknown), and history, the test's earlier dated values. test_name keeps only
+            matching tests (case and punctuation ignored, e.g. "ldl" or "hba1c");
+            only_out_of_range keeps only low, high, and abnormal results. Results come from
+            Lexia's reading of each PDF: treat a report with review_flags as unconfirmed,
+            and do not give medical advice beyond what the report and its ranges say.
+            The user adds reports by uploading the PDF to Luna Lexia.
+            """
+            found = reports.reports(test_name, only_out_of_range)
+            limit = min(max(limit, 1), 20)
+            return {"reports": found["reports"][:limit], "count": found["count"]}
+
+        @server.tool()
+        def get_lab_test_trend(test_name: str) -> dict[str, Any]:
+            """One lab test's values across all of the user's health reports, oldest first.
+
+            Matches test_name ignoring case and punctuation, the exact name first, else
+            the shortest name containing it ("cholesterol" picks "Cholesterol - Total";
+            other_matches lists the rest). Each point has its date, value, unit, and
+            status; points from an earlier value a report printed have no document_id.
+            """
+            return reports.trend(test_name)

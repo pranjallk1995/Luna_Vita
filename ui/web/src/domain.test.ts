@@ -4,6 +4,7 @@ import { average, byDay, fatRange, formatMetric, measurementPayloads, measuremen
 import { addDays, combine, daysBetween, dayLabel, moment } from "./clock";
 import { byTime, copyOf, displayTime, entryErrors, foodErrors, numberError, parseClock, payloadOf, recentFoods, resolveTime, textError, type FoodDraft } from "./food";
 import { NUTRIENTS, energySplit, floorStatus, limitStatus, macroPercentages, percentage, standing } from "./nutrition";
+import { byPanel, change, isOutOfRange, matching, rangeText, reportDay, resultText, seriesOf, type LabResult } from "./health";
 import { drinkAmount, drinkTime, formatMl, goalAmount, progressOf } from "./water";
 import { calendarSpan, exerciseErrors, exercisePayload, monthWeeks, monthsBetween, statusOf } from "./workouts";
 
@@ -294,5 +295,41 @@ describe("water", () => {
     expect(drinkTime("2026-11-16T03:35:00+00:00", zone)).toBe("9:05 AM");
     expect(drinkTime("2026-11-16T21:10:00+05:30", zone)).toBe("9:10 PM");
     expect(drinkTime(null, zone)).toBe("");
+  });
+});
+
+describe("health reports", () => {
+  const result = (fields: Partial<LabResult>): LabResult => ({ test_name: "Test", status: "normal", history: [], ...fields });
+
+  it("prints results and ranges as the report does", () => {
+    expect(resultText({ value: 4.0, unit: "mmol/L" })).toBe("4 mmol/L");
+    expect(resultText({ value: null, value_text: "Negative", unit: "mg/dL" })).toBe("Negative");
+    expect(rangeText({ reference_range: "<= 199.9" })).toBe("<= 199.9");
+    expect(rangeText({ reference_low: 13, reference_high: 17 })).toBe("13 – 17");
+    expect(rangeText({ reference_high: 99.9 })).toBe("≤ 99.9");
+    expect(rangeText({})).toBe("—");
+  });
+
+  it("groups by panel, out-of-range panels first, and filters by words", () => {
+    const results = [
+      result({ test_name: "Hemoglobin", panel: "Complete Blood Count" }),
+      result({ test_name: "Cholesterol - LDL", panel: "Lipid Profile", status: "high" }),
+      result({ test_name: "Colour", value_text: "Yellow" }),
+    ];
+    expect(byPanel(results).map(([panel]) => panel)).toEqual(["Complete Blood Count", "Lipid Profile", "Other tests"]);
+    expect(byPanel(results, true)[0][0]).toBe("Lipid Profile");
+    expect(matching(results, "ldl", false).map((found) => found.test_name)).toEqual(["Cholesterol - LDL"]);
+    expect(matching(results, "lipid cholesterol", false)).toHaveLength(1);
+    expect(matching(results, "", true).map((found) => found.status)).toEqual(["high"]);
+    expect(isOutOfRange("abnormal") && !isOutOfRange("unknown")).toBe(true);
+  });
+
+  it("shows how a result moved since its last earlier value", () => {
+    const ldl = result({ value: 153, history: [{ date: "2025-10-04", value: 170 }] });
+    expect(change(ldl)).toMatchObject({ delta: -17, direction: "down" });
+    expect(change(result({ value: 5 }))).toBeNull();
+    expect(seriesOf(ldl, "2026-04-18").map((point) => point.value)).toEqual([170, 153]);
+    expect(reportDay("2026-04-18")).toBe("18 Apr 2026");
+    expect(reportDay(null)).toBe("Undated");
   });
 });

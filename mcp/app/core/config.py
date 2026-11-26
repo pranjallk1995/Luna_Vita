@@ -32,6 +32,9 @@ class AppConfig:
     placeholder_image_id: str = "858eafb0-73ad-4717-8095-8cef43c62d3c"
     # Credential for storing new food images in Luna Visia ("" = linking existing ones only).
     visia_companion_token: str = ""
+    # Luna Lexia, where lab report PDFs are stored and read ("" token = health reports off).
+    lexia_api_url: str = "http://luna-lexia-mcp:8000"
+    lexia_api_token: str = ""
     host: str = "0.0.0.0"
     port: int = 8000
     # Public HTTPS origin of this MCP server, used for icon URLs ("" = embedded icons only).
@@ -58,6 +61,13 @@ class AppConfig:
         visia_companion_token = os.getenv("LUNAVISIA_COMPANION_TOKEN", "").strip()
         if visia_companion_token and len(visia_companion_token) < 32:
             raise RuntimeError("LUNAVISIA_COMPANION_TOKEN must contain at least 32 characters.")
+        lexia_api_url = os.getenv("LUNALEXIA_API_URL", cls.lexia_api_url).strip().rstrip("/")
+        parsed_lexia = urlparse(lexia_api_url)
+        if parsed_lexia.scheme not in {"http", "https"} or not parsed_lexia.netloc:
+            raise RuntimeError("LUNALEXIA_API_URL must be a valid HTTP(S) URL.")
+        lexia_api_token = os.getenv("LUNALEXIA_API_TOKEN", "").strip()
+        if lexia_api_token and len(lexia_api_token) < 32:
+            raise RuntimeError("LUNALEXIA_API_TOKEN must contain at least 32 characters.")
         mcp_public_url = os.getenv("MCP_PUBLIC_URL", "").strip().rstrip("/")
         if mcp_public_url:
             parsed_public_url = urlparse(mcp_public_url)
@@ -71,4 +81,6 @@ class AppConfig:
             visia_api_url=visia_api_url,
             placeholder_image_id=placeholder_image_id,
             visia_companion_token=visia_companion_token,
+            lexia_api_url=lexia_api_url,
+            lexia_api_token=lexia_api_token,
         )

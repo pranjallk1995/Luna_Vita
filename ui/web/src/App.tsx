@@ -1,10 +1,11 @@
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LogOut, type LucideIcon } from "lucide-react";
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, FlaskConical, LogOut, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Settings } from "./api";
 import { addDays, today } from "./clock";
 import { EnergySplit, FoodLog } from "./components/FoodLog";
 import { Brand, ForbiddenPage, SignInPage, UnreachablePage } from "./components/Gate";
+import { HealthReports } from "./components/HealthReports";
 import { Measurements } from "./components/Measurements";
 import { Monthly } from "./components/Monthly";
 import { DayHeading, Summary } from "./components/Summary";
@@ -13,12 +14,13 @@ import { Workout } from "./components/Workout";
 import { useSession } from "./http";
 import { remember, remembered } from "./lib";
 
-const PERIODS = ["daily", "monthly"] as const;
+const PERIODS = ["daily", "monthly", "health"] as const;
 type Period = (typeof PERIODS)[number];
 
 const NAV: { id: Period; label: string; icon: LucideIcon }[] = [
   { id: "daily", label: "Daily Tracking", icon: CalendarDays },
   { id: "monthly", label: "Monthly Tracking", icon: CalendarRange },
+  { id: "health", label: "Health Reports", icon: FlaskConical },
 ];
 
 function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Settings }) {
@@ -103,8 +105,10 @@ function Workspace({ logoutUrl, settings }: { logoutUrl: string; settings: Setti
             </aside>
           </div>
         </>
-      ) : (
+      ) : period === "monthly" ? (
         <Monthly day={day} settings={settings} />
+      ) : (
+        <HealthReports settings={settings} />
       )}
       <footer className="lv-footer">Luna Vita{settings.version && ` · v${settings.version}`}</footer>
     </main>

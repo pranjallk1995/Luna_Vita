@@ -33,7 +33,9 @@ from app.services.application import (
     WorkoutService,
 )
 from app.services.averages import RunningAverages
+from app.integrations.lexia import LexiaHealthReports
 from app.integrations.visia import VisiaImageCatalog
+from app.services.health_reports import HealthReportService
 
 
 class LunaVitaApplication:
@@ -96,6 +98,9 @@ class LunaVitaApplication:
             ),
             averages=RunningAverages(food_entries, measurement_entries, recommendations),
             water=WaterService(WaterRepository(self.database)),
+            health_reports=HealthReportService(
+                LexiaHealthReports(self.config.lexia_api_url, self.config.lexia_api_token)
+            ),
         )
 
     def remove_user(self, user_id: str) -> None:

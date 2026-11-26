@@ -39,6 +39,7 @@ from app.core.models import (
     WorkoutBulkUpdate,
     WorkoutRecord,
 )
+from app.services.health_reports import HealthReportService
 from app.services.reports import DailyReport, DailyReportRenderer
 from app.data.repositories import (
     AnalysisRangeRepository,
@@ -926,6 +927,7 @@ class LunaVitaService:
         workouts: WorkoutService,
         averages: RunningAverages,
         water: WaterService,
+        health_reports: HealthReportService | None = None,
     ) -> None:
         self.food = food
         self.measurements = measurements
@@ -937,3 +939,4 @@ class LunaVitaService:
         self.workouts = workouts
         self.averages = averages
         self.water = water
+        self.health_reports = health_reports

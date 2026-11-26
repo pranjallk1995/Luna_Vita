@@ -25,6 +25,7 @@ from sso import CURRENT_USER, LunaSingleSignOn, send_user
 
 ID = r"\d+"
 DAY = r"\d{4}-\d{2}-\d{2}"
+UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 # The backend routes the browser app may reach, as (method, path pattern).
 PROXIED_ROUTES = tuple(
     (method, re.compile(pattern))
@@ -54,8 +55,15 @@ PROXIED_ROUTES = tuple(
         ("PUT", r"/api/water/goal"),
         ("DELETE", rf"/api/water/{ID}"),
         ("GET", rf"/api/reports/daily/{DAY}"),
+        ("GET", r"/api/health-reports"),
+        ("GET", r"/api/health-reports/trend"),
+        ("GET", rf"/api/health-reports/{UUID}/file"),
     )
 )
+# A health report's PDF opens inside the page's viewer, so this page alone may frame it.
+FRAMED_PDF = re.compile(rf"/api/health-reports/{UUID}/file")
+# Backend headers passed on to the browser besides the content type.
+PASSED_HEADERS = ("content-disposition",)
 UNAVAILABLE = "Luna Vita's backend is unavailable. Please try again."
 
 
@@ -146,6 +154,7 @@ class UIGateway:
             "photo_upload_types": UIConfig.PHOTO_UPLOAD_TYPES,
             "max_food_rows": UIConfig.MAX_FOOD_ROWS,
             "max_measurement_rows": UIConfig.MAX_MEASUREMENT_ROWS,
+            "lexia_ui_url": UIConfig.LEXIA_UI_URL,
         }
 
     # Food photos
@@ -186,11 +195,12 @@ class UIGateway:
             )
         except httpx.HTTPError:
             return JSONResponse({"error": UNAVAILABLE}, status_code=502)
+        passed = {name: response.headers[name] for name in PASSED_HEADERS if name in response.headers}
         return Response(
             response.content,
             status_code=response.status_code,
             media_type=response.headers.get("content-type"),
-            headers={"Cache-Control": "no-store"},
+            headers={"Cache-Control": "no-store", **passed},
         )
 
     # Application
@@ -214,7 +224,9 @@ class UIGateway:
 
         async def secure_headers(request: Request, call_next) -> Response:
             response = await call_next(request)
-            response.headers["Content-Security-Policy"] = UIConfig.CONTENT_SECURITY_POLICY
+            framed = FRAMED_PDF.fullmatch(request.url.path) and response.headers.get("content-type", "").startswith("application/pdf")
+            # The browser's PDF viewer runs inside that response, so only framing is restricted.
+            response.headers["Content-Security-Policy"] = "frame-ancestors 'self'" if framed else UIConfig.CONTENT_SECURITY_POLICY
             response.headers["X-Content-Type-Options"] = "nosniff"
             return response
 

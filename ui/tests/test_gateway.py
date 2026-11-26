@@ -31,8 +31,10 @@ class GatewayTestCase(unittest.TestCase):
 
         def backend(request: httpx.Request) -> httpx.Response:
             self.backend_requests.append(request)
-            if request.url.path.startswith("/api/reports/"):
-                return httpx.Response(200, content=b"%PDF", headers={"content-type": "application/pdf"})
+            if request.url.path.startswith(("/api/reports/", "/api/health-reports/")) and request.url.path != "/api/health-reports/trend":
+                return httpx.Response(200, content=b"%PDF", headers={
+                    "content-type": "application/pdf", "content-disposition": 'inline; filename="lab.pdf"',
+                })
             if request.method == "DELETE":
                 return httpx.Response(204)
             return httpx.Response(200, json={"status": "ok"})
@@ -109,6 +111,19 @@ class ProxyTests(GatewayTestCase):
         response = self.client.get("/api/reports/daily/2026-01-01")
         self.assertEqual(response.headers["content-type"], "application/pdf")
         self.assertEqual(response.content, b"%PDF")
+
+    def test_health_reports_and_their_pdfs_are_forwarded(self):
+        self.sign_in()
+        for path in ("/api/health-reports?out_of_range=true", "/api/health-reports/trend?test=ldl"):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
+        response = self.client.get(f"/api/health-reports/{PHOTO[-36:]}/file")
+        self.assertEqual(response.content, b"%PDF")
+        self.assertEqual(response.headers["content-disposition"], 'inline; filename="lab.pdf"')
+        # Only this page may frame the report, and the browser's PDF viewer is not restricted inside it.
+        self.assertEqual(response.headers["content-security-policy"], "frame-ancestors 'self'")
+        self.assertIn("frame-ancestors 'none'", self.client.get("/api/summary/2026-01-01").headers["content-security-policy"])
+        self.assertEqual(self.client.get("/api/health-reports/not-an-id/file").status_code, 404)
+        self.assertEqual(self.client.get("/auth/session").json()["settings"]["lexia_ui_url"], UIConfig.LEXIA_UI_URL)
 
     def test_routes_the_ui_does_not_use_are_not_forwarded(self):
         self.sign_in()

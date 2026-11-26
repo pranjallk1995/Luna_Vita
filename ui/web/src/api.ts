@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { useToast } from "./components/Toasts";
+import type { HealthReports } from "./health";
 import { post, put, remove, request } from "./http";
 import { messageOf } from "./lib";
 
@@ -16,6 +17,7 @@ export type Settings = {
   photo_upload_types: string[];
   max_food_rows: number;
   max_measurement_rows: number;
+  lexia_ui_url: string;
 };
 
 export type FoodEntry = {
@@ -132,6 +134,13 @@ export const useExercises = (day: string) =>
 
 export const useWater = (day: string) =>
   useQuery({ queryKey: ["water", day], queryFn: () => request<WaterDay>(`/api/water/${day}`) });
+
+/** Lab reports read live from Luna Lexia; a 503 means Lexia is off or away. */
+export const useHealthReports = () =>
+  useQuery({ queryKey: ["health-reports"], queryFn: () => request<HealthReports>("/api/health-reports"), retry: 1, staleTime: 60_000 });
+
+/** The report's own PDF, passed through from Luna Lexia. */
+export const healthReportFile = (documentId: string) => `/api/health-reports/${encodeURIComponent(documentId)}/file`;
 
 export const vita = {
   createFood: (payload: unknown) => post<FoodEntry>("/api/food", payload),

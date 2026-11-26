@@ -19,7 +19,7 @@
 
 Luna Vita combines a responsive React interface, one FastMCP service for conversational tools and UI-facing HTTP routes, and persistence in Luna Sentia's shared PostgreSQL. It is designed to run beside [Luna Visia](https://github.com/pranjallk1995/Luna_Visia) on the shared private Docker network created by [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) while keeping its service names, host ports, and database separate.
 
-> **Requires Luna Sentia, running and healthy:** Luna Vita keeps its data in Luna Sentia's PostgreSQL (`luna-sentia-db`) and joins Sentia's `luna_sentia_network`; it has no database of its own. Start [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) first and wait until its `postgres` and `ollama` services report healthy, as described under [Start](#start). Food-image matching also needs Luna Visia running on the same network.
+> **Requires Luna Sentia, running and healthy:** Luna Vita keeps its data in Luna Sentia's PostgreSQL (`luna-sentia-db`) and joins Sentia's `luna_sentia_network`; it has no database of its own. Start [Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia) first and wait until its `postgres` and `ollama` services report healthy, as described under [Start](#start). Food-image matching also needs Luna Visia running on the same network, and the Health Reports tab needs [Luna Lexia](https://github.com/pranjallk1995/Luna_Lexia).
 
 <p align="center">
   <img src="docs/assets/luna-vita-dashboard.png" alt="Luna Vita daily nutrition dashboard" width="1200">
@@ -119,6 +119,24 @@ The daily view's Water card tracks what you drink against a daily goal (3 L unti
 
 An assistant logs water the same way: "I just had a bottle of water" becomes `log_water`, which answers with the day's total and what is left.
 
+### Health reports
+
+The **Health Reports** tab shows your lab reports (blood tests, full-body check-ups) from
+[Luna Lexia](https://github.com/pranjallk1995/Luna_Lexia). Upload a report's PDF to Lexia,
+which reads it into its `health_report` schema; it appears here at once:
+
+- Each report's lab, collection date, package, and how many results are in range, low, high, or abnormal.
+- Its results by panel (blood count, lipids, liver, kidney, thyroid, vitamins, hormones, urine), out-of-range ones first, each against the range its report prints, with how it moved since the last report and a small trend line.
+- Select a test for its trend across every report, with the reference band; **View PDF** opens the report itself.
+- A report Lexia marked for review shows Lexia's reasons, so you can check those values against the PDF.
+
+Nothing is copied into Vita's database: the backend reads Lexia over `luna_sentia_network`
+with Lexia's private `LUNALEXIA_API_TOKEN`, naming the signed-in person, so each person sees
+only their own reports. The PDF passes through Vita's backend and gateway, so the browser
+never needs Lexia's address. Without the token, or with Lexia stopped, the tab says so and the
+rest of Vita works as before. Status compares a result with its printed interval; it is not a
+diagnosis.
+
 ### Bulk corrections
 
 Assistants can correct many records at once across a range of dates: food entries by food and meal, body measurements by metric, workout days by done or skipped, and logged exercises by name and type.
@@ -131,7 +149,7 @@ Assistants can correct many records at once across a range of dates: food entrie
 
 - Luna Visia-inspired dark, monochrome styling and Luna Vita branding.
 - The mobile logo and title remain on one line.
-- Daily/Weekly/Monthly navigation becomes icon-only on mobile.
+- Daily/Monthly/Health Reports navigation becomes icon-only on mobile.
 - Morning and Night deletion controls use compact one-line mobile buttons.
 - Dialogs are centered and inputs are arranged responsively.
 
@@ -187,7 +205,8 @@ the GPU and keeps Socia's chat model resident, to its Ollama. Socia's pictures c
 Sentia's image service (Qwen-Image 2.1 with diffusers), which takes turns with Ollama on the GPU. Visia's SigLIP 2, Vibia's CLAP
 and Lexia's Docling run inside those apps instead, each in a process that exits when idle.
 Orange lines are Visia image URLs that other apps use: food images for Vita, room images
-for Lumia, and cover art for Vibia. Grey dashed lines are planned: links into Fiora (tax
+for Lumia, and cover art for Vibia. The rose line is lab reports: Vita reads the health reports Lexia stores,
+with their results and PDFs, for its Health reports page. Grey dashed lines are planned: links into Fiora (tax
 details from Lexia, transaction image and icon URLs from Visia). Luna Unia is the one home
 for the other apps, on port 42069: it checks which Luna stacks are running and opens each
 one with the shared sign-in. The purple line is the mood and beats of the track Vibia
@@ -274,9 +293,14 @@ LUNAVISIA_API_URL=http://luna-visia-mcp:8000
 LUNAVITA_PLACEHOLDER_IMAGE_ID=858eafb0-73ad-4717-8095-8cef43c62d3c
 LUNAVITA_ALLOWED_EMAILS=*
 LUNAVITA_API_TOKEN=replace-with-a-random-value-of-at-least-32-characters
+# Health reports: the same value as LUNALEXIA_API_TOKEN in Luna_Lexia/.env, and Lexia's UI address.
+LUNALEXIA_API_TOKEN=the-same-value-as-in-Luna_Lexia
+LUNALEXIA_UI_URL=https://lexia.example.com
 ```
 
 `LUNAVITA_API_TOKEN` is a shared secret between the UI and the MCP server. Generate your own with `openssl rand -hex 32`.
+`LUNALEXIA_API_TOKEN` is Lexia's own private token, which lets Vita read each person's health reports from Lexia; without it (or with a
+different value than Lexia's) the Health Reports tab says it cannot reach Lexia. `LUNALEXIA_API_URL` defaults to `http://luna-lexia-mcp:8000`.
 
 `*` allows everyone with a Luna account; otherwise separate accounts with commas. Keep `LUNAVISIA_API_URL` on the shared
 Docker network. `MCP_PUBLIC_URL` is optional and defaults to `http://localhost:18006`; set it to your public HTTPS origin when the server is exposed (plain HTTP is accepted only for localhost).Replace the placeholder image ID only when Vita should use a
@@ -394,6 +418,11 @@ Use [Adminer in Luna Sentia](https://github.com/pranjallk1995/Luna_Sentia#databa
 - `get_water_history` — each day's total between two dates (30 days by default), with days logged, days the goal was reached, and the average.
 - `set_water_goal` — the daily goal in ml (500 to 10000; 3000 until set).
 - `delete_water_entry` — delete one drink by its id.
+
+### Health reports
+
+- `get_health_reports` - the user's lab reports from Luna Lexia, newest first (3 by default, up to 20): lab, dates, package, review flags, and results with their unit, printed range, status (low, high, abnormal, normal, or unknown), and earlier values. `test_name` (e.g. "ldl", "hba1c") keeps matching tests; `only_out_of_range` keeps low, high, and abnormal results.
+- `get_lab_test_trend` - one test's dated values across every report, oldest first, with its latest reference range.
 
 ### Monthly analysis
 
@@ -525,8 +554,9 @@ Pure logic lives in `domain/` and is unit tested directly, backend access and ca
 - `ui/web/src/body.ts` - tracked body metrics, Morning/Night tables, measurement payloads, and weight and body fat series.
 - `ui/web/src/workouts.ts` - workout types, the calendar, and exercise rows.
 - `ui/web/src/clock.ts` - Asia/Kolkata dates and timestamps.
+- `ui/web/src/health.ts` - health report results: printed values and ranges, panels, filtering, and change since the last report.
 - `ui/web/src/api.ts` - the backend routes and hooks, and fitting a chosen food photo in the browser.
-- `ui/web/src/components/` - the summary, food log, workout, measurements, and Monthly sections.
+- `ui/web/src/components/` - the summary, food log, workout, measurements, Monthly, and Health Reports sections.
 - `ui/web/src/domain.test.ts` - unit tests for ordering, validation, macro math, measurement tables, and payloads.
 - `ui/requirements.txt` - Python dependencies used by the gateway.
 - `ui/Dockerfile` - builds the UI container image.
@@ -546,6 +576,8 @@ Dependencies point one way: transports (`mcp_tools.py`, `http_routes.py`) call s
 - `mcp/app/data/database.py` - connection-pool management and idempotent schema creation and upgrades.
 - `mcp/app/services/analysis.py` - pure period analysis: food-name grouping, macro-quality rules, verdict overrides, and the JSON shared by the UI route and MCP tool.
 - `mcp/app/integrations/visia.py` - `VisiaImageCatalog`, which verifies assistant-supplied food images against Luna Visia's catalog.
+- `mcp/app/integrations/lexia.py` - `LexiaHealthReports`, which reads the person's `health_report` documents and their PDFs from Luna Lexia.
+- `mcp/app/services/health_reports.py` - `HealthReportService`: each result's status against its printed range, and each test's values across reports.
 - `mcp/app/services/body_composition.py` - weight and body fat % series, estimating body fat when it was not recorded.
 - `mcp/app/services/reports.py` - pure ReportLab rendering of a collected `DailyReport` into the daily PDF.
 - `mcp/app/transport/report_tools.py` - MCP embedded-resource wrapper for the current daily PDF.

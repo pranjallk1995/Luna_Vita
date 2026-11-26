@@ -1,10 +1,12 @@
 """REST routes used by the Luna Vita Streamlit dashboard."""
 
+import re
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
@@ -25,6 +27,7 @@ from app.core.models import (
     WorkoutBatch,
     WorkoutRecord,
 )
+from app.integrations.lexia import LexiaUnavailableError
 from app.services.application import LunaVitaService
 
 Handler = Callable[[Request], Awaitable[Any]]
@@ -155,6 +158,7 @@ class LunaVitaHTTPRoutes:
         self._register_days()
         self._register_workouts()
         self._register_water()
+        self._register_health_reports()
 
     async def health(self, request: Request) -> dict:
         return {"status": "ok", "service": "luna-vita"}
@@ -293,6 +297,44 @@ class LunaVitaHTTPRoutes:
         self.route("PUT", "/api/water/goal", set_goal)
         self.route("GET", "/api/water/{day}", read_day)
         self.route("DELETE", "/api/water/{entry_id}", delete, NO_CONTENT)
+
+    def _register_health_reports(self) -> None:
+        """Lab reports stored in Luna Lexia, read live; 503 when Lexia is off or unreachable."""
+        reports = self.service.health_reports
+        if reports is None:
+            return
+
+        def unavailable(error: LexiaUnavailableError) -> Response:
+            return self.response({"error": str(error), "lexia_unavailable": True}, 503)
+
+        async def listing(request: Request):
+            only = request.query_params.get("out_of_range", "").lower() in {"1", "true", "yes"}
+            try:
+                return await anyio.to_thread.run_sync(reports.reports, request.query_params.get("test") or None, only)
+            except LexiaUnavailableError as error:
+                return unavailable(error)
+
+        async def trend(request: Request):
+            try:
+                return await anyio.to_thread.run_sync(reports.trend, request.query_params.get("test", ""))
+            except LexiaUnavailableError as error:
+                return unavailable(error)
+
+        async def file(request: Request):
+            try:
+                data, media_type, name = await anyio.to_thread.run_sync(reports.file, request.path_params["document_id"])
+            except LexiaUnavailableError as error:
+                return unavailable(error)
+            safe = re.sub(r'[^\w. -]+', "_", name)[:120] or "health-report.pdf"
+            return Response(data, media_type=media_type, headers={
+                "Content-Disposition": f'inline; filename="{safe}"',
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            })
+
+        self.route("GET", "/api/health-reports", listing)
+        self.route("GET", "/api/health-reports/trend", trend)
+        self.route("GET", "/api/health-reports/{document_id}/file", file)
 
     def _register_workouts(self) -> None:
         workouts = self.service.workouts

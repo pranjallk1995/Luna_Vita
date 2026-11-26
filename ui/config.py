@@ -55,6 +55,8 @@ class UIConfig:
     PHOTO_UPLOAD_TYPES: ClassVar[tuple[str, ...]] = ("jpg", "jpeg", "png", "webp")
     MAX_FOOD_ROWS: ClassVar[int] = 500
     MAX_MEASUREMENT_ROWS: ClassVar[int] = 500
+    # Where the "Add one in Luna Lexia" link of the Health reports page goes.
+    LEXIA_UI_URL: ClassVar[str] = os.getenv("LUNALEXIA_UI_URL", "http://localhost:18501").strip().rstrip("/")
     # Hashed bundles never change under the same name.
     IMMUTABLE_CACHE_CONTROL: ClassVar[str] = "private, max-age=31536000, immutable"
     CONTENT_SECURITY_POLICY: ClassVar[str] = (

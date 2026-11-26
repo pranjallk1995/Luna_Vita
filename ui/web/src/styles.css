@@ -1058,3 +1058,58 @@ a {
   .vt-chip { flex: 1 1 auto; padding: 0.2rem 0.4rem; font-size: 0.66rem; white-space: nowrap; }
   .vt-plot-box { min-height: 9rem; }
 }
+
+/* Health reports: lab results read by Luna Lexia, against their ranges and over time */
+
+.vt-lab { display: grid; gap: 0.85rem; }
+.vt-lab .vt-section-head .lv-button { display: inline-flex; align-items: center; gap: 0.4rem; }
+.vt-lab-muted { color: var(--lv-muted); font-size: var(--luna-text-small); font-weight: 400; }
+.vt-lab-report { display: grid; gap: 0.8rem; }
+.vt-lab-report-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1rem; }
+.vt-lab-report-head h3 { margin-bottom: 0.2rem; font-size: 0.95rem; }
+.vt-lab-report-head p { margin: 0; }
+.vt-lab-report-head .lv-button, .vt-lab-open { display: inline-flex; align-items: center; gap: 0.4rem; }
+.vt-lab-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: 0.45rem; }
+.vt-lab-count { --state: var(--lv-text); display: grid; gap: 0.1rem; padding: 0.55rem 0.7rem; border: 1px solid var(--lv-border); border-radius: 0.6rem; background: var(--lv-control); }
+.vt-lab-count strong { color: var(--state); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.vt-lab-count span { color: var(--lv-muted); font-size: var(--luna-text-small); }
+.vt-lab-count.vt-lab-normal { --state: var(--vt-good); }
+.vt-lab-count.vt-lab-low, .vt-lab-count.vt-lab-high { --state: var(--vt-warn); }
+.vt-lab-count.vt-lab-abnormal { --state: var(--vt-bad); }
+.vt-lab-flags { display: flex; gap: 0.55rem; margin: 0; font-size: var(--luna-text-small); }
+.vt-lab-flags svg { flex: none; margin-top: 0.15rem; color: var(--vt-warn); }
+.vt-lab-flags ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+.vt-lab-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.vt-lab-search { position: relative; display: flex; align-items: center; }
+.vt-lab-search svg { position: absolute; left: 0.65rem; color: var(--lv-muted); pointer-events: none; }
+.vt-lab-search .lv-input { width: min(18rem, 100%); padding-left: 2rem; }
+.vt-lab-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 33rem), 1fr)); gap: 0.85rem; align-items: start; }
+.vt-lab-panel { padding-bottom: 0.35rem; }
+.vt-lab-table td { vertical-align: middle; }
+.vt-lab-table td:first-child { white-space: normal; min-width: 9rem; }
+.vt-lab-table .vt-link-button { text-align: left; }
+.vt-lab-flagged td:first-child { box-shadow: inset 2px 0 0 var(--vt-warn); }
+.vt-lab-range { color: var(--lv-muted); font-size: var(--luna-text-small); white-space: normal; max-width: 11rem; }
+.vt-lab-status { --state: var(--lv-muted); display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid color-mix(in srgb, var(--state) 45%, transparent); border-radius: 999px; color: var(--state); font-size: var(--luna-text-small); }
+.vt-lab-status.vt-lab-normal { --state: var(--vt-good); }
+.vt-lab-status.vt-lab-low, .vt-lab-status.vt-lab-high { --state: var(--vt-warn); }
+.vt-lab-status.vt-lab-abnormal { --state: var(--vt-bad); }
+.vt-lab-change { display: inline-flex; align-items: center; gap: 0.25rem; font-variant-numeric: tabular-nums; }
+.vt-lab-change small { color: var(--lv-muted); font-size: 0.66rem; }
+.vt-lab-trend { display: block; width: 5.25rem; height: 1.5rem; overflow: visible; }
+.vt-lab-trend-large { width: 100%; height: auto; margin: 0.5rem 0 0.25rem; }
+.vt-lab-band { fill: rgba(74, 222, 128, 0.1); }
+.vt-lab-line { fill: none; stroke: var(--lv-text); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.vt-lab-dot { fill: var(--lv-text); }
+.vt-lab-label { fill: var(--lv-text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.vt-lab-date { fill: var(--lv-muted); font-size: 10px; }
+.vt-lab-trend-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
+.vt-lab-trend-head strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.vt-lab-pdf { display: block; width: 100%; height: min(75vh, 52rem); margin-bottom: 0.75rem; border: 1px solid var(--lv-border); border-radius: 0.6rem; background: #fff; }
+.vt-lab-picker { margin-top: -0.2rem; }
+
+@media (max-width: 700px) {
+  .vt-lab-search, .vt-lab-search .lv-input { width: 100%; }
+  .vt-lab-picker { flex-wrap: wrap; }
+  .vt-lab-picker .vt-chip { flex: 1 1 100%; }
+}
