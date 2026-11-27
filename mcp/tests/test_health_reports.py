@@ -16,17 +16,17 @@ TOKEN = "lexia-test-token-with-at-least-32-characters"
 def lab(document_id, date, results, **extra):
     return {
         "document_id": document_id, "name": f"report-{date}.pdf", "doc_type": "health_report", "title": "Full body check-up",
-        "issuer": "Tata 1mg Labs", "document_date": date, "review_flags": [], "public_url": None, "updated_at": date,
-        "extracted": {"lab_name": "Tata 1mg Labs", "collection_date": date, "results": results, **extra},
+        "issuer": "Acme Diagnostics", "document_date": date, "review_flags": [], "public_url": None, "updated_at": date,
+        "extracted": {"lab_name": "Acme Diagnostics", "collection_date": date, "results": results, **extra},
     }
 
 
 LDL = {"panel": "Lipid Profile", "test_name": "Cholesterol - LDL", "unit": "mg/dl", "reference_range": "<= 99.9", "reference_high": 99.9}
 DOCUMENTS = [
-    lab(OCTOBER, "2025-10-04", [{**LDL, "value": 170}]),
-    lab(APRIL, "2026-04-18", [
-        {**LDL, "value": 153, "previous_value": 170, "previous_date": "2025-10-04"},
-        {"test_name": "Vitamin D (25-OH)", "value": 25.1, "unit": "ng/mL", "reference_low": 30, "reference_high": 100},
+    lab(OCTOBER, "2025-09-12", [{**LDL, "value": 161}]),
+    lab(APRIL, "2026-03-09", [
+        {**LDL, "value": 142, "previous_value": 161, "previous_date": "2025-09-12"},
+        {"test_name": "Vitamin D (25-OH)", "value": 22.4, "unit": "ng/mL", "reference_low": 30, "reference_high": 100},
         {"test_name": "Glucose", "value_text": "Negative", "reference_range": "Negative"},
         {"test_name": "Hemoglobin", "value": 14, "reference_low": 13, "reference_high": 17},
     ], pending_tests=["Testosterone Free"]),
@@ -57,8 +57,8 @@ def service(fake=None, token=TOKEN):
 
 class StatusTests(unittest.TestCase):
     def test_numbers_are_judged_against_their_range(self):
-        self.assertEqual(status_of({"value": 25.1, "reference_low": 30, "reference_high": 100}), "low")
-        self.assertEqual(status_of({"value": 153, "reference_high": 99.9}), "high")
+        self.assertEqual(status_of({"value": 22.4, "reference_low": 30, "reference_high": 100}), "low")
+        self.assertEqual(status_of({"value": 142, "reference_high": 99.9}), "high")
         self.assertEqual(status_of({"value": 14, "reference_low": 13, "reference_high": 17}), "normal")
         self.assertEqual(status_of({"value": 14}), "unknown")
 
@@ -87,7 +87,7 @@ class HealthReportServiceTests(unittest.TestCase):
         ldl = latest["results"][0]
         self.assertEqual(ldl["status"], "high")
         # October's own reading and the earlier value April prints are the same point.
-        self.assertEqual([(point["date"], point["value"]) for point in ldl["history"]], [("2025-10-04", 170)])
+        self.assertEqual([(point["date"], point["value"]) for point in ldl["history"]], [("2025-09-12", 161)])
         request = fake.requests[0]
         self.assertEqual(request.url.params.get_list("doc_type"), ["health_report"])
         self.assertEqual(request.headers["authorization"], f"Bearer {TOKEN}")
@@ -105,7 +105,7 @@ class HealthReportServiceTests(unittest.TestCase):
         reports, _ = service()
         trend = reports.trend("cholesterol ldl")
         self.assertEqual(trend["test_name"], "Cholesterol - LDL")
-        self.assertEqual([point["value"] for point in trend["points"]], [170, 153])
+        self.assertEqual([point["value"] for point in trend["points"]], [161, 142])
         self.assertEqual(trend["reference_high"], 99.9)
         with self.assertRaises(ValueError):
             reports.trend("ferritin")
@@ -128,7 +128,7 @@ class HealthReportServiceTests(unittest.TestCase):
     def test_only_this_persons_reports_are_served_as_files(self):
         reports, fake = service()
         data, media_type, name = reports.file(APRIL.upper())
-        self.assertEqual((data, media_type, name), (b"%PDF-1.7", "application/pdf", "report-2026-04-18.pdf"))
+        self.assertEqual((data, media_type, name), (b"%PDF-1.7", "application/pdf", "report-2026-03-09.pdf"))
         self.assertEqual(fake.requests[-1].url.path, f"/api/public/documents/{APRIL}")
         for unknown in ("2d77a066-d097-4b1b-9682-c9eb41538b26", "../etc/passwd"):
             with self.subTest(unknown), self.assertRaises(NotFoundError):
