@@ -457,6 +457,136 @@ Age is calculated dynamically from the stored date of birth, so it changes autom
 
 ## Data model
 
+### Database diagram
+
+Each person's schema (`u_<id>` in the `lunavita` database) holds these tables, drawn from the live database. Lines are foreign keys; a table without one is joined by value (a name, a date, an ID kept as text). `PK` marks primary keys, `FK` foreign keys, `UK` unique columns.
+
+```mermaid
+erDiagram
+    analysis_range {
+        int2 range_id PK
+        date start_date
+        date end_date
+        timestamptz updated_at
+    }
+    daily_logs {
+        date log_date PK
+        int4 calorie_goal
+        numeric protein_goal_g
+        numeric carbs_goal_g
+        numeric fat_goal_min_g
+        numeric fat_goal_max_g
+        numeric added_sugar_goal_g
+        numeric added_sugar_max_g
+        int4 reported_calories
+        numeric reported_protein_g
+        numeric reported_carbs_g
+        numeric reported_fat_g
+        numeric reported_natural_sugar_g
+        numeric reported_added_sugar_g
+        text activity_notes
+        text supplement_notes
+        text daily_notes
+        text report_caveats
+        timestamptz updated_at
+    }
+    daily_recommendations {
+        int2 profile_id PK
+        int4 calories_kcal
+        numeric protein_g
+        numeric carbs_g
+        numeric fat_g
+        numeric sugars_g
+        numeric height_cm
+        text sex
+        date birth_date
+        numeric weight_kg
+        text goal
+        text notes
+        timestamptz updated_at
+        numeric body_fat_target_percent
+    }
+    food_aliases {
+        text alias_key PK
+        text canonical_name
+        timestamptz updated_at
+    }
+    food_entries {
+        int8 id PK
+        timestamptz consumed_at
+        date consumed_date
+        text time_label
+        text food_name
+        text quantity
+        text meal_type
+        int4 calories
+        numeric protein_g
+        numeric carbs_g
+        numeric fat_g
+        numeric natural_sugar_g
+        numeric added_sugar_g
+        text image_url
+        text notes
+        timestamptz created_at
+    }
+    food_images {
+        text food_key PK
+        text food_name
+        text image_url
+        timestamptz updated_at
+    }
+    food_verdicts {
+        text food_key PK
+        text food_name
+        text verdict
+        text reason
+        timestamptz updated_at
+    }
+    health_measurements {
+        int8 id PK
+        timestamptz measured_at
+        text time_label
+        text metric
+        numeric value
+        text unit
+        text notes
+        timestamptz created_at
+    }
+    water_entries {
+        int8 id PK
+        date drank_on
+        timestamptz drank_at
+        int4 amount_ml
+        text notes
+        timestamptz created_at
+    }
+    water_goal {
+        int2 goal_id PK
+        int4 goal_ml
+        timestamptz updated_at
+    }
+    workout_exercises {
+        int8 id PK
+        date workout_date
+        text exercise
+        text type
+        int4 sets
+        int4 reps
+        numeric weight_kg
+        numeric duration_min
+        text notes
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    workouts {
+        date workout_date PK
+        bool done
+        text notes
+        timestamptz updated_at
+        text_array types
+    }
+```
+
 ### `food_entries`
 
 Stores the consumed date and timestamp, optional display-time label, food/supplement name, quantity, calories in kcal, protein, carbohydrates, fat, natural sugar, added sugar, optional image, and notes. Luna Visia images are referenced through their immutable image-ID URLs, so renaming a file in Visia does not break its Vita entry.
